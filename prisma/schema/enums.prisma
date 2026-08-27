@@ -1,0 +1,17 @@
+// Enum values are deliberately lowercase: they travel to the client as literal
+// strings and are compared there, so the wire value and the TypeScript value
+// stay the same thing.
+
+enum Role {
+  super_admin
+  owner
+  manager
+  staff
+  accountant
+}
+
+enum AccountStatus {
+  pending
+  active
+  suspended
+}

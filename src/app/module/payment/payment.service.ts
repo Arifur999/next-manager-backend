@@ -4,6 +4,7 @@ import { Currency, LedgerSource } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { recalcInvoiceStatus } from "../../shared/invoiceStatus.js";
 import { assertAccount, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
 import { dateRangeWhere, escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { getReportingRate } from "../../utils/currencyRate.js";
@@ -148,6 +149,13 @@ const createPayment = async (payload: ICreatePaymentPayload, user: IRequestUser)
             Currency.USD
         );
 
+        // An invoice's status is derived from what has been paid against it, so
+        // it has to be reconsidered in the same transaction - otherwise a
+        // settled invoice stays "sent" until something else happens to touch it.
+        if (payload.invoice_id) {
+            await recalcInvoiceStatus(tx, payload.invoice_id, user.organizationId);
+        }
+
         return payment;
     });
 };
@@ -200,7 +208,7 @@ const updatePayment = async (id: string, payload: IUpdatePaymentPayload, user: I
             );
         }
 
-        return tx.payment.update({
+        const updated = await tx.payment.update({
             where: { id },
             data: {
                 client_id: payload.client_id ?? undefined,
@@ -215,6 +223,19 @@ const updatePayment = async (id: string, payload: IUpdatePaymentPayload, user: I
                 notes: payload.notes ?? undefined,
             },
         });
+
+        // Both invoices may need reconsidering: the one this payment used to
+        // settle, and the one it now does. Moving a payment between invoices
+        // otherwise leaves the old one looking paid.
+        const affected = new Set(
+            [existing.invoice_id, updated.invoice_id].filter((value): value is string => Boolean(value))
+        );
+
+        for (const invoiceId of affected) {
+            await recalcInvoiceStatus(tx, invoiceId, user.organizationId);
+        }
+
+        return updated;
     });
 };
 
@@ -236,6 +257,12 @@ const deletePayment = async (id: string, user: IRequestUser) => {
             where: { id },
             data: { deleted_at: new Date(), deleted_by: user.userId },
         });
+
+        // Removing the payment that settled an invoice has to walk that invoice
+        // back, or the books would carry a "paid" invoice nothing paid for.
+        if (existing.invoice_id) {
+            await recalcInvoiceStatus(tx, existing.invoice_id, user.organizationId);
+        }
 
         return { message: "Payment deleted successfully" };
     });

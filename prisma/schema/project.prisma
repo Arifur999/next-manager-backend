@@ -1,0 +1,84 @@
+// Projects, who is on them, and the work inside them.
+
+model Project {
+  id             String        @id @default(uuid())
+  organization_id String
+  client_id      String
+  name           String
+  code           String
+  description    String        @default("")
+  status         ProjectStatus @default(planning)
+  start_date     DateTime?     @db.Date
+  end_date       DateTime?     @db.Date
+  /// What the client agreed to pay, in USD. Profitability compares this (and
+  /// what was actually received) against team payouts and project expenses.
+  contract_value_usd Decimal   @default(0) @db.Decimal(15, 2)
+  notes          String        @default("")
+  deleted_at     DateTime?
+  deleted_by     String?
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+
+  organization Organization    @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  client       Client          @relation(fields: [client_id], references: [id], onDelete: Restrict)
+  members      ProjectMember[]
+  tasks        Task[]
+  payments     Payment[]
+  invoices     Invoice[]
+  expenses     Expense[]
+  payouts      TeamPayout[]
+  credentials  Credential[]
+
+  /// Project codes are unique per agency, not globally.
+  @@unique([organization_id, code])
+  @@index([organization_id])
+  @@index([organization_id, status])
+  @@index([client_id])
+  @@map("projects")
+}
+
+model ProjectMember {
+  id             String   @id @default(uuid())
+  organization_id String
+  project_id     String
+  user_id        String
+  /// Free text ("Designer", "Lead dev") rather than an enum: agency roles vary
+  /// per project and are not worth a migration each time.
+  role_on_project String  @default("")
+  created_at     DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([project_id, user_id])
+  @@index([organization_id])
+  @@index([user_id])
+  @@map("project_members")
+}
+
+model Task {
+  id             String       @id @default(uuid())
+  organization_id String
+  project_id     String
+  title          String
+  description    String       @default("")
+  assignee_id    String?
+  status         TaskStatus   @default(todo)
+  priority       TaskPriority @default(medium)
+  due_date       DateTime?    @db.Date
+  completed_at   DateTime?
+  deleted_at     DateTime?
+  created_by     String?
+  created_at     DateTime     @default(now())
+  updated_at     DateTime     @updatedAt
+
+  project  Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  assignee User?   @relation("TaskAssignee", fields: [assignee_id], references: [id], onDelete: SetNull)
+
+  @@index([organization_id])
+  @@index([project_id])
+  /// "My tasks", and the dashboard's "due today".
+  @@index([assignee_id, status])
+  @@index([organization_id, due_date])
+  @@map("tasks")
+}

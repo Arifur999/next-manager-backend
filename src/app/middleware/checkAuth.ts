@@ -45,7 +45,7 @@ export const checkAuth = (...authRoles: Role[]) => async (req: Request, res: Res
                 email: true,
                 full_name: true,
                 role: true,
-                owner_id: true,
+                organization_id: true,
                 is_active: true,
                 email_verified: true,
                 token_version: true,
@@ -78,9 +78,10 @@ export const checkAuth = (...authRoles: Role[]) => async (req: Request, res: Res
 
         req.user = {
             userId: user.id,
-            // A super admin is its own workspace root; an owner is too. Only a
-            // team member inherits someone else's.
-            ownerId: user.role === Role.super_admin ? user.id : (user.owner_id ?? user.id),
+            // A super_admin belongs to no agency, so there is nothing to scope
+            // by; every other role must have one, and a row without it is broken
+            // data rather than a request to see everything.
+            organizationId: user.organization_id ?? "",
             role: user.role,
             email: user.email,
             name: user.full_name,

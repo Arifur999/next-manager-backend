@@ -1,9 +1,9 @@
 import z from "zod";
 import { Role } from "../../../generated/prisma/enums.js";
 
-// Team members an owner may create. super_admin and owner are deliberately not
-// in this list: neither can be handed out from inside a workspace.
-const assignableRoles = [Role.manager, Role.staff, Role.accountant] as const;
+// Roles an owner may hand out. super_admin and owner are deliberately absent:
+// neither can be granted from inside an agency.
+const assignableRoles = [Role.admin, Role.manager, Role.member] as const;
 
 export const createUserZodSchema = z.object({
     full_name: z.string("Full name must be string").min(1, "Full name is required"),

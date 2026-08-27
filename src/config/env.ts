@@ -13,6 +13,9 @@ interface ENVConfig {
     FRONTEND_URL: string;
     SUPER_ADMIN_EMAIL: string;
     SUPER_ADMIN_PASSWORD: string;
+    // AES-256-GCM key for vault credentials. 64 hex chars (openssl rand -hex 32).
+    // Losing it loses every stored password - it belongs in the secret store.
+    VAULT_ENCRYPTION_KEY: string;
     CLOUDINARY: {
         CLOUD_NAME: string;
         API_KEY: string;
@@ -29,6 +32,7 @@ const requiredEnvVars = [
     "REFRESH_TOKEN_SECRET",
     "SUPER_ADMIN_EMAIL",
     "SUPER_ADMIN_PASSWORD",
+    "VAULT_ENCRYPTION_KEY",
 ];
 
 requiredEnvVars.forEach((varName) => {
@@ -48,6 +52,7 @@ export const env: ENVConfig = {
     FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:3000",
     SUPER_ADMIN_EMAIL: process.env.SUPER_ADMIN_EMAIL as string,
     SUPER_ADMIN_PASSWORD: process.env.SUPER_ADMIN_PASSWORD as string,
+    VAULT_ENCRYPTION_KEY: process.env.VAULT_ENCRYPTION_KEY as string,
     CLOUDINARY: {
         CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME || "",
         API_KEY: process.env.CLOUDINARY_API_KEY || "",

@@ -17,10 +17,9 @@ const PUBLIC_USER_FIELDS = {
     phone: true,
     avatar_url: true,
     role: true,
-    status: true,
     is_active: true,
     email_verified: true,
-    owner_id: true,
+    organization_id: true,
     permissions: true,
     created_at: true,
 } as const;
@@ -43,9 +42,10 @@ const issueTokens = (user: { id: string; email: string; role: Role; token_versio
     };
 };
 
-// Registering creates a workspace OWNER. Team members are invited from inside a
-// workspace (see the user module), never through this route - otherwise anyone
-// could self-register into a role.
+// Signing up creates an AGENCY and its owner together - one is meaningless
+// without the other, so both happen in one transaction. Team members are
+// invited from inside an agency (see the user module), never through this
+// route, or anyone could self-register into a role.
 const register = async (payload: IRegisterPayload) => {
     const existing = await prisma.user.findUnique({ where: { email: payload.email } });
 
@@ -53,18 +53,29 @@ const register = async (payload: IRegisterPayload) => {
         throw new AppError(status.CONFLICT, "An account with this email already exists");
     }
 
-    const user = await prisma.user.create({
-        data: {
-            full_name: payload.full_name,
-            email: payload.email,
-            phone: payload.phone ?? "",
-            password: await passwordUtils.hashPassword(payload.password),
-            role: Role.owner,
-        },
-        select: PUBLIC_USER_FIELDS,
-    });
+    const hashedPassword = await passwordUtils.hashPassword(payload.password);
 
-    return user;
+    return prisma.$transaction(async (tx) => {
+        const organization = await tx.organization.create({
+            data: {
+                name: payload.organization_name,
+                email: payload.email,
+            },
+        });
+
+        return tx.user.create({
+            data: {
+                full_name: payload.full_name,
+                email: payload.email,
+                phone: payload.phone ?? "",
+                password: hashedPassword,
+                role: Role.owner,
+                organization_id: organization.id,
+                email_verified: true,
+            },
+            select: PUBLIC_USER_FIELDS,
+        });
+    });
 };
 
 const login = async (payload: ILoginPayload) => {

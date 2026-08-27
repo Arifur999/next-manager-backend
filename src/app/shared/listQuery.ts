@@ -15,7 +15,7 @@ export interface ListOptions {
     search?: string;
     // Inclusive date bounds, as YYYY-MM-DD. The browser asks for the range it is
     // about to display; without them a page showing one month still has to
-    // download every row the workspace has ever had.
+    // download every row the agency has ever had.
     from?: string;
     to?: string;
 }

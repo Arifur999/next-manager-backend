@@ -1,0 +1,149 @@
+// Everything money goes OUT to: expenses, the team, the owner, and the
+// informal due-payment ledger. All of it is BDT - that is the currency the
+// agency actually spends in.
+
+model ExpenseCategory {
+  id             String              @id @default(uuid())
+  organization_id String
+  name           String
+  /// "employee" marks salary-like costs so operating-expense reporting can
+  /// exclude them; "general" is everything else.
+  type           ExpenseCategoryType @default(general)
+  color          String              @default("")
+  monthly_budget Decimal?            @db.Decimal(15, 2)
+  is_active      Boolean             @default(true)
+  created_at     DateTime            @default(now())
+  updated_at     DateTime            @updatedAt
+
+  expenses Expense[]
+
+  @@unique([organization_id, name])
+  @@index([organization_id])
+  @@map("expense_categories")
+}
+
+model Expense {
+  id             String    @id @default(uuid())
+  organization_id String
+  date           DateTime  @db.Date
+  category_id    String
+  amount_bdt     Decimal   @db.Decimal(15, 2)
+  /// Must be a BDT account.
+  account_id     String
+  /// Set when the cost belongs to a specific project, so profitability can
+  /// subtract it. Left null for general overhead.
+  project_id     String?
+  vendor         String    @default("")
+  notes          String    @default("")
+  receipt_url    String    @default("")
+  deleted_at     DateTime?
+  deleted_by     String?
+  created_by     String?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  category ExpenseCategory @relation(fields: [category_id], references: [id], onDelete: Restrict)
+  account  Account         @relation(fields: [account_id], references: [id], onDelete: Restrict)
+  project  Project?        @relation(fields: [project_id], references: [id], onDelete: SetNull)
+
+  @@index([organization_id])
+  @@index([organization_id, date(sort: Desc)])
+  @@index([category_id])
+  @@index([project_id])
+  @@map("expenses")
+}
+
+model TeamPayout {
+  id             String     @id @default(uuid())
+  organization_id String
+  date           DateTime   @db.Date
+  user_id        String
+  project_id     String?
+  amount_bdt     Decimal    @db.Decimal(15, 2)
+  type           PayoutType @default(salary)
+  account_id     String
+  notes          String     @default("")
+  deleted_at     DateTime?
+  deleted_by     String?
+  created_by     String?
+  created_at     DateTime   @default(now())
+  updated_at     DateTime   @updatedAt
+
+  user    User     @relation(fields: [user_id], references: [id], onDelete: Restrict)
+  project Project? @relation(fields: [project_id], references: [id], onDelete: SetNull)
+  account Account  @relation(fields: [account_id], references: [id], onDelete: Restrict)
+
+  @@index([organization_id])
+  @@index([organization_id, date(sort: Desc)])
+  @@index([user_id])
+  @@index([project_id])
+  @@map("team_payouts")
+}
+
+/// Money the owner takes out of the business. Visible to the owner role only -
+/// this is the one table a manager or admin must never be able to read.
+model OwnerWithdrawal {
+  id             String         @id @default(uuid())
+  organization_id String
+  date           DateTime       @db.Date
+  amount_bdt     Decimal        @db.Decimal(15, 2)
+  type           WithdrawalType @default(personal)
+  account_id     String
+  notes          String         @default("")
+  deleted_at     DateTime?
+  deleted_by     String?
+  created_by     String?
+  created_at     DateTime       @default(now())
+  updated_at     DateTime       @updatedAt
+
+  account Account @relation(fields: [account_id], references: [id], onDelete: Restrict)
+
+  @@index([organization_id])
+  @@index([organization_id, date(sort: Desc)])
+  @@map("owner_withdrawals")
+}
+
+/// A person the agency informally lends to or borrows from ("DP").
+///
+/// Not a client and not a team member - deliberately its own list, because the
+/// balance owed is personal and should not appear in client revenue or team
+/// cost.
+model DuePerson {
+  id             String    @id @default(uuid())
+  organization_id String
+  name           String
+  phone          String    @default("")
+  notes          String    @default("")
+  deleted_at     DateTime?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  transactions DueTransaction[]
+
+  @@index([organization_id])
+  @@map("due_people")
+}
+
+model DueTransaction {
+  id             String       @id @default(uuid())
+  organization_id String
+  due_person_id  String
+  date           DateTime     @db.Date
+  /// From the agency's point of view: `received` is money in, `payment` is
+  /// money out. The running balance per person is the sum of the two.
+  direction      DueDirection
+  amount_bdt     Decimal      @db.Decimal(15, 2)
+  account_id     String
+  notes          String       @default("")
+  deleted_at     DateTime?
+  created_by     String?
+  created_at     DateTime     @default(now())
+
+  due_person DuePerson @relation(fields: [due_person_id], references: [id], onDelete: Restrict)
+  account    Account   @relation(fields: [account_id], references: [id], onDelete: Restrict)
+
+  @@index([organization_id])
+  @@index([due_person_id])
+  @@index([organization_id, date(sort: Desc)])
+  @@map("due_transactions")
+}

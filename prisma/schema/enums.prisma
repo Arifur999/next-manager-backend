@@ -3,15 +3,128 @@
 // stay the same thing.
 
 enum Role {
-  super_admin
-  owner
-  manager
-  staff
-  accountant
+  super_admin // platform operator, not part of any agency
+  owner       // the agency owner - the only role that sees owner withdrawals
+  admin       // full operations access
+  manager     // clients, projects, tasks; limited finance
+  member      // their own tasks and payouts
 }
 
-enum AccountStatus {
-  pending
+enum Currency {
+  USD
+  BDT
+}
+
+enum AccountType {
+  paypal
+  payoneer
+  stripe
+  wise
+  bank
+  cash
+  bkash
+  nagad
+  other
+}
+
+// Why a ledger row exists. The row points back at the record that caused it
+// through source_type + source_id, so any balance can be explained.
+enum LedgerSource {
+  opening_balance
+  payment
+  expense
+  team_payout
+  owner_withdrawal
+  exchange_out
+  exchange_in
+  due_received
+  due_payment
+  adjustment
+}
+
+enum ClientStatus {
   active
-  suspended
+  inactive
+  archived
+}
+
+enum LeadStage {
+  new
+  contacted
+  proposal
+  negotiating
+  won
+  lost
+}
+
+enum ProjectStatus {
+  planning
+  active
+  on_hold
+  completed
+  cancelled
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  in_review
+  done
+}
+
+enum TaskPriority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum InvoiceStatus {
+  draft
+  sent
+  partially_paid
+  paid
+  overdue
+  cancelled
+}
+
+// "employee" categories are salary-like costs that should be excluded from
+// operating-expense reporting; "general" is everything else.
+enum ExpenseCategoryType {
+  general
+  employee
+}
+
+enum PayoutType {
+  salary
+  project_bonus
+  commission
+  reimbursement
+}
+
+enum WithdrawalType {
+  personal
+  reinvestment
+}
+
+// Direction of a due-payment movement, from the agency's point of view.
+enum DueDirection {
+  received // money came in from that person
+  payment  // money went out to that person
+}
+
+enum CredentialAction {
+  created
+  updated
+  viewed
+  revealed
+  deleted
+}
+
+// Where a stored USD -> BDT rate came from. An api rate is the mid-market rate
+// and is only ever a suggestion; the rate actually received on an exchange is
+// recorded on the exchange itself.
+enum RateSource {
+  api
+  manual
 }

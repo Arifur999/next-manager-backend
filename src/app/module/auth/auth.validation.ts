@@ -1,6 +1,9 @@
 import z from "zod";
 
 export const registerZodSchema = z.object({
+    // Signing up creates the agency too, so its name is required here rather
+    // than being a later settings step.
+    organization_name: z.string("Agency name must be string").min(1, "Agency name is required"),
     full_name: z.string("Full name must be string").min(1, "Full name is required"),
     email: z.string("Email must be string").email("Enter a valid email address"),
     password: z

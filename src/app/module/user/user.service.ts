@@ -14,7 +14,6 @@ const PUBLIC_USER_FIELDS = {
     phone: true,
     avatar_url: true,
     role: true,
-    status: true,
     is_active: true,
     email_verified: true,
     permissions: true,
@@ -22,11 +21,10 @@ const PUBLIC_USER_FIELDS = {
     updated_at: true,
 } as const;
 
-// Team members of the caller's workspace. The owner themselves is excluded -
-// they are not a row anyone manages from this screen.
+// Everyone in the caller's agency.
 const getAllUsers = async (user: IRequestUser, options: ListOptions = {}) => {
     const where: Prisma.UserWhereInput = {
-        owner_id: user.ownerId,
+        organization_id: user.organizationId,
         deleted_at: null,
         ...(options.search
             ? {
@@ -65,7 +63,7 @@ const getAllUsers = async (user: IRequestUser, options: ListOptions = {}) => {
 
 const getSingleUser = async (id: string, user: IRequestUser) => {
     const found = await prisma.user.findFirst({
-        where: { id, owner_id: user.ownerId, deleted_at: null },
+        where: { id, organization_id: user.organizationId, deleted_at: null },
         select: PUBLIC_USER_FIELDS,
     });
 
@@ -91,9 +89,9 @@ const createUser = async (payload: ICreateUserPayload, user: IRequestUser) => {
             password: await passwordUtils.hashPassword(payload.password),
             role: payload.role,
             permissions: payload.permissions ?? [],
-            // The new member belongs to the caller's workspace, never to whatever
-            // owner_id a request body might have carried.
-            owner_id: user.ownerId,
+            // The new member joins the caller's agency, never whatever
+            // organization_id a request body might have carried.
+            organization_id: user.organizationId,
         },
         select: PUBLIC_USER_FIELDS,
     });
@@ -101,7 +99,7 @@ const createUser = async (payload: ICreateUserPayload, user: IRequestUser) => {
 
 const updateUser = async (id: string, payload: IUpdateUserPayload, user: IRequestUser) => {
     const existing = await prisma.user.findFirst({
-        where: { id, owner_id: user.ownerId, deleted_at: null },
+        where: { id, organization_id: user.organizationId, deleted_at: null },
     });
 
     if (!existing) {
@@ -121,7 +119,7 @@ const deleteUser = async (id: string, user: IRequestUser) => {
     }
 
     const existing = await prisma.user.findFirst({
-        where: { id, owner_id: user.ownerId, deleted_at: null },
+        where: { id, organization_id: user.organizationId, deleted_at: null },
     });
 
     if (!existing) {

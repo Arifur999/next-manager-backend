@@ -1,0 +1,57 @@
+// Invoices. Billed in USD, like every other client-facing figure.
+
+model Invoice {
+  id             String        @id @default(uuid())
+  organization_id String
+  client_id      String
+  project_id     String?
+  /// Unique per agency, not globally - two agencies both having INV-001 is
+  /// correct.
+  invoice_number String
+  issue_date     DateTime      @db.Date
+  due_date       DateTime      @db.Date
+  status         InvoiceStatus @default(draft)
+  subtotal       Decimal       @default(0) @db.Decimal(15, 2)
+  discount       Decimal       @default(0) @db.Decimal(15, 2)
+  tax            Decimal       @default(0) @db.Decimal(15, 2)
+  total          Decimal       @default(0) @db.Decimal(15, 2)
+  notes          String        @default("")
+  terms          String        @default("")
+  deleted_at     DateTime?
+  deleted_by     String?
+  created_by     String?
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+
+  client   Client        @relation(fields: [client_id], references: [id], onDelete: Restrict)
+  project  Project?      @relation(fields: [project_id], references: [id], onDelete: SetNull)
+  items    InvoiceItem[]
+  payments Payment[]
+
+  @@unique([organization_id, invoice_number])
+  @@index([organization_id])
+  @@index([organization_id, status])
+  @@index([organization_id, due_date])
+  @@index([client_id])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id             String   @id @default(uuid())
+  organization_id String
+  invoice_id     String
+  description    String
+  quantity       Decimal  @default(1) @db.Decimal(12, 2)
+  unit_price     Decimal  @default(0) @db.Decimal(15, 2)
+  /// quantity * unit_price, stored so a historical invoice cannot be restated
+  /// by a change to how the total is worked out.
+  amount         Decimal  @default(0) @db.Decimal(15, 2)
+  sort_order     Int      @default(0)
+  created_at     DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
+
+  @@index([organization_id])
+  @@index([invoice_id])
+  @@map("invoice_items")
+}

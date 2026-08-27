@@ -1,0 +1,57 @@
+// Clients and the lead pipeline that feeds them.
+
+model Client {
+  id             String       @id @default(uuid())
+  organization_id String
+  name           String
+  company        String       @default("")
+  email          String       @default("")
+  phone          String       @default("")
+  country        String       @default("")
+  status         ClientStatus @default(active)
+  notes          String       @default("")
+  deleted_at     DateTime?
+  deleted_by     String?
+  created_at     DateTime     @default(now())
+  updated_at     DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  projects     Project[]
+  payments     Payment[]
+  invoices     Invoice[]
+  credentials  Credential[]
+  leads        Lead[]
+
+  @@index([organization_id])
+  @@index([organization_id, status])
+  @@map("clients")
+}
+
+model Lead {
+  id             String    @id @default(uuid())
+  organization_id String
+  name           String
+  company        String    @default("")
+  email          String    @default("")
+  phone          String    @default("")
+  source         String    @default("")
+  stage          LeadStage @default(new)
+  /// What the deal is thought to be worth. Estimates are always USD - that is
+  /// the currency the agency actually bills in.
+  estimated_value_usd Decimal @default(0) @db.Decimal(15, 2)
+  notes          String    @default("")
+  /// Set when the lead is converted, so a won deal can be traced to its client.
+  converted_client_id String?
+  converted_at   DateTime?
+  deleted_at     DateTime?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  organization     Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  converted_client Client?      @relation(fields: [converted_client_id], references: [id], onDelete: SetNull)
+
+  @@index([organization_id])
+  @@index([organization_id, stage])
+  @@index([converted_client_id])
+  @@map("leads")
+}

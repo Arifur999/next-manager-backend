@@ -1,0 +1,63 @@
+// Client credentials.
+//
+// The password is never stored readable. It is encrypted with AES-256-GCM
+// (see utils/crypto.ts) and only decrypted server-side, for one request, when
+// somebody explicitly asks to reveal it - and that ask is logged.
+//
+// Consequences worth knowing before changing anything here:
+//   - The ciphertext is not searchable. Search works on label / url / username,
+//     which is why those stay plain.
+//   - Losing VAULT_ENCRYPTION_KEY loses every password in the table. It belongs
+//     in the secret store, not in the repo, and rotating it means re-encrypting
+//     every row.
+
+model Credential {
+  id             String    @id @default(uuid())
+  organization_id String
+  /// A credential belongs to a client, a project, or neither (agency-internal).
+  client_id      String?
+  project_id     String?
+  label          String
+  url            String    @default("")
+  username       String    @default("")
+  /// AES-256-GCM output, stored as "iv:authTag:ciphertext", all base64.
+  /// Never selected by a list query - only by an explicit reveal.
+  password_cipher String
+  /// Free-text notes are as sensitive as the password itself, so they get the
+  /// same treatment.
+  notes_cipher   String?
+  deleted_at     DateTime?
+  deleted_by     String?
+  created_by     String?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  client     Client?               @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  project    Project?              @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  access_log CredentialAccessLog[]
+
+  @@index([organization_id])
+  @@index([client_id])
+  @@index([project_id])
+  @@map("credentials")
+}
+
+/// Who looked at what, and when. Append-only: there is no update or delete path
+/// for these rows, because an audit trail somebody can edit is not one.
+model CredentialAccessLog {
+  id             String           @id @default(uuid())
+  organization_id String
+  credential_id  String
+  user_id        String
+  action         CredentialAction
+  ip             String           @default("")
+  user_agent     String           @default("")
+  created_at     DateTime         @default(now())
+
+  credential Credential @relation(fields: [credential_id], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([organization_id])
+  @@index([credential_id, created_at(sort: Desc)])
+  @@map("credential_access_logs")
+}

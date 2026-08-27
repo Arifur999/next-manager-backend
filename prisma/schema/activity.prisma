@@ -1,0 +1,23 @@
+/// The dashboard's "Recent Activity" feed.
+///
+/// Denormalised on purpose: `summary` is written at the time of the action and
+/// never recomputed, so the feed still reads correctly after the thing it
+/// describes has been renamed or deleted.
+model ActivityLog {
+  id             String   @id @default(uuid())
+  organization_id String
+  user_id        String?
+  /// e.g. "payment", "project", "invoice" - a plain string rather than an enum
+  /// so adding a module does not need a migration.
+  entity_type    String
+  entity_id      String?
+  /// "created", "updated", "deleted", "status_changed", ...
+  action         String
+  summary        String
+  created_at     DateTime @default(now())
+
+  user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([organization_id, created_at(sort: Desc)])
+  @@map("activity_logs")
+}

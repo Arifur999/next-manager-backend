@@ -2,6 +2,7 @@ import { Router } from "express";
 import { AccountRoutes } from "../module/account/account.route.js";
 import { AuthRoutes } from "../module/auth/auth.route.js";
 import { ClientRoutes } from "../module/client/client.route.js";
+import { DashboardRoutes } from "../module/dashboard/dashboard.route.js";
 import { ExchangeRoutes } from "../module/exchange/exchange.route.js";
 import { ExpenseRoutes } from "../module/expense/expense.route.js";
 import { ExpenseCategoryRoutes } from "../module/expenseCategory/expenseCategory.route.js";
@@ -15,6 +16,7 @@ import { VaultRoutes } from "../module/vault/vault.route.js";
 const router = Router();
 
 router.use("/auth", AuthRoutes);
+router.use("/dashboard", DashboardRoutes);
 router.use("/users", UserRoutes);
 router.use("/clients", ClientRoutes);
 router.use("/projects", ProjectRoutes);

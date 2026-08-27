@@ -1,0 +1,294 @@
+// End-to-end smoke test against a running AGENCIO backend.
+// Walks the money path that matters: signup -> accounts -> client -> payment
+// (USD in) -> exchange (USD out, BDT in) -> balances -> dashboard.
+
+const BASE = "http://localhost:5000/api/v1";
+let cookie = "";
+let failures = 0;
+
+const call = async (method, path, body) => {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const setCookie = res.headers.getSetCookie?.() ?? [];
+  if (setCookie.length) {
+    cookie = setCookie.map((c) => c.split(";")[0]).join("; ");
+  }
+
+  const json = await res.json().catch(() => ({}));
+  return { status: res.status, json };
+};
+
+const check = (label, condition, detail = "") => {
+  if (condition) {
+    console.log(`  PASS  ${label}`);
+  } else {
+    failures += 1;
+    console.log(`  FAIL  ${label}${detail ? ` -> ${detail}` : ""}`);
+  }
+};
+
+const near = (a, b, tolerance = 0.01) => Math.abs(a - b) < tolerance;
+
+const stamp = Date.now();
+const email = `owner${stamp}@agencio.test`;
+
+console.log("\n--- signup + auth ---");
+let r = await call("POST", "/auth/register", {
+  organization_name: "Pixel Forge Agency",
+  full_name: "Test Owner",
+  email,
+  password: "Passw0rd123",
+});
+check("register creates agency + owner", r.status === 201, `${r.status} ${r.json.message}`);
+check("owner role assigned", r.json.data?.role === "owner", r.json.data?.role);
+check("organization_id set", Boolean(r.json.data?.organization_id));
+
+r = await call("POST", "/auth/login", { email, password: "Passw0rd123" });
+check("login", r.status === 200, `${r.status} ${r.json.message}`);
+check("cookies issued", cookie.includes("accessToken"));
+
+r = await call("GET", "/auth/me");
+check("/auth/me", r.status === 200 && r.json.data?.email === email);
+
+console.log("\n--- accounts ---");
+r = await call("POST", "/accounts", { name: "PayPal", type: "paypal", currency: "USD" });
+const usdAccount = r.json.data?.id;
+check("create USD account", r.status === 201, r.json.message);
+
+r = await call("POST", "/accounts", { name: "bKash", type: "bkash", currency: "BDT" });
+const bdtAccount = r.json.data?.id;
+check("create BDT account", r.status === 201, r.json.message);
+
+r = await call("POST", "/accounts", { name: "PayPal", type: "paypal", currency: "USD" });
+check("duplicate account name rejected", r.status === 409, `${r.status}`);
+
+console.log("\n--- client + payment (USD in) ---");
+r = await call("POST", "/clients", { name: "Acme Corp", company: "Acme", email: "billing@acme.test" });
+const clientId = r.json.data?.id;
+check("create client", r.status === 201, r.json.message);
+
+// No rate configured and no cron run yet -> the server must say so rather than
+// invent a figure.
+r = await call("POST", "/payments", {
+  client_id: clientId,
+  date: "2026-08-10",
+  amount_usd: 500,
+  account_id: usdAccount,
+});
+const rateAutoResolved = r.status === 201;
+check(
+  "payment without a rate either resolves one or refuses clearly",
+  rateAutoResolved || (r.status === 400 && /rate/i.test(r.json.message)),
+  `${r.status} ${r.json.message}`
+);
+
+if (!rateAutoResolved) {
+  r = await call("POST", "/payments", {
+    client_id: clientId,
+    date: "2026-08-10",
+    amount_usd: 500,
+    reporting_rate: 122,
+    account_id: usdAccount,
+  });
+}
+check("record payment", r.status === 201, `${r.status} ${r.json.message}`);
+const paymentRate = r.json.data?.reporting_rate;
+check("reporting rate frozen on the row", typeof paymentRate === "number" && paymentRate > 0, String(paymentRate));
+check(
+  "BDT reporting = usd * rate",
+  near(r.json.data?.amount_bdt_reporting, 500 * paymentRate),
+  `${r.json.data?.amount_bdt_reporting} vs ${500 * paymentRate}`
+);
+
+console.log("\n--- currency guards ---");
+r = await call("POST", "/payments", {
+  client_id: clientId,
+  date: "2026-08-10",
+  amount_usd: 100,
+  reporting_rate: 122,
+  account_id: bdtAccount,
+});
+check("payment into a BDT account rejected", r.status === 400, `${r.status} ${r.json.message}`);
+
+r = await call("POST", "/expenses", {
+  date: "2026-08-11",
+  category_id: "00000000-0000-0000-0000-000000000000",
+  amount_bdt: 100,
+  account_id: bdtAccount,
+});
+check("expense with an unknown category rejected", r.status === 404, `${r.status}`);
+
+console.log("\n--- balances after payment ---");
+r = await call("GET", "/accounts");
+let usd = r.json.data?.find((a) => a.id === usdAccount);
+check("USD balance = 500", near(usd?.balance, 500), String(usd?.balance));
+
+console.log("\n--- exchange (USD out, BDT in) ---");
+r = await call("POST", "/exchanges", {
+  date: "2026-08-12",
+  from_account_id: usdAccount,
+  to_account_id: bdtAccount,
+  amount_usd: 300,
+  rate: 118,
+  fee_usd: 5,
+});
+check("record exchange", r.status === 201, `${r.status} ${r.json.message}`);
+check("BDT = (usd - fee) * rate", near(r.json.data?.amount_bdt, (300 - 5) * 118), String(r.json.data?.amount_bdt));
+
+r = await call("POST", "/exchanges", {
+  date: "2026-08-12",
+  from_account_id: usdAccount,
+  to_account_id: bdtAccount,
+  amount_usd: 9999,
+  rate: 118,
+});
+check("overdrawing the USD wallet rejected", r.status === 409, `${r.status} ${r.json.message}`);
+
+r = await call("POST", "/exchanges", {
+  date: "2026-08-12",
+  from_account_id: bdtAccount,
+  to_account_id: usdAccount,
+  amount_usd: 10,
+  rate: 118,
+});
+check("exchange with the wallets the wrong way round rejected", r.status === 400, `${r.status}`);
+
+console.log("\n--- ledger arithmetic ---");
+r = await call("GET", "/accounts");
+usd = r.json.data?.find((a) => a.id === usdAccount);
+const bdt = r.json.data?.find((a) => a.id === bdtAccount);
+check("USD balance = 500 - 300 = 200", near(usd?.balance, 200), String(usd?.balance));
+check("BDT balance = 295 * 118 = 34810", near(bdt?.balance, (300 - 5) * 118), String(bdt?.balance));
+
+console.log("\n--- invoice status derived from payments ---");
+r = await call("POST", "/invoices", {
+  client_id: clientId,
+  issue_date: "2026-08-01",
+  due_date: "2026-08-15",
+  status: "sent",
+  items: [{ description: "Landing page", quantity: 1, unit_price: 200 }],
+});
+const invoiceId = r.json.data?.id;
+check("create invoice", r.status === 201, `${r.status} ${r.json.message}`);
+check("total computed server-side", near(Number(r.json.data?.total), 200), String(r.json.data?.total));
+check("invoice number generated", /^INV-\d{4}$/.test(r.json.data?.invoice_number ?? ""), r.json.data?.invoice_number);
+
+r = await call("POST", "/payments", {
+  client_id: clientId,
+  invoice_id: invoiceId,
+  date: "2026-08-14",
+  amount_usd: 120,
+  reporting_rate: 122,
+  account_id: usdAccount,
+});
+check("partial payment recorded", r.status === 201, r.json.message);
+
+r = await call("GET", `/invoices/${invoiceId}`);
+check("invoice becomes partially_paid", r.json.data?.status === "partially_paid", r.json.data?.status);
+check("due = 200 - 120 = 80", near(r.json.data?.due_usd, 80), String(r.json.data?.due_usd));
+
+r = await call("POST", "/payments", {
+  client_id: clientId,
+  invoice_id: invoiceId,
+  date: "2026-08-15",
+  amount_usd: 80,
+  reporting_rate: 122,
+  account_id: usdAccount,
+});
+r = await call("GET", `/invoices/${invoiceId}`);
+check("invoice becomes paid once settled", r.json.data?.status === "paid", r.json.data?.status);
+
+console.log("\n--- vault ---");
+r = await call("POST", "/vault", {
+  client_id: clientId,
+  label: "Acme cPanel",
+  url: "https://acme.test/cpanel",
+  username: "admin",
+  password: "s3cret-p@ss",
+});
+const credentialId = r.json.data?.id;
+check("create credential", r.status === 201, r.json.message);
+check("create response masks the password", r.json.data?.password === "••••••••", r.json.data?.password);
+
+r = await call("GET", "/vault");
+check("list masks the password", r.json.data?.[0]?.password === "••••••••");
+check("list never carries the cipher", r.json.data?.[0]?.password_cipher === undefined);
+
+r = await call("GET", `/vault/${credentialId}/reveal`);
+check("reveal returns the real password", r.json.data?.password === "s3cret-p@ss", r.json.data?.password);
+
+r = await call("GET", `/vault/${credentialId}/access-log`);
+const actions = (r.json.data ?? []).map((e) => e.action);
+check("access log recorded create + reveal", actions.includes("created") && actions.includes("revealed"), actions.join(","));
+
+console.log("\n--- dashboard + reports ---");
+r = await call("GET", "/dashboard");
+check("dashboard responds", r.status === 200, `${r.status} ${r.json.message}`);
+check("month revenue USD = 500 + 120 + 80", near(r.json.data?.month?.revenue_usd, 700), String(r.json.data?.month?.revenue_usd));
+check("balances by currency present", r.json.data?.balance_by_currency?.USD !== undefined);
+
+r = await call("GET", "/reports/profit-loss");
+check("P&L responds", r.status === 200, `${r.status}`);
+check("P&L revenue USD = 700", near(r.json.data?.revenue?.usd, 700), String(r.json.data?.revenue?.usd));
+
+r = await call("GET", "/reports/monthly?months=3");
+check("monthly series fills every month", Array.isArray(r.json.data) && r.json.data.length === 3, String(r.json.data?.length));
+
+console.log("\n--- tenant isolation ---");
+const otherEmail = `other${stamp}@agencio.test`;
+const savedCookie = cookie;
+cookie = "";
+await call("POST", "/auth/register", {
+  organization_name: "Other Agency",
+  full_name: "Other Owner",
+  email: otherEmail,
+  password: "Passw0rd123",
+});
+await call("POST", "/auth/login", { email: otherEmail, password: "Passw0rd123" });
+
+r = await call("GET", "/clients");
+check("a second agency sees none of the first's clients", (r.json.data ?? []).length === 0, String(r.json.data?.length));
+
+r = await call("GET", "/accounts");
+check("a second agency sees none of the first's accounts", (r.json.data ?? []).length === 0, String(r.json.data?.length));
+
+r = await call("GET", `/vault/${credentialId}/reveal`);
+check("a second agency cannot reveal the first's credential", r.status === 404, `${r.status}`);
+
+r = await call("POST", "/payments", {
+  client_id: clientId,
+  date: "2026-08-10",
+  amount_usd: 10,
+  reporting_rate: 122,
+  account_id: usdAccount,
+});
+check("a second agency cannot pay into the first's account", r.status === 404, `${r.status} ${r.json.message}`);
+
+cookie = savedCookie;
+
+console.log("\n--- owner-only routes ---");
+r = await call("POST", "/users", {
+  full_name: "Manager Person",
+  email: `mgr${stamp}@agencio.test`,
+  password: "Passw0rd123",
+  role: "manager",
+});
+check("owner can invite a manager", r.status === 201, `${r.status} ${r.json.message}`);
+
+const ownerCookie = cookie;
+cookie = "";
+await call("POST", "/auth/login", { email: `mgr${stamp}@agencio.test`, password: "Passw0rd123" });
+r = await call("GET", "/owner-withdrawals");
+check("manager blocked from owner withdrawals", r.status === 403, `${r.status}`);
+r = await call("GET", "/reports/profit-loss");
+check("manager blocked from reports", r.status === 403, `${r.status}`);
+r = await call("GET", "/clients");
+check("manager can still read clients", r.status === 200, `${r.status}`);
+cookie = ownerCookie;
+
+console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
+process.exit(failures === 0 ? 0 : 1);

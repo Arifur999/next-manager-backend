@@ -16,7 +16,8 @@
     "push": "prisma db push",
     "seed": "tsx src/app/utils/seed.ts",
     "lint": "eslint . --ext .ts",
-    "test": "tsx --test \"src/**/*.test.ts\""
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.3.0",

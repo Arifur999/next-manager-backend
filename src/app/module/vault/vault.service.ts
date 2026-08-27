@@ -53,12 +53,26 @@ const writeAccessLog = async (
     });
 };
 
-const getAllCredentials = async (user: IRequestUser, options: ListOptions = {}) => {
+export interface CredentialFilters {
+    clientId?: string;
+    projectId?: string;
+}
+
+const getAllCredentials = async (
+    user: IRequestUser,
+    options: ListOptions = {},
+    filters: CredentialFilters = {}
+) => {
     // Search works on label / url / username, which is why those stay plain
     // text. The ciphertext is not searchable and should not be.
     const where: Prisma.CredentialWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
+        // Filtering by id, not by text. Search matches label/url/username, so a
+        // project id typed into it would match nothing - which is exactly the
+        // trap the project screen fell into before these existed.
+        ...(filters.clientId ? { client_id: filters.clientId } : {}),
+        ...(filters.projectId ? { project_id: filters.projectId } : {}),
         ...(options.search
             ? {
                 OR: [

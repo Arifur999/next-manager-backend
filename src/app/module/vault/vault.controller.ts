@@ -15,8 +15,12 @@ const accessContext = (req: Request) => ({
 });
 
 const getAllCredentials = catchAsync(async (req: Request, res: Response) => {
-    const options = parseListOptions(req.query as Record<string, unknown>);
-    const { rows, total } = await VaultService.getAllCredentials(req.user as IRequestUser, options);
+    const query = req.query as Record<string, unknown>;
+    const options = parseListOptions(query);
+    const { rows, total } = await VaultService.getAllCredentials(req.user as IRequestUser, options, {
+        clientId: typeof query.client_id === "string" ? query.client_id : undefined,
+        projectId: typeof query.project_id === "string" ? query.project_id : undefined,
+    });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

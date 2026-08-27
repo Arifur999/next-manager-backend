@@ -5,6 +5,7 @@ import { ClientRoutes } from "../module/client/client.route.js";
 import { ExchangeRoutes } from "../module/exchange/exchange.route.js";
 import { ExpenseRoutes } from "../module/expense/expense.route.js";
 import { ExpenseCategoryRoutes } from "../module/expenseCategory/expenseCategory.route.js";
+import { OwnerWithdrawalRoutes } from "../module/ownerWithdrawal/ownerWithdrawal.route.js";
 import { PaymentRoutes } from "../module/payment/payment.route.js";
 import { ProjectRoutes } from "../module/project/project.route.js";
 import { TeamPayoutRoutes } from "../module/teamPayout/teamPayout.route.js";
@@ -23,6 +24,7 @@ router.use("/exchanges", ExchangeRoutes);
 router.use("/expense-categories", ExpenseCategoryRoutes);
 router.use("/expenses", ExpenseRoutes);
 router.use("/team-payouts", TeamPayoutRoutes);
+router.use("/owner-withdrawals", OwnerWithdrawalRoutes);
 router.use("/vault", VaultRoutes);
 
 export const indexRoute = router;

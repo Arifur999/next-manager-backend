@@ -8,6 +8,7 @@ import { ExpenseCategoryRoutes } from "../module/expenseCategory/expenseCategory
 import { PaymentRoutes } from "../module/payment/payment.route.js";
 import { TeamPayoutRoutes } from "../module/teamPayout/teamPayout.route.js";
 import { UserRoutes } from "../module/user/user.route.js";
+import { VaultRoutes } from "../module/vault/vault.route.js";
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use("/exchanges", ExchangeRoutes);
 router.use("/expense-categories", ExpenseCategoryRoutes);
 router.use("/expenses", ExpenseRoutes);
 router.use("/team-payouts", TeamPayoutRoutes);
+router.use("/vault", VaultRoutes);
 
 export const indexRoute = router;

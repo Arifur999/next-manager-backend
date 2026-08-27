@@ -30,6 +30,7 @@
     "express-rate-limit": "^8.6.2",
     "http-status": "^2.1.0",
     "jsonwebtoken": "^9.0.3",
+    "node-cron": "^4.6.0",
     "pg": "^8.18.0",
     "prisma": "^7.3.0",
     "zod": "^4.3.6"
@@ -41,6 +42,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.2.1",
+    "@types/node-cron": "^3.0.11",
     "@types/pg": "^8.16.0",
     "eslint": "^9.39.2",
     "globals": "^17.11.0",

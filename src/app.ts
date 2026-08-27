@@ -1,13 +1,33 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { Application, Request, Response } from "express";
+import cron from "node-cron";
 import { apiRateLimit } from "./app/middleware/rateLimit.js";
 import { globalErrorHandler } from "./app/middleware/globalErrorHandler.js";
 import notFound from "./app/middleware/notFound.js";
 import { indexRoute } from "./app/routes/index.js";
+import { syncTodaysRate } from "./app/utils/currencyRate.js";
 import { env } from "./config/env.js";
 
 const app: Application = express();
+
+// Daily at 00:30 UTC, just after the providers publish. Storing the rate keeps
+// a history to report against and means a payment recorded while the provider
+// is down still gets a sensible default instead of failing.
+//
+// This is only ever the MID-MARKET rate, which is not what any processor
+// actually pays - it is a default and a reporting figure. The rate on an
+// exchange is the real one, typed in by whoever did it.
+cron.schedule("30 0 * * *", async () => {
+    try {
+        const result = await syncTodaysRate();
+        if (result) {
+            console.log(`[currency] USD/BDT ${result.rate} via ${result.provider}`);
+        }
+    } catch (error) {
+        console.error("[currency] daily sync failed:", (error as Error).message);
+    }
+});
 
 // Behind a reverse proxy the client address arrives in X-Forwarded-For. Without
 // this every request looks like it came from the proxy, which would put all

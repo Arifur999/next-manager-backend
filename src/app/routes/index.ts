@@ -3,6 +3,7 @@ import { AccountRoutes } from "../module/account/account.route.js";
 import { AuthRoutes } from "../module/auth/auth.route.js";
 import { ClientRoutes } from "../module/client/client.route.js";
 import { DashboardRoutes } from "../module/dashboard/dashboard.route.js";
+import { DuePaymentRoutes } from "../module/duePayment/duePayment.route.js";
 import { ExchangeRoutes } from "../module/exchange/exchange.route.js";
 import { ExpenseRoutes } from "../module/expense/expense.route.js";
 import { ExpenseCategoryRoutes } from "../module/expenseCategory/expenseCategory.route.js";
@@ -31,6 +32,7 @@ router.use("/expense-categories", ExpenseCategoryRoutes);
 router.use("/expenses", ExpenseRoutes);
 router.use("/team-payouts", TeamPayoutRoutes);
 router.use("/owner-withdrawals", OwnerWithdrawalRoutes);
+router.use("/due-payments", DuePaymentRoutes);
 router.use("/vault", VaultRoutes);
 
 export const indexRoute = router;

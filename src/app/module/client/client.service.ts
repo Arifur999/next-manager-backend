@@ -4,6 +4,7 @@ import { InvoiceStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateClientPayload, IUpdateClientPayload } from "./client.validation.js";
 
@@ -119,18 +120,31 @@ const getClientFinancials = async (id: string, user: IRequestUser) => {
     };
 };
 
+// Wrapped in a transaction only so the activity entry cannot outlive a failed
+// create - the row on its own would not need one.
 const createClient = async (payload: ICreateClientPayload, user: IRequestUser) => {
-    return prisma.client.create({
-        data: {
-            organization_id: user.organizationId,
-            name: payload.name,
-            company: payload.company ?? "",
-            email: payload.email ?? "",
-            phone: payload.phone ?? "",
-            country: payload.country ?? "",
-            status: payload.status,
-            notes: payload.notes ?? "",
-        },
+    return prisma.$transaction(async (tx) => {
+        const client = await tx.client.create({
+            data: {
+                organization_id: user.organizationId,
+                name: payload.name,
+                company: payload.company ?? "",
+                email: payload.email ?? "",
+                phone: payload.phone ?? "",
+                country: payload.country ?? "",
+                status: payload.status,
+                notes: payload.notes ?? "",
+            },
+        });
+
+        await logActivity(tx, {
+            entityType: "client",
+            entityId: client.id,
+            action: "created",
+            summary: `Added ${client.name} as a client`,
+        }, user);
+
+        return client;
     });
 };
 

@@ -4,6 +4,7 @@ import { Currency, LedgerSource } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { logActivity, money } from "../../shared/activity.js";
 import { assertAccount, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
 import { dateRangeWhere, escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateExpensePayload, IUpdateExpensePayload } from "./expense.validation.js";
@@ -147,6 +148,14 @@ const createExpense = async (payload: ICreateExpensePayload, user: IRequestUser)
             user,
             Currency.BDT
         );
+
+        const category = await tx.expenseCategory.findUnique({ where: { id: payload.category_id }, select: { name: true } });
+        await logActivity(tx, {
+            entityType: "expense",
+            entityId: expense.id,
+            action: "created",
+            summary: `Spent ${money(payload.amount_bdt, "BDT")} on ${category?.name ?? "an expense"}`,
+        }, user);
 
         return expense;
     });

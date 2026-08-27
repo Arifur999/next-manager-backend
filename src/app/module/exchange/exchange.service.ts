@@ -4,6 +4,7 @@ import { Currency, LedgerSource } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { logActivity, money } from "../../shared/activity.js";
 import { assertAccount, getAccountBalances, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
 import { dateRangeWhere, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateExchangePayload } from "./exchange.validation.js";
@@ -138,6 +139,13 @@ const createExchange = async (payload: ICreateExchangePayload, user: IRequestUse
             user,
             Currency.BDT
         );
+
+        await logActivity(tx, {
+            entityType: "exchange",
+            entityId: exchange.id,
+            action: "created",
+            summary: `Exchanged ${money(payload.amount_usd, "USD")} to ${money(amountBdt, "BDT")} at ${payload.rate}`,
+        }, user);
 
         return exchange;
     });

@@ -4,6 +4,7 @@ import { Currency, LedgerSource } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { logActivity, money } from "../../shared/activity.js";
 import { recalcInvoiceStatus } from "../../shared/invoiceStatus.js";
 import { assertAccount, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
 import { dateRangeWhere, escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
@@ -156,6 +157,14 @@ const createPayment = async (payload: ICreatePaymentPayload, user: IRequestUser)
             await recalcInvoiceStatus(tx, payload.invoice_id, user.organizationId);
         }
 
+        const client = await tx.client.findUnique({ where: { id: payload.client_id }, select: { name: true } });
+        await logActivity(tx, {
+            entityType: "payment",
+            entityId: payment.id,
+            action: "created",
+            summary: `Recorded ${money(payload.amount_usd, "USD")} from ${client?.name ?? "a client"}`,
+        }, user);
+
         return payment;
     });
 };
@@ -263,6 +272,13 @@ const deletePayment = async (id: string, user: IRequestUser) => {
         if (existing.invoice_id) {
             await recalcInvoiceStatus(tx, existing.invoice_id, user.organizationId);
         }
+
+        await logActivity(tx, {
+            entityType: "payment",
+            entityId: id,
+            action: "deleted",
+            summary: `Deleted a ${money(existing.amount_usd, "USD")} payment`,
+        }, user);
 
         return { message: "Payment deleted successfully" };
     });

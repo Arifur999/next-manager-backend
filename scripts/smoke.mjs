@@ -248,13 +248,27 @@ await call("POST", "/auth/register", {
   email: otherEmail,
   password: "Passw0rd123",
 });
-await call("POST", "/auth/login", { email: otherEmail, password: "Passw0rd123" });
+r = await call("POST", "/auth/login", { email: otherEmail, password: "Passw0rd123" });
+
+// Assert the second agency is genuinely signed in BEFORE testing isolation.
+// Without this the next two checks pass whenever login fails: an unauthorised
+// response carries no `data`, and (undefined ?? []).length === 0 is true — so a
+// broken login would look like perfect isolation.
+check("second agency signed in", r.status === 200 && cookie.includes("accessToken"), `${r.status} ${r.json.message}`);
 
 r = await call("GET", "/clients");
-check("a second agency sees none of the first's clients", (r.json.data ?? []).length === 0, String(r.json.data?.length));
+check(
+  "a second agency sees none of the first's clients",
+  r.status === 200 && Array.isArray(r.json.data) && r.json.data.length === 0,
+  `${r.status} len=${r.json.data?.length}`
+);
 
 r = await call("GET", "/accounts");
-check("a second agency sees none of the first's accounts", (r.json.data ?? []).length === 0, String(r.json.data?.length));
+check(
+  "a second agency sees none of the first's accounts",
+  r.status === 200 && Array.isArray(r.json.data) && r.json.data.length === 0,
+  `${r.status} len=${r.json.data?.length}`
+);
 
 r = await call("GET", `/vault/${credentialId}/reveal`);
 check("a second agency cannot reveal the first's credential", r.status === 404, `${r.status}`);

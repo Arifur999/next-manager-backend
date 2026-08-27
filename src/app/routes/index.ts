@@ -11,6 +11,7 @@ import { InvoiceRoutes } from "../module/invoice/invoice.route.js";
 import { OwnerWithdrawalRoutes } from "../module/ownerWithdrawal/ownerWithdrawal.route.js";
 import { PaymentRoutes } from "../module/payment/payment.route.js";
 import { ProjectRoutes } from "../module/project/project.route.js";
+import { SettingsRoutes } from "../module/settings/settings.route.js";
 import { TaskRoutes } from "../module/task/task.route.js";
 import { TeamPayoutRoutes } from "../module/teamPayout/teamPayout.route.js";
 import { UserRoutes } from "../module/user/user.route.js";
@@ -34,5 +35,6 @@ router.use("/team-payouts", TeamPayoutRoutes);
 router.use("/owner-withdrawals", OwnerWithdrawalRoutes);
 router.use("/due-payments", DuePaymentRoutes);
 router.use("/vault", VaultRoutes);
+router.use("/settings", SettingsRoutes);
 
 export const indexRoute = router;

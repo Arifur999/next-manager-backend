@@ -4,6 +4,7 @@ import { Role } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { DEFAULT_WEEKLY_HOURS, loadCapacityRows } from "../../shared/capacity.js";
 import { dateRangeWhere, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateTimeEntryPayload, IUpdateTimeEntryPayload } from "./timeEntry.validation.js";
 
@@ -294,25 +295,28 @@ const deleteEntry = async (id: string, user: IRequestUser) => {
  * caller having to know who is missing.
  */
 const getCapacities = async (user: IRequestUser) => {
-    const [members, stored] = await Promise.all([
+    const [members, rows] = await Promise.all([
         prisma.user.findMany({
             where: { organization_id: user.organizationId, deleted_at: null, is_active: true },
             select: { id: true, full_name: true, email: true, role: true },
             orderBy: { full_name: "asc" },
         }),
-        prisma.capacity.findMany({
-            where: { organization_id: user.organizationId },
-            select: { user_id: true, weekly_hours: true },
-        }),
+        // Same helper the KPI engine divides by, so the hours shown here and
+        // the hours utilization is measured against are the same hours.
+        loadCapacityRows(user.organizationId),
     ]);
 
-    const byUser = new Map(stored.map((row) => [row.user_id, row.weekly_hours.toNumber()]));
+    const byUser = new Map(rows.map((row) => [row.user_id, row]));
 
-    return members.map((member) => ({
-        user: member,
-        weekly_hours: byUser.get(member.id) ?? 40,
-        is_default: !byUser.has(member.id),
-    }));
+    return members.map((member) => {
+        const row = byUser.get(member.id);
+        return {
+            user: member,
+            weekly_hours: row?.weekly_hours ?? DEFAULT_WEEKLY_HOURS,
+            standard_rate_usd: row?.standard_rate_usd ?? 0,
+            is_default: row?.is_default ?? true,
+        };
+    });
 };
 
 const setCapacity = async (userId: string, weeklyHours: number, user: IRequestUser) => {

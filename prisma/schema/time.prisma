@@ -59,6 +59,15 @@ model Capacity {
   organization_id String
   user_id        String
   weekly_hours   Decimal  @default(40) @db.Decimal(5, 2)
+  /// What an hour of this person's time is billed at. Realization - the share
+  /// of billable time that actually turns into collected money - is
+  /// uncomputable without it: there is no way to say what the logged hours
+  /// were WORTH, only how many there were.
+  ///
+  /// Zero means unset, and the engine returns null realization for that person
+  /// rather than dividing by it. A fabricated rate would produce a confident
+  /// number built on a guess.
+  standard_rate_usd Decimal @default(0) @db.Decimal(10, 2)
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
 

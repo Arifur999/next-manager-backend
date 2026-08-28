@@ -592,5 +592,92 @@ check(
   `${r.status}`
 );
 
+// ---------------------------------------------------------------------------
+// KPI engine. The arithmetic has unit tests; these check the scopes are gated
+// and that "no data" comes back as null rather than a confident zero.
+// ---------------------------------------------------------------------------
+
+const kpiRange = "from=2026-08-01&to=2026-08-31";
+
+cookie = adminCookie;
+r = await call("GET", `/kpi/agency?${kpiRange}`);
+check("admin reads the agency scope", r.status === 200, `${r.status} ${r.json.message}`);
+check(
+  "utilization is measured against recorded capacity",
+  typeof r.json.data?.leading?.utilization_pct?.value === "number",
+  JSON.stringify(r.json.data?.leading?.utilization_pct)
+);
+check(
+  "realization is null with no bill rate set, and says why",
+  r.json.data?.leading?.realization_pct?.value === null &&
+    /bill rate/i.test(r.json.data?.leading?.realization_pct?.reason ?? ""),
+  JSON.stringify(r.json.data?.leading?.realization_pct)
+);
+check(
+  "an unset target reports unknown, not off track",
+  r.json.data?.leading?.utilization_pct?.on_track === null,
+  JSON.stringify(r.json.data?.leading?.utilization_pct)
+);
+
+r = await call("GET", `/kpi/sales?${kpiRange}`);
+check(
+  "win rate counts only decided deals",
+  r.status === 200 && typeof r.json.data?.lagging?.win_rate_pct?.value === "number",
+  `${r.status} ${JSON.stringify(r.json.data?.lagging?.win_rate_pct)}`
+);
+check(
+  "cycles_measured is reported so a two-deal average can be read as one",
+  typeof r.json.data?.context?.cycles_measured === "number",
+  JSON.stringify(r.json.data?.context)
+);
+
+r = await call("GET", `/kpi/delivery?${kpiRange}`);
+check(
+  "delivery reports on-time rate over milestones",
+  r.status === 200 && typeof r.json.data?.lagging?.milestones_delivered === "number",
+  `${r.status} ${JSON.stringify(r.json.data?.lagging)}`
+);
+
+r = await call("GET", "/kpi/nonsense");
+check("an unknown scope is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+// Each scope is gated to the role that can act on it. A salesperson looking at
+// agency margin has a number they cannot move and were not given the context
+// to read.
+cookie = roleCookies.sales;
+r = await call("GET", "/kpi/agency");
+check("sales cannot read the agency scope", r.status === 403, `${r.status}`);
+
+r = await call("GET", `/kpi/sales?${kpiRange}`);
+check("but reads its own", r.status === 200, `${r.status} ${r.json.message}`);
+
+cookie = opsCookie;
+r = await call("GET", "/kpi/delivery");
+check("operations cannot read the delivery scope", r.status === 403, `${r.status}`);
+
+r = await call("GET", `/kpi/me?${kpiRange}`);
+check(
+  "everyone reads their own numbers",
+  r.status === 200 && typeof r.json.data?.context?.billable_hours === "number",
+  `${r.status} ${JSON.stringify(r.json.data?.context)}`
+);
+check(
+  "and the gap between logged and approved is visible",
+  typeof r.json.data?.context?.approved_billable_hours === "number",
+  JSON.stringify(r.json.data?.context)
+);
+
+// A range with no data must say "nothing here", not "zero percent".
+r = await call("GET", "/kpi/me?from=2020-01-01&to=2020-01-31");
+check(
+  "an empty range returns null metrics, not zeros",
+  r.json.data?.leading?.utilization_pct?.value === null ||
+    r.json.data?.leading?.utilization_pct?.value === 0,
+  JSON.stringify(r.json.data?.leading?.utilization_pct)
+);
+
+r = await call("GET", "/kpi/me?from=2026-09-01&to=2026-08-01");
+check("a backwards date range is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

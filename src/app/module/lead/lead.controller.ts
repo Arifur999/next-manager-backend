@@ -47,6 +47,16 @@ const convertToClient = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const getStageEvents = catchAsync(async (req: Request, res: Response) => {
+    const result = await LeadService.getStageEvents(req.params.id as string, req.user as IRequestUser);
+    sendResponse(res, {
+        success: true,
+        httpStatus: status.OK,
+        message: "Stage history retrieved successfully",
+        data: result,
+    });
+});
+
 const deleteLead = catchAsync(async (req: Request, res: Response) => {
     const result = await LeadService.deleteLead(req.params.id as string, req.user as IRequestUser);
     sendResponse(res, {
@@ -57,4 +67,11 @@ const deleteLead = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
-export const LeadController = { getPipeline, createLead, updateLead, convertToClient, deleteLead };
+export const LeadController = {
+    getPipeline,
+    createLead,
+    updateLead,
+    getStageEvents,
+    convertToClient,
+    deleteLead,
+};

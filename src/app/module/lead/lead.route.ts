@@ -17,6 +17,10 @@ router.post("/", checkAuth(Role.admin, Role.sales), validateRequest(createLeadZo
 // endpoint of its own.
 router.patch("/:id", checkAuth(Role.admin, Role.sales), validateRequest(updateLeadZodSchema), LeadController.updateLead);
 
+// The history behind a deal. Admin can read it too - sales-cycle length is a
+// company-health number, not just a sales one.
+router.get("/:id/stage-events", checkAuth(Role.admin, Role.sales), LeadController.getStageEvents);
+
 // Converting creates a client, which is squarely sales' job.
 router.post("/:id/convert", checkAuth(Role.admin, Role.sales), LeadController.convertToClient);
 

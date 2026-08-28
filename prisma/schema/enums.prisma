@@ -133,3 +133,36 @@ enum RateSource {
   api
   manual
 }
+
+// What a KpiTarget can be set against.
+//
+// An enum rather than free text on purpose: a target on a metric the engine
+// cannot compute is a target nobody will ever be scored against, which is
+// worse than having no target at all. Adding a metric here is deliberate, and
+// the migration is the reminder to also teach the engine to compute it.
+enum KpiMetric {
+  // Delivery capacity
+  utilization_pct      // billable hours / available hours
+  realization_pct      // billable hours that were invoiced and collected
+  billable_hours
+
+  // Money
+  revenue_usd
+  gross_margin_pct
+
+  // Selling
+  deals_won
+  deal_value_usd
+  win_rate_pct
+  pipeline_coverage    // open pipeline value / the target it has to cover
+
+  // Delivery quality
+  on_time_delivery_pct
+  project_margin_pct
+}
+
+enum KpiPeriod {
+  month
+  quarter
+  year
+}

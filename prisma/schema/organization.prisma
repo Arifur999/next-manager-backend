@@ -23,6 +23,7 @@ model Organization {
 
   users     User[]
   clients   Client[]
+  kpi_targets KpiTarget[]
   leads     Lead[]
   projects  Project[]
   accounts  Account[]
@@ -61,6 +62,7 @@ model User {
   credential_access  CredentialAccessLog[]
   time_entries       TimeEntry[]         @relation("TimeEntryUser")
   capacity           Capacity?
+  kpi_targets        KpiTarget[]         @relation("KpiTargetUser")
   activities         ActivityLog[]
 
   @@index([organization_id])

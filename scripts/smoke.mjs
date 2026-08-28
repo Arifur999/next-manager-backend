@@ -451,5 +451,146 @@ check(
   JSON.stringify(r.json.data?.[0])
 );
 
+// ---------------------------------------------------------------------------
+// Measurement primitives: stage history, milestones, targets.
+// ---------------------------------------------------------------------------
+
+// A lead's stage history is the part that cannot be reconstructed later, so
+// what matters is that every one of the three paths that moves a stage writes
+// an event: creation, update, and conversion.
+cookie = roleCookies.sales;
+r = await call("POST", "/leads", {
+  name: "Stage Log Co",
+  stage: "contacted",
+  estimated_value_usd: 5000,
+});
+const stageLeadId = r.json.data?.id;
+check("sales creates a lead", r.status === 201 && Boolean(stageLeadId), `${r.status} ${r.json.message}`);
+
+r = await call("PATCH", `/leads/${stageLeadId}`, { stage: "proposal" });
+check("lead moves stage", r.status === 200, `${r.status} ${r.json.message}`);
+
+// Re-saving the same stage must not add an event — time-in-stage would then
+// be measured from the re-save rather than from the arrival.
+r = await call("PATCH", `/leads/${stageLeadId}`, { stage: "proposal", notes: "same stage" });
+check("re-saving the same stage is accepted", r.status === 200, `${r.status}`);
+
+r = await call("POST", `/leads/${stageLeadId}/convert`);
+check("lead converts to a client", r.status === 201 || r.status === 200, `${r.status} ${r.json.message}`);
+
+// Three real moves: created-as-contacted, -> proposal, -> won on conversion.
+// The no-op re-save must not be among them.
+cookie = adminCookie;
+r = await call("GET", `/leads/${stageLeadId}/stage-events`);
+check(
+  "stage history has one event per real move, and no more",
+  r.status === 200 && r.json.data?.length === 3,
+  `${r.status} len=${r.json.data?.length} ${JSON.stringify(r.json.data?.map((e) => e.to_stage))}`
+);
+check(
+  "the first event has no from_stage",
+  r.json.data?.[0]?.from_stage === null && r.json.data?.[0]?.to_stage === "contacted",
+  JSON.stringify(r.json.data?.[0])
+);
+
+// Milestones — on-time delivery needs a promise to measure against.
+cookie = pmCookie;
+r = await call("POST", "/milestones", {
+  project_id: timeProjectId,
+  title: "Design handover",
+  due_date: "2026-08-20",
+});
+const milestoneId = r.json.data?.id;
+check("project manager sets a milestone", r.status === 201, `${r.status} ${r.json.message}`);
+
+cookie = roleCookies.sales;
+r = await call("POST", "/milestones", {
+  project_id: timeProjectId,
+  title: "Sales should not schedule",
+  due_date: "2026-08-20",
+});
+check("sales cannot set a milestone", r.status === 403, `${r.status}`);
+
+cookie = opsCookie;
+r = await call("POST", `/milestones/${milestoneId}/submit`, { submitted_at: "2026-08-19T10:00:00.000Z" });
+check("operations submits a milestone", r.status === 200, `${r.status} ${r.json.message}`);
+
+r = await call("POST", `/milestones/${milestoneId}/accept`);
+check("operations cannot accept its own delivery", r.status === 403, `${r.status}`);
+
+// Moving the date after delivery would turn a missed milestone into an
+// on-time one — the exact number this table exists to protect.
+cookie = pmCookie;
+r = await call("PATCH", `/milestones/${milestoneId}`, { due_date: "2026-09-30" });
+check("a submitted milestone's due date is frozen", r.status === 400, `${r.status} ${r.json.message}`);
+
+r = await call("POST", `/milestones/${milestoneId}/accept`);
+check("project manager accepts", r.status === 200, `${r.status} ${r.json.message}`);
+
+r = await call("POST", "/milestones", {
+  project_id: timeProjectId,
+  title: "Future submission",
+  due_date: "2026-08-25",
+});
+const futureMilestoneId = r.json.data?.id;
+r = await call("POST", `/milestones/${futureMilestoneId}/submit`, {
+  submitted_at: "2099-01-01T00:00:00.000Z",
+});
+check("a submission dated in the future is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+// Targets — a KPI without one is a fact, not a verdict.
+cookie = adminCookie;
+r = await call("POST", "/kpi-targets", {
+  metric: "utilization_pct",
+  period: "quarter",
+  period_start: "2026-07-01",
+  target_value: 70,
+});
+check("admin sets an agency target", r.status === 201, `${r.status} ${r.json.message}`);
+
+r = await call("POST", "/kpi-targets", {
+  metric: "utilization_pct",
+  period: "quarter",
+  period_start: "2026-07-01",
+  target_value: 75,
+});
+check(
+  "a second agency target for the same period is refused",
+  r.status === 409,
+  `${r.status} ${r.json.message}`
+);
+
+r = await call("POST", "/kpi-targets", {
+  metric: "utilization_pct",
+  period: "quarter",
+  period_start: "2026-08-01",
+  target_value: 70,
+});
+check("a quarter starting in August is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+r = await call("POST", "/kpi-targets", {
+  metric: "win_rate_pct",
+  period: "month",
+  period_start: "2026-08-01",
+  target_value: 150,
+});
+check("a percentage target above 100 is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+cookie = roleCookies.sales;
+r = await call("POST", "/kpi-targets", {
+  metric: "deal_value_usd",
+  period: "month",
+  period_start: "2026-08-01",
+  target_value: 20000,
+});
+check("sales cannot set its own quota", r.status === 403, `${r.status}`);
+
+r = await call("GET", "/kpi-targets");
+check(
+  "but can read the targets it is measured against",
+  r.status === 200 && Array.isArray(r.json.data),
+  `${r.status}`
+);
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

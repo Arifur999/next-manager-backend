@@ -49,6 +49,7 @@ model Lead {
 
   organization     Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   converted_client Client?      @relation(fields: [converted_client_id], references: [id], onDelete: SetNull)
+  stage_events     LeadStageEvent[]
 
   @@index([organization_id])
   @@index([organization_id, stage])

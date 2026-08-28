@@ -1,0 +1,110 @@
+// The things a KPI has to be measured against.
+//
+// Every model here exists because a metric the plan calls for cannot be
+// computed without it, and none of them can be back-filled later:
+//
+//   - A target turns a number into a verdict. 62% utilization is neither good
+//     nor bad until somebody wrote down what it was supposed to be.
+//   - A Lead row knows which stage it is in, never how long it took to get
+//     there. Sales-cycle length and pipeline velocity are uncomputable from a
+//     current-state column, and the history it would need is destroyed on
+//     every update. This is why the stage log starts now rather than when the
+//     KPI screens are built.
+//   - On-time delivery needs a promise to compare against. Project.end_date
+//     cannot express a project that shipped three of four milestones late.
+
+/// A number somebody committed to, for a period.
+///
+/// `user_id` null means the whole agency; set, it is that person's own target
+/// (a quota, a utilization goal). Both can exist for the same metric and
+/// period - an agency target is not the sum of individual ones.
+model KpiTarget {
+  id              String    @id @default(uuid())
+  organization_id String
+  user_id         String?
+  metric          KpiMetric
+  period          KpiPeriod
+  /// The first day of the period the target covers. Stored rather than
+  /// derived so a target can be set for a quarter that has not started.
+  period_start    DateTime  @db.Date
+  /// Percentages are stored as the percentage (70 for 70%), money in USD.
+  /// Which one a metric means is fixed by the metric itself.
+  target_value    Decimal   @db.Decimal(15, 2)
+  notes           String    @default("")
+  created_by      String?
+  deleted_at      DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  user         User?        @relation("KpiTargetUser", fields: [user_id], references: [id], onDelete: Cascade)
+
+  /// Postgres treats NULLs as distinct, so this constraint does NOT stop two
+  /// agency-wide targets for the same metric and period. The service checks
+  /// for that case explicitly - do not rely on the database for it.
+  @@unique([organization_id, user_id, metric, period, period_start])
+  @@index([organization_id, metric, period_start])
+  @@index([user_id])
+  @@map("kpi_targets")
+}
+
+/// Every stage a lead has been in, and when it got there.
+///
+/// Append-only: rows are never edited or deleted, because the whole value is
+/// that they record what was true at a moment. Written from updateLead, plus
+/// one row at creation so a lead's first stage has a timestamp too.
+model LeadStageEvent {
+  id              String     @id @default(uuid())
+  organization_id String
+  lead_id         String
+  /// Null on the creation event - there was no stage before the first one.
+  from_stage      LeadStage?
+  to_stage        LeadStage
+  changed_by      String?
+  changed_at      DateTime   @default(now())
+
+  lead Lead @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+
+  /// Rebuilding one lead's journey in order.
+  @@index([lead_id, changed_at])
+  /// Cycle length and velocity across the pipeline, over a date range.
+  @@index([organization_id, to_stage, changed_at])
+  @@map("lead_stage_events")
+}
+
+/// A dated promise inside a project.
+///
+/// On-time delivery rate is submitted_at <= due_date, counted over
+/// milestones - not over projects, because a project that lands its final
+/// date after missing every interim one is not on time in any sense the
+/// client recognises.
+model ProjectMilestone {
+  id              String    @id @default(uuid())
+  organization_id String
+  project_id      String
+  title           String
+  description     String    @default("")
+  due_date        DateTime  @db.Date
+  /// When operations handed it over. Null means still outstanding - and past
+  /// due_date, that is what "overdue" means.
+  submitted_at    DateTime?
+  /// When the client (or the PM on their behalf) accepted it. A submitted
+  /// milestone that is never accepted is delivered but not done, and the two
+  /// are worth telling apart.
+  accepted_at     DateTime?
+  /// Ordering inside a project is editorial, not chronological - two
+  /// milestones can share a due date.
+  sort_order      Int       @default(0)
+  deleted_at      DateTime?
+  created_by      String?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([organization_id])
+  @@index([project_id, sort_order])
+  /// The overdue list, and on-time rate over a range.
+  @@index([organization_id, due_date])
+  @@map("project_milestones")
+}

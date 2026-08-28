@@ -4,6 +4,7 @@ import { ClientStatus, LeadStage } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { OPEN_LEAD_STAGES, recordStageMove } from "../../shared/leadStage.js";
 import { escapeLikeTerm, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateLeadPayload, IUpdateLeadPayload } from "./lead.validation.js";
 
@@ -14,13 +15,6 @@ import { ICreateLeadPayload, IUpdateLeadPayload } from "./lead.validation.js";
  * kanban board - handing back one array and making the browser bucket it would
  * just move the same work somewhere slower.
  */
-
-const OPEN_STAGES: LeadStage[] = [
-    LeadStage.new,
-    LeadStage.contacted,
-    LeadStage.proposal,
-    LeadStage.negotiating,
-];
 
 const getPipeline = async (user: IRequestUser, options: ListOptions = {}) => {
     const where: Prisma.LeadWhereInput = {
@@ -58,7 +52,7 @@ const getPipeline = async (user: IRequestUser, options: ListOptions = {}) => {
         };
     });
 
-    const open = leads.filter((lead) => OPEN_STAGES.includes(lead.stage));
+    const open = leads.filter((lead) => OPEN_LEAD_STAGES.includes(lead.stage));
 
     return {
         stages,
@@ -71,31 +65,63 @@ const getPipeline = async (user: IRequestUser, options: ListOptions = {}) => {
 };
 
 const createLead = async (payload: ICreateLeadPayload, user: IRequestUser) => {
-    return prisma.lead.create({
-        data: {
-            organization_id: user.organizationId,
-            name: payload.name,
-            company: payload.company ?? "",
-            email: payload.email ?? "",
-            phone: payload.phone ?? "",
-            source: payload.source ?? "",
-            stage: payload.stage,
-            estimated_value_usd: payload.estimated_value_usd ?? 0,
-            notes: payload.notes ?? "",
-        },
+    return prisma.$transaction(async (tx) => {
+        const lead = await tx.lead.create({
+            data: {
+                organization_id: user.organizationId,
+                name: payload.name,
+                company: payload.company ?? "",
+                email: payload.email ?? "",
+                phone: payload.phone ?? "",
+                source: payload.source ?? "",
+                stage: payload.stage,
+                estimated_value_usd: payload.estimated_value_usd ?? 0,
+                notes: payload.notes ?? "",
+            },
+        });
+
+        // The first stage needs a timestamp too. Without it, a lead created
+        // straight into `proposal` has no arrival time for any stage, and its
+        // cycle length has nothing to count from.
+        await recordStageMove(tx, {
+            organizationId: user.organizationId,
+            leadId: lead.id,
+            fromStage: null,
+            toStage: lead.stage,
+            changedBy: user.userId,
+        });
+
+        return lead;
     });
 };
 
 const updateLead = async (id: string, payload: IUpdateLeadPayload, user: IRequestUser) => {
-    const existing = await prisma.lead.findFirst({
-        where: { id, organization_id: user.organizationId, deleted_at: null },
+    return prisma.$transaction(async (tx) => {
+        const existing = await tx.lead.findFirst({
+            where: { id, organization_id: user.organizationId, deleted_at: null },
+        });
+
+        if (!existing) {
+            throw new AppError(status.NOT_FOUND, "Lead not found");
+        }
+
+        const updated = await tx.lead.update({ where: { id }, data: payload });
+
+        // The Lead row only ever knows where it is now. This is the one place
+        // that knows where it just came from, so if the move is not written
+        // here it is not recoverable afterwards.
+        if (payload.stage && payload.stage !== existing.stage) {
+            await recordStageMove(tx, {
+                organizationId: user.organizationId,
+                leadId: id,
+                fromStage: existing.stage,
+                toStage: payload.stage,
+                changedBy: user.userId,
+            });
+        }
+
+        return updated;
     });
-
-    if (!existing) {
-        throw new AppError(status.NOT_FOUND, "Lead not found");
-    }
-
-    return prisma.lead.update({ where: { id }, data: payload });
 };
 
 /**
@@ -143,7 +169,41 @@ const convertToClient = async (id: string, user: IRequestUser) => {
             },
         });
 
+        // Conversion moves the stage to `won` as a side effect, so it is a
+        // stage move like any other. Missing it here would leave every deal
+        // that was won by converting absent from win-rate and cycle length -
+        // which is most of them.
+        await recordStageMove(tx, {
+            organizationId: user.organizationId,
+            leadId: id,
+            fromStage: lead.stage,
+            toStage: LeadStage.won,
+            changedBy: user.userId,
+        });
+
         return client;
+    });
+};
+
+/**
+ * One lead's journey, oldest move first.
+ *
+ * The Lead row answers "where is it now"; only this answers "how long did
+ * each step take", which is what cycle length and velocity are made of.
+ */
+const getStageEvents = async (id: string, user: IRequestUser) => {
+    const lead = await prisma.lead.findFirst({
+        where: { id, organization_id: user.organizationId, deleted_at: null },
+        select: { id: true },
+    });
+
+    if (!lead) {
+        throw new AppError(status.NOT_FOUND, "Lead not found");
+    }
+
+    return prisma.leadStageEvent.findMany({
+        where: { lead_id: id },
+        orderBy: { changed_at: "asc" },
     });
 };
 
@@ -165,6 +225,7 @@ export const LeadService = {
     getPipeline,
     createLead,
     updateLead,
+    getStageEvents,
     convertToClient,
     deleteLead,
 };

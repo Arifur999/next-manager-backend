@@ -13,6 +13,15 @@ model Project {
   /// What the client agreed to pay, in USD. Profitability compares this (and
   /// what was actually received) against team payouts and project expenses.
   contract_value_usd Decimal   @default(0) @db.Decimal(15, 2)
+  /// Frozen at kickoff so scope drift has an original to be measured from.
+  /// contract_value_usd moves when the deal changes; these do not, and the
+  /// gap between them IS the scope-change rate.
+  baseline_hours     Decimal   @default(0) @db.Decimal(10, 2)
+  baseline_value_usd Decimal   @default(0) @db.Decimal(15, 2)
+  /// Null means no baseline was ever taken. Without it, a project that was
+  /// never baselined is indistinguishable from one baselined at zero, and
+  /// every unbaselined project would report infinite overrun.
+  baseline_set_at    DateTime?
   notes          String        @default("")
   deleted_at     DateTime?
   deleted_by     String?
@@ -29,6 +38,7 @@ model Project {
   payouts      TeamPayout[]
   credentials  Credential[]
   time_entries TimeEntry[]
+  milestones   ProjectMilestone[]
 
   /// Project codes are unique per agency, not globally.
   @@unique([organization_id, code])

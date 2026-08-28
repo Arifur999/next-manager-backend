@@ -59,6 +59,8 @@ model User {
   project_memberships ProjectMember[]
   payouts            TeamPayout[]
   credential_access  CredentialAccessLog[]
+  time_entries       TimeEntry[]         @relation("TimeEntryUser")
+  capacity           Capacity?
   activities         ActivityLog[]
 
   @@index([organization_id])

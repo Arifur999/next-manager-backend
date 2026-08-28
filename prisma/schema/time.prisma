@@ -1,0 +1,70 @@
+// Logged hours.
+//
+// This is the floor the whole KPI layer stands on. Utilization, realization,
+// revenue-per-employee and planned-vs-actual are all ratios over hours, and
+// none of them can be computed from money alone - which is why this exists
+// before the KPI screens rather than after them.
+//
+// The rule that shapes it: non-billable time is recorded too. When only
+// billable hours are logged, utilization is computed against a denominator
+// nobody wrote down, capacity planning runs on fiction, and everyone looks
+// freer than they are.
+
+model TimeEntry {
+  id             String    @id @default(uuid())
+  organization_id String
+  user_id        String
+  project_id     String
+  /// Optional: a day can be logged against a project without naming a task.
+  task_id        String?
+  date           DateTime  @db.Date
+  /// Hours, not minutes. 6,2 allows 0.25 increments up to four figures a day,
+  /// which is more than a day has - the guard against nonsense is in the
+  /// service, where a message can explain itself.
+  hours          Decimal   @db.Decimal(6, 2)
+  /// The whole point of the column. Billable hours are the numerator of
+  /// utilization; the rest is what makes the denominator honest.
+  is_billable    Boolean   @default(true)
+  notes          String    @default("")
+  /// Approval is what turns logged time into time anyone will bill for. Null
+  /// means logged but not yet signed off; realization only counts approved.
+  approved_at    DateTime?
+  approved_by    String?
+  deleted_at     DateTime?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  user    User    @relation("TimeEntryUser", fields: [user_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  task    Task?   @relation(fields: [task_id], references: [id], onDelete: SetNull)
+
+  @@index([organization_id])
+  /// The timesheet: one person, one week.
+  @@index([user_id, date])
+  /// Planned-vs-actual and project cost: one project, whole history.
+  @@index([project_id, date])
+  /// The approval queue.
+  @@index([organization_id, approved_at])
+  @@map("time_entries")
+}
+
+/// How many hours a week somebody is actually expected to be available.
+///
+/// Utilization needs a denominator and it is not the same for everyone - a
+/// part-timer at 20 hours is not underperforming against 40. Kept as its own
+/// row rather than a column on User so a change can be dated later without
+/// rewriting history.
+model Capacity {
+  id             String   @id @default(uuid())
+  organization_id String
+  user_id        String
+  weekly_hours   Decimal  @default(40) @db.Decimal(5, 2)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id])
+  @@index([organization_id])
+  @@map("capacities")
+}

@@ -16,6 +16,7 @@ import { ProjectMemberRoutes } from "../module/projectMember/projectMember.route
 import { ReportRoutes } from "../module/report/report.route.js";
 import { SettingsRoutes } from "../module/settings/settings.route.js";
 import { TaskRoutes } from "../module/task/task.route.js";
+import { TimeEntryRoutes } from "../module/timeEntry/timeEntry.route.js";
 import { TeamPayoutRoutes } from "../module/teamPayout/teamPayout.route.js";
 import { UserRoutes } from "../module/user/user.route.js";
 import { VaultRoutes } from "../module/vault/vault.route.js";
@@ -30,6 +31,7 @@ router.use("/leads", LeadRoutes);
 router.use("/projects", ProjectRoutes);
 router.use("/project-members", ProjectMemberRoutes);
 router.use("/tasks", TaskRoutes);
+router.use("/time-entries", TimeEntryRoutes);
 router.use("/accounts", AccountRoutes);
 router.use("/invoices", InvoiceRoutes);
 router.use("/payments", PaymentRoutes);

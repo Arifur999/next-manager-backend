@@ -28,6 +28,7 @@ model Project {
   expenses     Expense[]
   payouts      TeamPayout[]
   credentials  Credential[]
+  time_entries TimeEntry[]
 
   /// Project codes are unique per agency, not globally.
   @@unique([organization_id, code])
@@ -72,8 +73,9 @@ model Task {
   created_at     DateTime     @default(now())
   updated_at     DateTime     @updatedAt
 
-  project  Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  assignee User?   @relation("TaskAssignee", fields: [assignee_id], references: [id], onDelete: SetNull)
+  project      Project     @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  assignee     User?       @relation("TaskAssignee", fields: [assignee_id], references: [id], onDelete: SetNull)
+  time_entries TimeEntry[]
 
   @@index([organization_id])
   @@index([project_id])

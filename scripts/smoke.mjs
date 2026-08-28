@@ -356,5 +356,100 @@ for (const [method, path, allowed] of MATRIX) {
 
 cookie = adminCookie;
 
+console.log("\n--- time tracking ---");
+
+r = await call("POST", "/projects", {
+  client_id: clientId,
+  name: "Timesheet Project",
+  code: `TS-${stamp}`,
+  status: "active",
+});
+const timeProjectId = r.json.data?.id;
+check("create project for timesheet", r.status === 201, `${r.status} ${r.json.message}`);
+
+const opsCookie = roleCookies.operations;
+const pmCookie = roleCookies.project_manager;
+
+cookie = opsCookie;
+r = await call("POST", "/time-entries", {
+  project_id: timeProjectId,
+  date: "2026-08-24",
+  hours: 6,
+  is_billable: true,
+  notes: "Build",
+});
+const opsEntryId = r.json.data?.id;
+check("operations logs billable time", r.status === 201, `${r.status} ${r.json.message}`);
+
+// Non-billable time has to be recordable or the utilization denominator is
+// fiction and everybody looks freer than they are.
+r = await call("POST", "/time-entries", {
+  project_id: timeProjectId,
+  date: "2026-08-24",
+  hours: 2,
+  is_billable: false,
+  notes: "Standup",
+});
+check("non-billable time is recordable", r.status === 201, `${r.status}`);
+
+// A decimal point in the wrong place would poison every figure computed from it.
+r = await call("POST", "/time-entries", {
+  project_id: timeProjectId,
+  date: "2026-08-24",
+  hours: 80,
+  is_billable: true,
+});
+check("more than 24h in a day refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+r = await call("GET", "/time-entries/summary?from=2026-08-24&to=2026-08-24");
+check(
+  "summary splits billable from non-billable",
+  near(r.json.data?.billable_hours, 6) && near(r.json.data?.non_billable_hours, 2),
+  JSON.stringify(r.json.data)
+);
+
+// Approval is a second person's job by definition.
+r = await call("POST", `/time-entries/${opsEntryId}/approve`);
+check("operations cannot approve", r.status === 403, `${r.status}`);
+
+cookie = pmCookie;
+r = await call("POST", `/time-entries/${opsEntryId}/approve`);
+check("project manager approves", r.status === 200, `${r.status} ${r.json.message}`);
+
+cookie = opsCookie;
+r = await call("PATCH", `/time-entries/${opsEntryId}`, { hours: 9 });
+check("approved time is frozen", r.status === 409, `${r.status} ${r.json.message}`);
+
+// One operations user must not see or touch another's rows — and the refusal
+// is a 404, so which of a colleague's entries exist is not information the API
+// hands out.
+cookie = adminCookie;
+await call("POST", "/users", {
+  full_name: "Second ops",
+  email: `ops2${stamp}@agencio.test`,
+  password: "Passw0rd123",
+  role: "operations",
+});
+cookie = "";
+await call("POST", "/auth/login", { email: `ops2${stamp}@agencio.test`, password: "Passw0rd123" });
+
+r = await call("GET", "/time-entries");
+check(
+  "a second operations user sees none of the first's time",
+  r.status === 200 && Array.isArray(r.json.data) && r.json.data.length === 0,
+  `${r.status} len=${r.json.data?.length}`
+);
+
+r = await call("PATCH", `/time-entries/${opsEntryId}`, { hours: 1 });
+check("and cannot edit it — reads as not found", r.status === 404, `${r.status}`);
+
+cookie = adminCookie;
+r = await call("GET", "/time-entries/capacity");
+check(
+  "capacity defaults to 40 for everyone",
+  Array.isArray(r.json.data) && r.json.data.every((row) => row.weekly_hours === 40),
+  JSON.stringify(r.json.data?.[0])
+);
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

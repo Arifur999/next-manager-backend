@@ -7,12 +7,19 @@ import { createLeadZodSchema, updateLeadZodSchema } from "./lead.validation.js";
 
 const router = Router();
 
-router.get("/", checkAuth(Role.owner, Role.admin, Role.manager), LeadController.getPipeline);
-router.post("/", checkAuth(Role.owner, Role.admin, Role.manager), validateRequest(createLeadZodSchema), LeadController.createLead);
+// The pipeline is sales' own screen. Admin sees it too because pipeline
+// coverage is a company-health number, but delivery and operations have no
+// reason to see deals that may never happen.
+router.get("/", checkAuth(Role.admin, Role.sales), LeadController.getPipeline);
+router.post("/", checkAuth(Role.admin, Role.sales), validateRequest(createLeadZodSchema), LeadController.createLead);
+
 // Dragging a card between columns is a PATCH of `stage`, so the board needs no
 // endpoint of its own.
-router.patch("/:id", checkAuth(Role.owner, Role.admin, Role.manager), validateRequest(updateLeadZodSchema), LeadController.updateLead);
-router.post("/:id/convert", checkAuth(Role.owner, Role.admin, Role.manager), LeadController.convertToClient);
-router.delete("/:id", checkAuth(Role.owner, Role.admin), LeadController.deleteLead);
+router.patch("/:id", checkAuth(Role.admin, Role.sales), validateRequest(updateLeadZodSchema), LeadController.updateLead);
+
+// Converting creates a client, which is squarely sales' job.
+router.post("/:id/convert", checkAuth(Role.admin, Role.sales), LeadController.convertToClient);
+
+router.delete("/:id", checkAuth(Role.admin), LeadController.deleteLead);
 
 export const LeadRoutes = router;

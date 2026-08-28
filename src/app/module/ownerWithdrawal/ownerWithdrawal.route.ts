@@ -7,12 +7,13 @@ import { createOwnerWithdrawalZodSchema, updateOwnerWithdrawalZodSchema } from "
 
 const router = Router();
 
-// Owner only, every route including the read. This is the one part of the
-// system an admin must not see - what the owner takes out is nobody else's
-// business, and the role gate is the only thing enforcing that.
-router.get("/", checkAuth(Role.owner), OwnerWithdrawalController.getAllWithdrawals);
-router.post("/", checkAuth(Role.owner), validateRequest(createOwnerWithdrawalZodSchema), OwnerWithdrawalController.createWithdrawal);
-router.patch("/:id", checkAuth(Role.owner), validateRequest(updateOwnerWithdrawalZodSchema), OwnerWithdrawalController.updateWithdrawal);
-router.delete("/:id", checkAuth(Role.owner), OwnerWithdrawalController.deleteWithdrawal);
+// Admin only, every route including the read. With owner gone, admin is the
+// top of a company and this is what they take out of it - nobody below them
+// has any business seeing it, and the role gate is the only thing enforcing
+// that.
+router.get("/", checkAuth(Role.admin), OwnerWithdrawalController.getAllWithdrawals);
+router.post("/", checkAuth(Role.admin), validateRequest(createOwnerWithdrawalZodSchema), OwnerWithdrawalController.createWithdrawal);
+router.patch("/:id", checkAuth(Role.admin), validateRequest(updateOwnerWithdrawalZodSchema), OwnerWithdrawalController.updateWithdrawal);
+router.delete("/:id", checkAuth(Role.admin), OwnerWithdrawalController.deleteWithdrawal);
 
 export const OwnerWithdrawalRoutes = router;

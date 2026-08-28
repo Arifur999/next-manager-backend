@@ -4,18 +4,18 @@ import { Role } from "../../generated/prisma/enums.js";
 import AppError from "../errorHelpers/AppError.js";
 
 /**
- * Narrows what a team member may do WITHIN the role checkAuth already allowed.
+ * Narrows what a colleague may do WITHIN the role checkAuth already allowed.
  *
  * Always sits after checkAuth on a route, never instead of it: the role gate is
- * the outer boundary and this cannot widen it. A route that is owner-and-manager
- * only stays owner-and-manager only however the checkboxes are set.
+ * the outer boundary and this cannot widen it. An admin-only route stays
+ * admin-only however the checkboxes are set.
  *
  * Two deliberate escape hatches, both of which make this safe to turn on for a
  * system that already has users:
  *
- *   - An owner always passes. Locking an owner out of their own workspace with a
+ *   - An admin always passes. Locking an admin out of their own company with a
  *     checkbox is never the intent and there would be no way back.
- *   - A user with NO permissions stored passes. Every existing team member has
+ *   - A user with NO permissions stored passes. Every existing colleague has
  *     an empty column on the morning of the upgrade, so nobody loses access to
  *     anything they had yesterday. Restrictions begin only once somebody has
  *     actually ticked boxes for that user.
@@ -30,7 +30,7 @@ export const requirePermission = (...allowed: string[]) =>
             return next(new AppError(status.UNAUTHORIZED, "Unauthorized access! No user on the request."));
         }
 
-        if (user.role === Role.owner || user.role === Role.super_admin) {
+        if (user.role === Role.admin || user.role === Role.super_admin) {
             return next();
         }
 
@@ -45,7 +45,7 @@ export const requirePermission = (...allowed: string[]) =>
 
         // Names the missing permission on purpose. The caller is a signed-in
         // colleague, not an attacker probing the system, and "you need Delete
-        // Sale for this" is the difference between them asking the owner to tick
+        // Sale for this" is the difference between them asking an admin to tick
         // one box and reporting the app as broken.
         return next(
             new AppError(

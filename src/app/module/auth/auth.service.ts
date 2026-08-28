@@ -42,7 +42,7 @@ const issueTokens = (user: { id: string; email: string; role: Role; token_versio
     };
 };
 
-// Signing up creates an AGENCY and its owner together - one is meaningless
+// Signing up creates a COMPANY and its first admin together - one is meaningless
 // without the other, so both happen in one transaction. Team members are
 // invited from inside an agency (see the user module), never through this
 // route, or anyone could self-register into a role.
@@ -69,7 +69,7 @@ const register = async (payload: IRegisterPayload) => {
                 email: payload.email,
                 phone: payload.phone ?? "",
                 password: hashedPassword,
-                role: Role.owner,
+                role: Role.admin,
                 organization_id: organization.id,
                 email_verified: true,
             },

@@ -7,11 +7,11 @@ import { createPaymentZodSchema, updatePaymentZodSchema } from "./payment.valida
 
 const router = Router();
 
-// Income figures stop at manager - a member has no reason to see what clients
-// pay. Only owner and admin can record or change money.
-router.get("/", checkAuth(Role.owner, Role.admin, Role.manager), PaymentController.getAllPayments);
-router.post("/", checkAuth(Role.owner, Role.admin), validateRequest(createPaymentZodSchema), PaymentController.createPayment);
-router.patch("/:id", checkAuth(Role.owner, Role.admin), validateRequest(updatePaymentZodSchema), PaymentController.updatePayment);
-router.delete("/:id", checkAuth(Role.owner), PaymentController.deletePayment);
+// Income is admin-only. Sales brings the work in and can raise an invoice,
+// but what actually landed in a wallet is a finance question.
+router.get("/", checkAuth(Role.admin), PaymentController.getAllPayments);
+router.post("/", checkAuth(Role.admin), validateRequest(createPaymentZodSchema), PaymentController.createPayment);
+router.patch("/:id", checkAuth(Role.admin), validateRequest(updatePaymentZodSchema), PaymentController.updatePayment);
+router.delete("/:id", checkAuth(Role.admin), PaymentController.deletePayment);
 
 export const PaymentRoutes = router;

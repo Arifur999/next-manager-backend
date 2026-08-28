@@ -11,7 +11,7 @@ import { jwtUtils } from "../utils/jwt.js";
  * The outer auth gate, used as a factory on every protected route.
  *
  *   checkAuth()                              any signed-in user
- *   checkAuth(Role.owner, Role.manager)      role allow-list
+ *   checkAuth(Role.admin, Role.sales)        role allow-list
  *
  * Nothing downstream may widen what this allows - requirePermission only ever
  * narrows within the role decided here.

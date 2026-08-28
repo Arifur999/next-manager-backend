@@ -43,8 +43,10 @@ let r = await call("POST", "/auth/register", {
   email,
   password: "Passw0rd123",
 });
-check("register creates agency + owner", r.status === 201, `${r.status} ${r.json.message}`);
-check("owner role assigned", r.json.data?.role === "owner", r.json.data?.role);
+check("register creates company + first admin", r.status === 201, `${r.status} ${r.json.message}`);
+// With owner gone, whoever signs up is the company's first admin - the top
+// role inside it.
+check("admin role assigned", r.json.data?.role === "admin", r.json.data?.role);
 check("organization_id set", Boolean(r.json.data?.organization_id));
 
 r = await call("POST", "/auth/login", { email, password: "Passw0rd123" });
@@ -284,25 +286,75 @@ check("a second agency cannot pay into the first's account", r.status === 404, `
 
 cookie = savedCookie;
 
-console.log("\n--- owner-only routes ---");
-r = await call("POST", "/users", {
-  full_name: "Manager Person",
-  email: `mgr${stamp}@agencio.test`,
-  password: "Passw0rd123",
-  role: "manager",
-});
-check("owner can invite a manager", r.status === 201, `${r.status} ${r.json.message}`);
+/**
+ * The role matrix.
+ *
+ * Written BEFORE the gates were re-mapped, on purpose: a missed gate fails
+ * OPEN — too permissive — and neither the compiler nor eslint can see it. Only
+ * an assertion that a role is refused will catch one.
+ *
+ * Each row is (role, method, path, expected). 403 means "signed in, not
+ * allowed"; 200/201 means allowed. Anything creating money is left out of the
+ * allowed side so the matrix stays read-only apart from the invites.
+ */
+console.log("\n--- role matrix ---");
 
-const ownerCookie = cookie;
-cookie = "";
-await call("POST", "/auth/login", { email: `mgr${stamp}@agencio.test`, password: "Passw0rd123" });
-r = await call("GET", "/owner-withdrawals");
-check("manager blocked from owner withdrawals", r.status === 403, `${r.status}`);
-r = await call("GET", "/reports/profit-loss");
-check("manager blocked from reports", r.status === 403, `${r.status}`);
-r = await call("GET", "/clients");
-check("manager can still read clients", r.status === 200, `${r.status}`);
-cookie = ownerCookie;
+const adminCookie = cookie;
+
+const ROLES = ["admin", "sales", "project_manager", "operations"];
+const roleCookies = {};
+
+for (const role of ROLES) {
+  cookie = adminCookie;
+  const roleEmail = `${role}${stamp}@agencio.test`;
+
+  r = await call("POST", "/users", {
+    full_name: `${role} person`,
+    email: roleEmail,
+    password: "Passw0rd123",
+    role,
+  });
+  check(`admin can invite a ${role}`, r.status === 201, `${r.status} ${r.json.message}`);
+
+  cookie = "";
+  r = await call("POST", "/auth/login", { email: roleEmail, password: "Passw0rd123" });
+  // Without this the refusal checks below would pass for the wrong reason: an
+  // unauthenticated call returns 401, not 403, but a typo'd expectation could
+  // still line up by accident.
+  check(`${role} signs in`, r.status === 200 && cookie.includes("accessToken"), `${r.status}`);
+  roleCookies[role] = cookie;
+}
+
+// path -> which roles may reach it. Everyone else must get 403.
+const MATRIX = [
+  ["GET", "/reports/profit-loss", ["admin"]],
+  ["GET", "/owner-withdrawals", ["admin"]],
+  ["GET", "/due-payments", ["admin"]],
+  ["GET", "/payments", ["admin"]],
+  ["GET", "/accounts", ["admin"]],
+  ["GET", "/team-payouts", ["admin"]],
+  ["GET", "/clients", ["admin", "sales", "project_manager", "operations"]],
+  ["GET", "/leads", ["admin", "sales"]],
+  ["GET", "/projects", ["admin", "sales", "project_manager", "operations"]],
+  ["GET", "/tasks", ["admin", "sales", "project_manager", "operations"]],
+  ["GET", "/invoices", ["admin", "sales"]],
+];
+
+for (const [method, path, allowed] of MATRIX) {
+  for (const role of ROLES) {
+    cookie = roleCookies[role];
+    const res = await call(method, path);
+    const mayReach = allowed.includes(role);
+    const ok = mayReach ? res.status === 200 : res.status === 403;
+    check(
+      `${role.padEnd(15)} ${mayReach ? "reaches " : "blocked from"} ${path}`,
+      ok,
+      `${res.status}`
+    );
+  }
+}
+
+cookie = adminCookie;
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

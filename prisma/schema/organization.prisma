@@ -39,7 +39,7 @@ model User {
   full_name      String
   phone          String    @default("")
   avatar_url     String    @default("")
-  role           Role      @default(owner)
+  role           Role      @default(operations)
   is_active      Boolean   @default(true)
   email_verified Boolean   @default(false)
   /// Bumped on every password change and compared against the claim inside the

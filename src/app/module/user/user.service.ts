@@ -1,5 +1,6 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
+import { Role } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
@@ -89,12 +90,45 @@ const createUser = async (payload: ICreateUserPayload, user: IRequestUser) => {
             password: await passwordUtils.hashPassword(payload.password),
             role: payload.role,
             permissions: payload.permissions ?? [],
-            // The new member joins the caller's agency, never whatever
+            // The new colleague joins the caller's company, never whatever
             // organization_id a request body might have carried.
             organization_id: user.organizationId,
         },
         select: PUBLIC_USER_FIELDS,
     });
+};
+
+/**
+ * How many admins a company would have left if this one stopped being one.
+ *
+ * With `owner` gone, `admin` is the top of a company and nothing above it can
+ * put an admin back. So the last one is protected: demoting or deleting them
+ * would leave a company nobody can administer, and no amount of support access
+ * would fix it from inside.
+ */
+const assertNotLastAdmin = async (targetId: string, user: IRequestUser) => {
+    const target = await prisma.user.findFirst({
+        where: { id: targetId, organization_id: user.organizationId, deleted_at: null },
+        select: { role: true },
+    });
+
+    if (target?.role !== Role.admin) return;
+
+    const adminCount = await prisma.user.count({
+        where: {
+            organization_id: user.organizationId,
+            deleted_at: null,
+            is_active: true,
+            role: Role.admin,
+        },
+    });
+
+    if (adminCount <= 1) {
+        throw new AppError(
+            status.CONFLICT,
+            "This is the company's only admin. Promote someone else to admin first."
+        );
+    }
 };
 
 const updateUser = async (id: string, payload: IUpdateUserPayload, user: IRequestUser) => {
@@ -104,6 +138,16 @@ const updateUser = async (id: string, payload: IUpdateUserPayload, user: IReques
 
     if (!existing) {
         throw new AppError(status.NOT_FOUND, "User not found");
+    }
+
+    // Only a change that takes admin away needs the guard - editing the last
+    // admin's phone number is fine.
+    const losingAdmin =
+        existing.role === Role.admin &&
+        ((payload.role !== undefined && payload.role !== Role.admin) || payload.is_active === false);
+
+    if (losingAdmin) {
+        await assertNotLastAdmin(id, user);
     }
 
     return prisma.user.update({
@@ -125,6 +169,8 @@ const deleteUser = async (id: string, user: IRequestUser) => {
     if (!existing) {
         throw new AppError(status.NOT_FOUND, "User not found");
     }
+
+    await assertNotLastAdmin(id, user);
 
     // Soft delete, and deactivate in the same write: a row that is only flagged
     // deleted but still `is_active` would keep passing checkAuth.

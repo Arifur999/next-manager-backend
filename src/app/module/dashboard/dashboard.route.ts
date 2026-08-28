@@ -5,8 +5,8 @@ import { DashboardController } from "./dashboard.controller.js";
 
 const router = Router();
 
-// Revenue and balances are on this response, so it stops at manager. A member
-// gets their own task view instead, which is its own route.
-router.get("/", checkAuth(Role.owner, Role.admin, Role.manager), DashboardController.getOverview);
+// Revenue and balances are on this response, so it is the admin dashboard.
+// The other three roles get their own, built from their own numbers.
+router.get("/", checkAuth(Role.admin), DashboardController.getOverview);
 
 export const DashboardRoutes = router;

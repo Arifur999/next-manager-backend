@@ -7,13 +7,13 @@ import { createProjectZodSchema, updateProjectZodSchema } from "./project.valida
 
 const router = Router();
 
-// A member can see the projects they work on, so the read routes are open to
+// Operations can see the projects they work on, so the read routes are open to
 // every signed-in user - but the money on them is not.
 router.get("/", checkAuth(), ProjectController.getAllProjects);
 router.get("/:id", checkAuth(), ProjectController.getSingleProject);
-router.get("/:id/financials", checkAuth(Role.owner, Role.admin, Role.manager), ProjectController.getProjectFinancials);
-router.post("/", checkAuth(Role.owner, Role.admin, Role.manager), validateRequest(createProjectZodSchema), ProjectController.createProject);
-router.patch("/:id", checkAuth(Role.owner, Role.admin, Role.manager), validateRequest(updateProjectZodSchema), ProjectController.updateProject);
-router.delete("/:id", checkAuth(Role.owner, Role.admin), ProjectController.deleteProject);
+router.get("/:id/financials", checkAuth(Role.admin, Role.project_manager), ProjectController.getProjectFinancials);
+router.post("/", checkAuth(Role.admin, Role.sales, Role.project_manager), validateRequest(createProjectZodSchema), ProjectController.createProject);
+router.patch("/:id", checkAuth(Role.admin, Role.project_manager), validateRequest(updateProjectZodSchema), ProjectController.updateProject);
+router.delete("/:id", checkAuth(Role.admin), ProjectController.deleteProject);
 
 export const ProjectRoutes = router;

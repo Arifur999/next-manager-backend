@@ -7,10 +7,10 @@ import { createExpenseZodSchema, updateExpenseZodSchema } from "./expense.valida
 
 const router = Router();
 
-router.get("/", checkAuth(Role.owner, Role.admin, Role.manager), ExpenseController.getAllExpenses);
-router.get("/breakdown", checkAuth(Role.owner, Role.admin, Role.manager), ExpenseController.getCategoryBreakdown);
-router.post("/", checkAuth(Role.owner, Role.admin), validateRequest(createExpenseZodSchema), ExpenseController.createExpense);
-router.patch("/:id", checkAuth(Role.owner, Role.admin), validateRequest(updateExpenseZodSchema), ExpenseController.updateExpense);
-router.delete("/:id", checkAuth(Role.owner), ExpenseController.deleteExpense);
+router.get("/", checkAuth(Role.admin), ExpenseController.getAllExpenses);
+router.get("/breakdown", checkAuth(Role.admin), ExpenseController.getCategoryBreakdown);
+router.post("/", checkAuth(Role.admin), validateRequest(createExpenseZodSchema), ExpenseController.createExpense);
+router.patch("/:id", checkAuth(Role.admin), validateRequest(updateExpenseZodSchema), ExpenseController.updateExpense);
+router.delete("/:id", checkAuth(Role.admin), ExpenseController.deleteExpense);
 
 export const ExpenseRoutes = router;

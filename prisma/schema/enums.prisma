@@ -3,11 +3,16 @@
 // stay the same thing.
 
 enum Role {
-  super_admin // platform operator, not part of any agency
-  owner       // the agency owner - the only role that sees owner withdrawals
-  admin       // full operations access
-  manager     // clients, projects, tasks; limited finance
-  member      // their own tasks and payouts
+  // Platform. Belongs to no company, provisions and meters them, and
+  // deliberately cannot read any company's money.
+  super_admin
+
+  // Inside a company. admin is the top - there is no owner above it, so the
+  // last admin in a company is protected from demotion (see user.service.ts).
+  admin           // finance, company state, team, settings
+  sales           // clients, leads, invoices out - brings the work in
+  project_manager // turns won work into projects, assigns teams, owns schedule
+  operations      // does the work, logs time, submits
 }
 
 enum Currency {

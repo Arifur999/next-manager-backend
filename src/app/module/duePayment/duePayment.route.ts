@@ -7,16 +7,16 @@ import { createDuePersonZodSchema, createDueTransactionZodSchema, updateDuePerso
 
 const router = Router();
 
-// Informal lending is the owner's own business, so this stops at admin.
+// Informal lending is the admin's own business.
 // /transactions is declared before /:id so the literal path is not swallowed
 // by the parameter route.
-router.get("/transactions", checkAuth(Role.owner, Role.admin), DuePaymentController.getTransactions);
-router.post("/transactions", checkAuth(Role.owner, Role.admin), validateRequest(createDueTransactionZodSchema), DuePaymentController.createTransaction);
-router.delete("/transactions/:id", checkAuth(Role.owner), DuePaymentController.deleteTransaction);
+router.get("/transactions", checkAuth(Role.admin), DuePaymentController.getTransactions);
+router.post("/transactions", checkAuth(Role.admin), validateRequest(createDueTransactionZodSchema), DuePaymentController.createTransaction);
+router.delete("/transactions/:id", checkAuth(Role.admin), DuePaymentController.deleteTransaction);
 
-router.get("/", checkAuth(Role.owner, Role.admin), DuePaymentController.getAllPeople);
-router.post("/", checkAuth(Role.owner, Role.admin), validateRequest(createDuePersonZodSchema), DuePaymentController.createPerson);
-router.patch("/:id", checkAuth(Role.owner, Role.admin), validateRequest(updateDuePersonZodSchema), DuePaymentController.updatePerson);
-router.delete("/:id", checkAuth(Role.owner), DuePaymentController.deletePerson);
+router.get("/", checkAuth(Role.admin), DuePaymentController.getAllPeople);
+router.post("/", checkAuth(Role.admin), validateRequest(createDuePersonZodSchema), DuePaymentController.createPerson);
+router.patch("/:id", checkAuth(Role.admin), validateRequest(updateDuePersonZodSchema), DuePaymentController.updatePerson);
+router.delete("/:id", checkAuth(Role.admin), DuePaymentController.deletePerson);
 
 export const DuePaymentRoutes = router;

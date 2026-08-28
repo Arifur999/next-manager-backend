@@ -7,10 +7,10 @@ const router = Router();
 
 // Reports aggregate the whole agency's money, so they stop at admin. All of
 // them accept ?from= and ?to= as YYYY-MM-DD.
-router.get("/profit-loss", checkAuth(Role.owner, Role.admin), ReportController.getProfitAndLoss);
-router.get("/cash-flow", checkAuth(Role.owner, Role.admin), ReportController.getCashFlow);
-router.get("/client-revenue", checkAuth(Role.owner, Role.admin), ReportController.getClientRevenue);
-router.get("/project-profitability", checkAuth(Role.owner, Role.admin), ReportController.getProjectProfitability);
-router.get("/monthly", checkAuth(Role.owner, Role.admin), ReportController.getMonthlySeries);
+router.get("/profit-loss", checkAuth(Role.admin), ReportController.getProfitAndLoss);
+router.get("/cash-flow", checkAuth(Role.admin), ReportController.getCashFlow);
+router.get("/client-revenue", checkAuth(Role.admin), ReportController.getClientRevenue);
+router.get("/project-profitability", checkAuth(Role.admin), ReportController.getProjectProfitability);
+router.get("/monthly", checkAuth(Role.admin), ReportController.getMonthlySeries);
 
 export const ReportRoutes = router;

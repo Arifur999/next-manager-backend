@@ -39,13 +39,13 @@ const assertReferences = async (
 /**
  * Tasks the caller is allowed to see.
  *
- * A member sees only what is assigned to them. Anyone above that sees the whole
+ * Operations sees only what is assigned to them. Anyone above that sees the whole
  * agency's board - which is the difference between "My Tasks" and the project
  * task list being the same endpoint with a different scope, rather than two
  * near-identical ones that drift apart.
  */
 const visibilityScope = (user: IRequestUser): Prisma.TaskWhereInput =>
-    user.role === Role.member ? { assignee_id: user.userId } : {};
+    user.role === Role.operations ? { assignee_id: user.userId } : {};
 
 const getAllTasks = async (
     user: IRequestUser,

@@ -78,7 +78,12 @@ const getSingleUser = async (id: string, user: IRequestUser) => {
 };
 
 const createUser = async (payload: ICreateUserPayload, user: IRequestUser) => {
-    const existing = await prisma.user.findUnique({ where: { email: payload.email } });
+    // Existence only. Selecting the row would pull the password hash out of
+    // the database to answer a yes/no question.
+    const existing = await prisma.user.findUnique({
+        where: { email: payload.email },
+        select: { id: true },
+    });
 
     if (existing) {
         throw new AppError(status.CONFLICT, "An account with this email already exists");

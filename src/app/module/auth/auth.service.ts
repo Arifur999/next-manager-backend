@@ -56,7 +56,11 @@ const issueTokens = (user: { id: string; email: string; role: Role; token_versio
 // invited from inside an agency (see the user module), never through this
 // route, or anyone could self-register into a role.
 const register = async (payload: IRegisterPayload) => {
-    const existing = await prisma.user.findUnique({ where: { email: payload.email } });
+    // Existence only - see the note in user.service.ts.
+    const existing = await prisma.user.findUnique({
+        where: { email: payload.email },
+        select: { id: true },
+    });
 
     if (existing) {
         throw new AppError(status.CONFLICT, "An account with this email already exists");
@@ -103,8 +107,18 @@ const login = async (payload: ILoginPayload) => {
 
     const tokens = issueTokens(user);
 
-    const { password: _password, ...safeUser } = user;
-    void _password;
+    // Reduced to the same allow-list /auth/me uses, rather than "the whole row
+    // minus password".
+    //
+    // Subtracting one field meant login and /auth/me returned different shapes
+    // for the same thing, and login's shape was whatever the table happened to
+    // hold - token_version, deleted_at, deleted_by. None of those are secrets,
+    // but the next sensitive column added would have been excluded from
+    // PUBLIC_USER_FIELDS and shipped by this endpoint anyway. An allow-list one
+    // caller bypasses is not an allow-list.
+    const safeUser = Object.fromEntries(
+        Object.keys(PUBLIC_USER_FIELDS).map((field) => [field, user[field as keyof typeof user]])
+    );
 
     return { ...tokens, user: safeUser };
 };

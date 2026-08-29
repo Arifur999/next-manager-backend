@@ -20,7 +20,9 @@
     "smoke": "node -r dotenv/config scripts/smoke.mjs",
     "perf": "tsx -r dotenv/config scripts/perf.ts",
     "test:reset": "tsx -r dotenv/config scripts/resetFlow.ts",
-    "test:mail": "tsx -r dotenv/config scripts/mailTest.ts"
+    "test:mail": "tsx -r dotenv/config scripts/mailTest.ts",
+    "test:isolation": "tsx -r dotenv/config scripts/tenantIsolation.ts",
+    "test:leaks": "tsx -r dotenv/config scripts/responseLeaks.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.3.0",

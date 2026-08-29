@@ -48,6 +48,7 @@ const drop = async () => {
     const scope = { organization_id: org.id };
 
     await prisma.timeEntry.deleteMany({ where: scope });
+    await prisma.capacity.deleteMany({ where: scope });
     await prisma.leadStageEvent.deleteMany({ where: scope });
     await prisma.task.deleteMany({ where: scope });
     await prisma.accountTransaction.deleteMany({ where: scope });

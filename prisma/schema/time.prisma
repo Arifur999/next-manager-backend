@@ -34,7 +34,14 @@ model TimeEntry {
   created_at     DateTime  @default(now())
   updated_at     DateTime  @updatedAt
 
-  user    User    @relation("TimeEntryUser", fields: [user_id], references: [id], onDelete: Cascade)
+  /// Restrict, not Cascade.
+  ///
+  /// Cascade meant hard-deleting a person destroyed every hour they had ever
+  /// logged - and those hours are what utilization, realization and project
+  /// cost were computed from, so a finished quarter's figures would silently
+  /// change. The app soft-deletes people, so this never fired in normal use;
+  /// it was waiting for the first cleanup script or erasure request.
+  user    User    @relation("TimeEntryUser", fields: [user_id], references: [id], onDelete: Restrict)
   project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
   task    Task?   @relation(fields: [task_id], references: [id], onDelete: SetNull)
 

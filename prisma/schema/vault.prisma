@@ -50,14 +50,21 @@ model CredentialAccessLog {
   id             String           @id @default(uuid())
   organization_id String
   credential_id  String
-  user_id        String
+  /// Null once the person has been removed. The entry survives them.
+  user_id        String?
   action         CredentialAction
   ip             String           @default("")
   user_agent     String           @default("")
   created_at     DateTime         @default(now())
 
   credential Credential @relation(fields: [credential_id], references: [id], onDelete: Cascade)
-  user       User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  /// SetNull, matching ActivityLog - NOT Cascade, which is what this was.
+  ///
+  /// Cascade meant deleting a person erased the record of every credential
+  /// they had revealed. That is backwards for a security log: somebody could
+  /// reveal a client's passwords and then have their account removed, taking
+  /// the evidence with them. The two audit logs in this app now agree.
+  user       User?      @relation(fields: [user_id], references: [id], onDelete: SetNull)
 
   @@index([organization_id])
   @@index([credential_id, created_at(sort: Desc)])

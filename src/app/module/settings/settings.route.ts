@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
+import { requireCompany } from "../../middleware/requireCompany.js";
 import { authRateLimit } from "../../middleware/rateLimit.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { SettingsController } from "./settings.controller.js";
@@ -10,7 +11,7 @@ const router = Router();
 
 // The organization profile is on invoices, so anyone who can raise one needs to
 // read it - but only admin may change it.
-router.get("/organization", checkAuth(), SettingsController.getOrganization);
+router.get("/organization", checkAuth(), requireCompany, SettingsController.getOrganization);
 router.patch("/organization", checkAuth(Role.admin), validateRequest(updateOrganizationZodSchema), SettingsController.updateOrganization);
 
 router.get("/exchange-rates", checkAuth(Role.admin), SettingsController.getRateSettings);

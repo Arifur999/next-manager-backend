@@ -54,3 +54,37 @@ export const setSubscriptionZodSchema = z.object({
 });
 
 export type ISetSubscriptionPayload = z.infer<typeof setSubscriptionZodSchema>;
+
+/**
+ * Creating a company from the platform side.
+ *
+ * The self-serve route makes a company and its first admin together; so does
+ * this, because a company with no way in is not a company. The difference is
+ * who decides the plan and the trial length.
+ */
+export const createCompanyZodSchema = z.object({
+    name: z.string("Company name must be a string").min(1, "Company name is required"),
+    email: z.string("Email must be a string").email("Enter a valid email address").optional(),
+    admin_name: z.string("Admin name must be a string").min(1, "The admin's name is required"),
+    admin_email: z
+        .string("Admin email must be a string")
+        .email("Enter a valid email address for the admin"),
+    // Set by whoever is provisioning. They hand it over out of band; the admin
+    // changes it, or uses the reset flow.
+    admin_password: z
+        .string("Password must be a string")
+        .min(8, "Password must be at least 8 characters")
+        .regex(/[A-Za-z]/, "Password must contain a letter")
+        .regex(/[0-9]/, "Password must contain a number"),
+    plan_id: z.uuid("plan_id must be a valid id").optional(),
+    // Days from now. Absent means no trial - a company provisioned by hand is
+    // usually one that has already agreed to pay.
+    trial_days: z
+        .number("Trial days must be a number")
+        .int()
+        .min(1, "A trial of zero days is not a trial")
+        .max(365, "That is longer than a year - check the figure")
+        .optional(),
+});
+
+export type ICreateCompanyPayload = z.infer<typeof createCompanyZodSchema>;

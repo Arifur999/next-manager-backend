@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
+import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { TimeEntryController } from "./timeEntry.controller.js";
 import { createTimeEntryZodSchema, setCapacityZodSchema, updateTimeEntryZodSchema } from "./timeEntry.validation.js";
@@ -11,11 +12,11 @@ const router = Router();
 // every signed-in user. The service - not the gate - is what keeps operations
 // to their own rows: their id is applied to the where clause, so somebody
 // else's entry reads as "not found" rather than as a refusal.
-router.get("/", checkAuth(), TimeEntryController.getAllEntries);
-router.get("/summary", checkAuth(), TimeEntryController.getSummary);
-router.post("/", checkAuth(), validateRequest(createTimeEntryZodSchema), TimeEntryController.createEntry);
-router.patch("/:id", checkAuth(), validateRequest(updateTimeEntryZodSchema), TimeEntryController.updateEntry);
-router.delete("/:id", checkAuth(), TimeEntryController.deleteEntry);
+router.get("/", checkAuth(), requireCompany, TimeEntryController.getAllEntries);
+router.get("/summary", checkAuth(), requireCompany, TimeEntryController.getSummary);
+router.post("/", checkAuth(), requireCompany, validateRequest(createTimeEntryZodSchema), TimeEntryController.createEntry);
+router.patch("/:id", checkAuth(), requireCompany, validateRequest(updateTimeEntryZodSchema), TimeEntryController.updateEntry);
+router.delete("/:id", checkAuth(), requireCompany, TimeEntryController.deleteEntry);
 
 // Capacity is the denominator every utilization figure divides by, so changing
 // it moves every one of those numbers. That belongs with the people who own

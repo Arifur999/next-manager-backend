@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
+import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { ClientController } from "./client.controller.js";
 import { createClientZodSchema, updateClientZodSchema } from "./client.validation.js";
@@ -10,8 +11,8 @@ const router = Router();
 // Knowing WHO the agency works for is not sensitive - operations needs it to
 // make sense of the project they are on - so the reads are open to everyone
 // signed in. What that client is WORTH is a different question, gated below.
-router.get("/", checkAuth(), ClientController.getAllClients);
-router.get("/:id", checkAuth(), ClientController.getSingleClient);
+router.get("/", checkAuth(), requireCompany, ClientController.getAllClients);
+router.get("/:id", checkAuth(), requireCompany, ClientController.getSingleClient);
 
 // Revenue, outstanding and lifetime value are finance, not CRM. Sales owns the
 // relationship but not the ledger behind it.

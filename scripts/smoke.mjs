@@ -947,6 +947,71 @@ if (!superEmail || !superPassword) {
   cookie = adminCookie;
   r = await call("POST", "/clients", { name: "Unblocked Co" });
   check("and writing works again", r.status === 201, `${r.status} ${r.json.message}`);
+
+  // ---- the operator's own screens ----
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+
+  r = await call("GET", "/platform/overview");
+  check("the operator gets an overview", r.status === 200, `${r.status} ${r.json.message}`);
+  check(
+    "with a company count and monthly revenue",
+    typeof r.json.data?.companies?.total === "number" && typeof r.json.data?.mrr_usd === "number",
+    JSON.stringify(r.json.data?.companies)
+  );
+  check(
+    "and the trials about to lapse, which is what gets acted on",
+    Array.isArray(r.json.data?.ending_soon),
+    typeof r.json.data?.ending_soon
+  );
+  check(
+    "companies the platform never set up are surfaced, not hidden in a status",
+    typeof r.json.data?.companies?.unprovisioned === "number",
+    JSON.stringify(r.json.data?.companies)
+  );
+
+  // Provisioning by hand: workspace, first admin and subscription together.
+  const provisionEmail = `prov${stamp}@agencio.test`;
+  r = await call("POST", "/platform/companies", {
+    name: "Provisioned Co",
+    admin_name: "Prov Admin",
+    admin_email: provisionEmail,
+    admin_password: "Passw0rd123",
+    trial_days: 14,
+  });
+  check("the operator creates a company", r.status === 201, `${r.status} ${r.json.message}`);
+  check(
+    "its admin is an admin, and it is on a trial",
+    r.json.data?.admin?.role === "admin" && r.json.data?.subscription?.status === "trialing",
+    JSON.stringify({ role: r.json.data?.admin?.role, status: r.json.data?.subscription?.status })
+  );
+
+  // The whole point: the person can actually get in.
+  cookie = "";
+  r = await call("POST", "/auth/login", { email: provisionEmail, password: "Passw0rd123" });
+  check("and that admin can sign in", r.status === 200, `${r.status} ${r.json.message}`);
+
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+  r = await call("POST", "/platform/companies", {
+    name: "Duplicate Co",
+    admin_name: "Dup",
+    admin_email: provisionEmail,
+    admin_password: "Passw0rd123",
+  });
+  check("one email cannot admin two companies", r.status === 409, `${r.status} ${r.json.message}`);
+
+  // The operator belongs to no company, so company data must refuse rather
+  // than answer with an empty list.
+  for (const path of ["/clients", "/projects", "/tasks", "/time-entries", "/kpi/me"]) {
+    r = await call("GET", path);
+    check(`the operator is refused ${path}`, r.status === 403, `${r.status}`);
+  }
+
+  r = await call("GET", "/auth/me");
+  check("but still reaches its own account", r.status === 200, `${r.status}`);
+
+  cookie = adminCookie;
 }
 
 // ---------------------------------------------------------------------------

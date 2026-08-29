@@ -68,6 +68,26 @@ const getMySubscription = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const createCompany = catchAsync(async (req: Request, res: Response) => {
+    const result = await PlatformService.createCompany(req.body);
+    sendResponse(res, {
+        success: true,
+        httpStatus: status.CREATED,
+        message: "Company created",
+        data: result,
+    });
+});
+
+const getOverview = catchAsync(async (_req: Request, res: Response) => {
+    const result = await PlatformService.getOverview();
+    sendResponse(res, {
+        success: true,
+        httpStatus: status.OK,
+        message: "Overview retrieved successfully",
+        data: result,
+    });
+});
+
 export const PlatformController = {
     getPlans,
     createPlan,
@@ -75,4 +95,6 @@ export const PlatformController = {
     getCompanies,
     setSubscription,
     getMySubscription,
+    createCompany,
+    getOverview,
 };

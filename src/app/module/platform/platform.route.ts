@@ -4,6 +4,7 @@ import { checkAuth } from "../../middleware/checkAuth.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { PlatformController } from "./platform.controller.js";
 import {
+    createCompanyZodSchema,
     createPlanZodSchema,
     setSubscriptionZodSchema,
     updatePlanZodSchema,
@@ -34,7 +35,22 @@ router.patch(
     PlatformController.updatePlan
 );
 
+// What the operator opens the console to see: how many companies, what they
+// pay, and which trials are about to lapse.
+router.get("/overview", checkAuth(Role.super_admin), PlatformController.getOverview);
+
 router.get("/companies", checkAuth(Role.super_admin), PlatformController.getCompanies);
+
+// Provisioning by hand, for a company that agreed a price before it ever saw
+// the sign-up form. Creates the workspace, its first admin and its
+// subscription together - a workspace nobody can sign in to is not a
+// workspace.
+router.post(
+    "/companies",
+    checkAuth(Role.super_admin),
+    validateRequest(createCompanyZodSchema),
+    PlatformController.createCompany
+);
 router.patch(
     "/companies/:organizationId/subscription",
     checkAuth(Role.super_admin),

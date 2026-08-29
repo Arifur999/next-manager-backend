@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
+import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { MilestoneController } from "./milestone.controller.js";
 import {
@@ -14,7 +15,7 @@ const router = Router();
 
 // Reading is open to everyone signed in: operations needs to see what it owes
 // and when, and a deadline nobody can look up is not a deadline.
-router.get("/", checkAuth(), MilestoneController.getAllMilestones);
+router.get("/", checkAuth(), requireCompany, MilestoneController.getAllMilestones);
 
 // Setting the schedule is the project manager's job by definition.
 router.post(
@@ -34,7 +35,7 @@ router.patch(
 // role. On-time rate is measured from this timestamp.
 router.post(
     "/:id/submit",
-    checkAuth(),
+    checkAuth(), requireCompany,
     validateRequest(submitMilestoneZodSchema),
     MilestoneController.submitMilestone
 );

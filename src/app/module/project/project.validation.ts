@@ -20,3 +20,25 @@ export const updateProjectZodSchema = createProjectZodSchema.omit({ code: true }
 
 export type ICreateProjectPayload = z.infer<typeof createProjectZodSchema>;
 export type IUpdateProjectPayload = z.infer<typeof updateProjectZodSchema>;
+
+/**
+ * Freezing what was sold, at kickoff.
+ *
+ * Its own payload rather than fields on updateProject, and deliberately so:
+ * contract_value_usd is meant to move as the deal changes, and the baseline is
+ * meant not to. If both lived on the same edit form the baseline would drift
+ * with every save and scope-change rate would always read zero.
+ */
+export const setBaselineZodSchema = z.object({
+    baseline_hours: z
+        .number("Baseline hours must be a number")
+        .positive("Baseline hours must be greater than zero"),
+    // Defaults to whatever the contract is worth right now, which at kickoff
+    // is exactly what "what we sold" means.
+    baseline_value_usd: z.number("Baseline value must be a number").nonnegative().optional(),
+    // Re-baselining erases the original the drift was being measured from, so
+    // it cannot happen by accident.
+    replace_existing: z.boolean("replace_existing must be a boolean").optional(),
+});
+
+export type ISetBaselinePayload = z.infer<typeof setBaselineZodSchema>;

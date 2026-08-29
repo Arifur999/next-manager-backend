@@ -709,5 +709,45 @@ check(
   JSON.stringify(r.json.data?.context)
 );
 
+// A baseline is the original that plan-vs-actual and scope drift are measured
+// from, so it must not be overwritable by accident.
+cookie = pmCookie;
+r = await call("POST", `/projects/${timeProjectId}/baseline`, { baseline_hours: 120 });
+check("project manager baselines a project", r.status === 200, `${r.status} ${r.json.message}`);
+check(
+  "baseline value defaults to the contract as it stands",
+  Number(r.json.data?.baseline_value_usd) >= 0 && r.json.data?.baseline_set_at !== null,
+  JSON.stringify({
+    hours: r.json.data?.baseline_hours,
+    value: r.json.data?.baseline_value_usd,
+    at: r.json.data?.baseline_set_at,
+  })
+);
+
+r = await call("POST", `/projects/${timeProjectId}/baseline`, { baseline_hours: 300 });
+check(
+  "re-baselining is refused without saying so explicitly",
+  r.status === 409,
+  `${r.status} ${r.json.message}`
+);
+
+r = await call("POST", `/projects/${timeProjectId}/baseline`, {
+  baseline_hours: 300,
+  replace_existing: true,
+});
+check("but allowed when it is deliberate", r.status === 200, `${r.status} ${r.json.message}`);
+
+cookie = roleCookies.sales;
+r = await call("POST", `/projects/${timeProjectId}/baseline`, { baseline_hours: 10 });
+check("sales cannot baseline what it sold", r.status === 403, `${r.status}`);
+
+cookie = adminCookie;
+r = await call("GET", `/kpi/delivery?${kpiRange}`);
+check(
+  "a baselined project appears in plan-vs-actual",
+  Array.isArray(r.json.data?.projects) && r.json.data.projects.length >= 1,
+  JSON.stringify(r.json.data?.projects?.[0])
+);
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

@@ -5,7 +5,11 @@ import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
-import { ICreateProjectPayload, IUpdateProjectPayload } from "./project.validation.js";
+import {
+    ICreateProjectPayload,
+    ISetBaselinePayload,
+    IUpdateProjectPayload,
+} from "./project.validation.js";
 
 const getAllProjects = async (user: IRequestUser, options: ListOptions = {}) => {
     const where: Prisma.ProjectWhereInput = {
@@ -200,6 +204,45 @@ const updateProject = async (id: string, payload: IUpdateProjectPayload, user: I
     });
 };
 
+/**
+ * Freeze the plan a project will be measured against.
+ *
+ * Plan-vs-actual and scope-change rate both need an original that does not
+ * move. The contract value does move - that is what makes drift measurable -
+ * so the baseline is copied once and then left alone.
+ *
+ * Re-baselining is allowed but never implicit: it throws away the number every
+ * overrun was being measured from, and a project quietly re-baselined at its
+ * current state always reads as perfectly on plan.
+ */
+const setBaseline = async (id: string, payload: ISetBaselinePayload, user: IRequestUser) => {
+    const existing = await prisma.project.findFirst({
+        where: { id, organization_id: user.organizationId, deleted_at: null },
+        select: { id: true, baseline_set_at: true, contract_value_usd: true },
+    });
+
+    if (!existing) {
+        throw new AppError(status.NOT_FOUND, "Project not found");
+    }
+
+    if (existing.baseline_set_at && !payload.replace_existing) {
+        throw new AppError(
+            status.CONFLICT,
+            "This project is already baselined. Replacing it discards the original every overrun is measured against."
+        );
+    }
+
+    return prisma.project.update({
+        where: { id },
+        data: {
+            baseline_hours: payload.baseline_hours,
+            baseline_value_usd: payload.baseline_value_usd ?? existing.contract_value_usd,
+            baseline_set_at: new Date(),
+        },
+        include: { client: { select: { id: true, name: true } } },
+    });
+};
+
 const deleteProject = async (id: string, user: IRequestUser) => {
     const existing = await prisma.project.findFirst({
         where: { id, organization_id: user.organizationId, deleted_at: null },
@@ -238,5 +281,6 @@ export const ProjectService = {
     getProjectFinancials,
     createProject,
     updateProject,
+    setBaseline,
     deleteProject,
 };

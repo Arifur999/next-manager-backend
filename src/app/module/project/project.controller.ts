@@ -58,6 +58,20 @@ const updateProject = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const setBaseline = catchAsync(async (req: Request, res: Response) => {
+    const result = await ProjectService.setBaseline(
+        req.params.id as string,
+        req.body,
+        req.user as IRequestUser
+    );
+    sendResponse(res, {
+        success: true,
+        httpStatus: status.OK,
+        message: "Baseline set",
+        data: result,
+    });
+});
+
 const deleteProject = catchAsync(async (req: Request, res: Response) => {
     const result = await ProjectService.deleteProject(req.params.id as string, req.user as IRequestUser);
     sendResponse(res, {
@@ -74,5 +88,6 @@ export const ProjectController = {
     getProjectFinancials,
     createProject,
     updateProject,
+    setBaseline,
     deleteProject,
 };

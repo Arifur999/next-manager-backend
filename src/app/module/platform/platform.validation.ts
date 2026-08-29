@@ -219,3 +219,61 @@ export const updatePlatformSettingsZodSchema = z.object({
 });
 
 export type IUpdatePlatformSettingsPayload = z.infer<typeof updatePlatformSettingsZodSchema>;
+
+/**
+ * Inviting an agency owner.
+ *
+ * No role field. The whole point of this flow is that it produces an agency
+ * admin and can never be edited into producing a platform operator, so the role
+ * is fixed in the service rather than accepted from the request.
+ *
+ * `company_name` is optional: set it when the deal was agreed with a named
+ * agency, leave it out and the owner types their own on the way in.
+ */
+export const createAgencyInviteZodSchema = z.object({
+    email: z.email("A valid email is required"),
+    company_name: z
+        .string("Agency name must be a string")
+        .max(120, "That is longer than a name")
+        .optional(),
+    // Absent means the platform default for new sign-ups, which is what the
+    // settings screen is for. Explicitly null is not offered: an invite onto
+    // nothing is not something anybody means to send.
+    plan_id: z.uuid("plan_id must be a valid id").optional(),
+    trial_days: z
+        .number("Trial days must be a number")
+        .int()
+        .min(0, "Use 0 for no trial")
+        .max(365, "That is longer than a year - check the figure")
+        .optional(),
+    expires_in_days: z
+        .number("Expiry must be a number")
+        .int()
+        .min(1, "An invite that expires today is not useful")
+        .max(60, "An invite living longer than two months is a link nobody is watching")
+        .optional(),
+});
+
+/**
+ * Accepting one.
+ *
+ * No email field: it comes from the invite. Taking it from the form would let
+ * whoever holds a leaked link open an agency under any address.
+ */
+export const acceptAgencyInviteZodSchema = z.object({
+    full_name: z.string("Name must be a string").min(1, "Your name is required"),
+    // Only read when the invite carries no name. When it does, that is the
+    // agency the deal was agreed with and it does not change on the way in.
+    company_name: z
+        .string("Agency name must be a string")
+        .max(120, "That is longer than a name")
+        .optional(),
+    password: z
+        .string("Password must be a string")
+        .min(8, "Password must be at least 8 characters")
+        .regex(/[A-Za-z]/, "Password must contain a letter")
+        .regex(/[0-9]/, "Password must contain a number"),
+});
+
+export type ICreateAgencyInvitePayload = z.infer<typeof createAgencyInviteZodSchema>;
+export type IAcceptAgencyInvitePayload = z.infer<typeof acceptAgencyInviteZodSchema>;

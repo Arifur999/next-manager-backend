@@ -1441,6 +1441,178 @@ if (!superEmail || !superPassword) {
   r = await call("GET", "/auth/me");
   check("but still reaches its own account", r.status === 200, `${r.status}`);
 
+  // ---- the console's actual job: bringing an agency on ----
+  //
+  // The owner arrives owning a workspace, and everything after that happens
+  // inside it. The platform never touches their staff.
+
+  const agencyEmail = `agencyowner${stamp}@agencio.test`;
+  // Stamped: earlier runs of this suite left agencies behind, and "nothing
+  // exists yet" has to be about THIS invite.
+  const agencyName = `Invited Agency ${stamp}`;
+  r = await call("GET", "/platform/plans");
+  const sellPlanId = (r.json.data ?? []).find((p) => p.is_active)?.id;
+
+  r = await call("POST", "/platform/agency-invites", {
+    email: agencyEmail,
+    company_name: agencyName,
+    plan_id: sellPlanId,
+    trial_days: 21,
+  });
+  const agencyJoinUrl = r.json.data?.join_url;
+  const agencyInviteId = r.json.data?.invite?.id;
+  check("an agency owner can be invited", r.status === 201, `${r.status} ${r.json.message}`);
+  check(
+    "and the link is emailed, with the link still returned as a fallback",
+    typeof r.json.data?.email?.delivered === "boolean" &&
+      agencyJoinUrl?.includes("/agency-join/"),
+    JSON.stringify({ email: r.json.data?.email, url: agencyJoinUrl })
+  );
+
+  // Nothing exists yet. An invite that is never accepted must not leave an
+  // empty agency in every total.
+  r = await call("GET", `/platform/companies?search=${encodeURIComponent(agencyName)}`);
+  check(
+    "no company exists until the invite is accepted",
+    (r.json.data ?? []).length === 0,
+    JSON.stringify((r.json.data ?? []).map((c) => c.name))
+  );
+
+  const agencyToken = agencyJoinUrl?.split("/agency-join/")[1];
+
+  cookie = "";
+  r = await call("GET", `/agency-join/${agencyToken}`);
+  check("the join page reads the invite signed out", r.status === 200, `${r.status}`);
+  check(
+    "and says what they are being put on before they set a password",
+    r.json.data?.email === agencyEmail &&
+      r.json.data?.company_name === agencyName &&
+      r.json.data?.trial_days === 21,
+    JSON.stringify(r.json.data)
+  );
+
+  r = await call("POST", `/agency-join/${agencyToken}/accept`, {
+    full_name: "Agency Owner",
+    password: "Passw0rd123",
+    // Ignored: the name on the invite is the agency the deal was agreed with.
+    company_name: "Something Else",
+    email: "attacker@evil.test",
+  });
+  check("accepting opens the agency", r.status === 201, `${r.status} ${r.json.message}`);
+  check(
+    "under the invited address and the agreed name",
+    r.json.data?.owner?.email === agencyEmail &&
+      r.json.data?.organization?.name === agencyName,
+    JSON.stringify({ email: r.json.data?.owner?.email, name: r.json.data?.organization?.name })
+  );
+  check(
+    "as an agency admin, never a platform operator",
+    r.json.data?.owner?.role === "admin",
+    r.json.data?.owner?.role
+  );
+  check(
+    "and active, because there is nobody inside to approve them",
+    r.json.data?.owner?.status === "active",
+    r.json.data?.owner?.status
+  );
+
+  r = await call("POST", `/agency-join/${agencyToken}/accept`, {
+    full_name: "Again",
+    password: "Passw0rd123",
+  });
+  check("the invite cannot be used twice", r.status === 404, `${r.status}`);
+
+  r = await call("GET", `/agency-join/${agencyToken}`);
+  check("and the join page stops opening too", r.status === 404, `${r.status}`);
+
+  // The point of the whole flow: they can sign in and run their own agency.
+  const ownerLogin = await call("POST", "/auth/login", {
+    email: agencyEmail,
+    password: "Passw0rd123",
+  });
+  check("the owner can sign in", ownerLogin.status === 200, `${ownerLogin.status}`);
+  check("as an admin of their own company", ownerLogin.json.data?.user?.role === "admin", ownerLogin.json.data?.user?.role);
+
+  r = await call("GET", "/platform/subscription");
+  check(
+    "on the trial they were invited onto",
+    r.json.data?.subscription?.status === "trialing",
+    JSON.stringify(r.json.data?.subscription?.status)
+  );
+
+  // And they add their own team, which is the half the platform never touches.
+  r = await call("POST", "/users", {
+    full_name: "Their Sales Person",
+    email: `theirsales${stamp}@agencio.test`,
+    password: "Passw0rd123",
+    role: "sales",
+  });
+  check("and adds their own sales person", r.status === 201, `${r.status} ${r.json.message}`);
+
+  r = await call("POST", "/users", {
+    full_name: "Their PM",
+    email: `theirpm${stamp}@agencio.test`,
+    password: "Passw0rd123",
+    role: "project_manager",
+  });
+  check("and their own project manager", r.status === 201, `${r.status} ${r.json.message}`);
+
+  // The boundary that makes the roles mean anything: an agency owner cannot
+  // reach the platform console, however they got in.
+  r = await call("GET", "/platform/companies");
+  check("but cannot see the platform's customers", r.status === 403, `${r.status}`);
+
+  r = await call("POST", "/platform/agency-invites", { email: `nope${stamp}@agencio.test` });
+  check("nor invite another agency", r.status === 403, `${r.status}`);
+
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+
+  // With no plan chosen and no platform default set, they arrive unprovisioned
+  // rather than on the cheapest thing nobody agreed to.
+  const barEmail = `bareagency${stamp}@agencio.test`;
+  r = await call("POST", "/platform/agency-invites", { email: barEmail });
+  const bareToken = r.json.data?.join_url?.split("/agency-join/")[1];
+  check("an agency can be invited with no plan", r.status === 201, `${r.status} ${r.json.message}`);
+
+  cookie = "";
+  r = await call("POST", `/agency-join/${bareToken}/accept`, {
+    full_name: "Bare Owner",
+    password: "Passw0rd123",
+    company_name: "Named On The Way In",
+  });
+  check(
+    "and names their own agency when the invite did not",
+    r.json.data?.organization?.name === "Named On The Way In",
+    r.json.data?.organization?.name
+  );
+
+  await call("POST", "/auth/login", { email: barEmail, password: "Passw0rd123" });
+  r = await call("GET", "/platform/subscription");
+  check(
+    "landing unprovisioned rather than on a plan nobody agreed to",
+    r.json.data?.subscription === null,
+    JSON.stringify(r.json.data?.subscription)
+  );
+
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+
+  r = await call("DELETE", `/platform/agency-invites/${agencyInviteId}`);
+  check("a used invite cannot be revoked", r.status === 409, `${r.status} ${r.json.message}`);
+
+  // An address that already owns an agency cannot be invited to own a second.
+  r = await call("POST", "/platform/agency-invites", { email: agencyEmail });
+  check("one address cannot own two agencies", r.status === 409, `${r.status} ${r.json.message}`);
+
+  // Nor can somebody on the platform team be turned into a customer.
+  r = await call("POST", "/platform/agency-invites", { email: superEmail });
+  check(
+    "and your own team cannot be invited as a customer",
+    r.status === 409,
+    `${r.status} ${r.json.message}`
+  );
+
   // ---- settings, and the one thing they actually change ----
 
   r = await call("GET", "/platform/settings");

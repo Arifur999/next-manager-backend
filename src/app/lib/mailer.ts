@@ -210,6 +210,55 @@ export const platformInviteMail = (
 };
 
 /**
+ * The invite that brings an agency onto the platform.
+ *
+ * Different from the operator invite in what it promises: this one hands
+ * somebody their own workspace, so it says what they are being put on before
+ * they set a password. Somebody about to create an account is entitled to know
+ * whether it costs money on Tuesday.
+ */
+export const agencyInviteMail = (
+    joinUrl: string,
+    expiresAt: Date,
+    companyName: string,
+    trialDays: number,
+    brand: PlatformBrand
+): Omit<Mail, "to"> => {
+    const expires = expiresAt.toUTCString();
+    const what = companyName
+        ? `a workspace for ${companyName}`
+        : "your own workspace";
+    const terms =
+        trialDays > 0
+            ? `You get ${trialDays} days to try everything before it has to be paid for.`
+            : "It is on a paid plan from the moment you open it.";
+
+    return {
+        subject: `Your ${brand.productName} agency is ready to open`,
+        text: [
+            `You have been invited to open ${what} on ${brand.productName}.`,
+            "",
+            `Open this link to set your password: ${joinUrl}`,
+            "",
+            terms,
+            "Once you are in, you add your own sales people, project managers and operations team - they never go through us.",
+            "",
+            `The link works once and expires on ${expires}.`,
+            "",
+            signOff(brand),
+        ].join("\n"),
+        html: `
+        <p>You have been invited to open ${escapeHtml(what)} on ${escapeHtml(brand.productName)}.</p>
+        <p><a href="${joinUrl}">Set your password and open it</a></p>
+        <p>${escapeHtml(terms)}</p>
+        <p>Once you are in, you add your own sales people, project managers and operations team - they never go through us.</p>
+        <p>The link works once and expires on ${escapeHtml(expires)}.</p>
+        <p style="color:#666;font-size:13px">${escapeHtml(signOff(brand))}</p>
+    `,
+    };
+};
+
+/**
  * A platform announcement, emailed.
  *
  * Blank lines become paragraphs and nothing else does. A notice to customers is

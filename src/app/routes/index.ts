@@ -19,6 +19,7 @@ import { MilestoneRoutes } from "../module/milestone/milestone.route.js";
 import { OwnerWithdrawalRoutes } from "../module/ownerWithdrawal/ownerWithdrawal.route.js";
 import {
     NotificationRoutes,
+    PublicAgencyInviteRoutes,
     PlatformRoutes,
     PublicPlatformInviteRoutes,
 } from "../module/platform/platform.route.js";
@@ -69,5 +70,6 @@ router.use("/platform", PlatformRoutes);
 router.use("/notifications", NotificationRoutes);
 // Public: joining the platform team, before any account exists.
 router.use("/platform-join", PublicPlatformInviteRoutes);
+router.use("/agency-join", PublicAgencyInviteRoutes);
 
 export const indexRoute = router;

@@ -38,6 +38,7 @@ model Plan {
 
   subscriptions Subscription[]
   default_for     PlatformSetting[]
+  agency_invites  AgencyInvite[]    @relation("AgencyInvitePlan")
 
   @@map("plans")
 }
@@ -282,4 +283,48 @@ model PlatformSetting {
   default_plan Plan? @relation(fields: [default_plan_id], references: [id], onDelete: Restrict)
 
   @@map("platform_settings")
+}
+
+/// Bringing an agency onto the platform.
+///
+/// Distinct from PlatformInvite, which grows the team that RUNS AGENCIO, and
+/// from TeamInvite, which adds somebody to a company that already exists. This
+/// one has no company yet - that is the point. The workspace, its first admin
+/// and its subscription are all created when the link is accepted.
+///
+/// Nothing is created at invite time on purpose. An invite that is never
+/// accepted would otherwise leave an empty agency on the customers list,
+/// counted in every total, belonging to nobody.
+model AgencyInvite {
+  id         String @id @default(uuid())
+  email      String
+  token_hash String @unique
+
+  /// Optional. Set it when the deal was agreed with a named agency and the
+  /// name should be on the record; leave it empty and the owner types their
+  /// own on the way in. Empty rather than null - one absent value, not two.
+  company_name String @default("")
+
+  /// What they land on. Null means no subscription is created and they show up
+  /// as unprovisioned, the same as a company that signed itself up before the
+  /// platform had a default plan.
+  plan_id    String?
+  trial_days Int     @default(14)
+
+  expires_at DateTime
+  /// Set when the agency is created from it. Single-use: a link that keeps
+  /// working can be replayed out of an inbox months later.
+  used_at    DateTime?
+  revoked_at DateTime?
+  created_by String?
+  created_at DateTime  @default(now())
+
+  /// Restrict, not SetNull: an invite silently losing the plan it was sold on
+  /// would let somebody accept onto nothing.
+  plan Plan? @relation("AgencyInvitePlan", fields: [plan_id], references: [id], onDelete: Restrict)
+
+  /// The outstanding list, and refusing a second live invite to one address.
+  @@index([email, used_at])
+  @@index([plan_id])
+  @@map("agency_invites")
 }

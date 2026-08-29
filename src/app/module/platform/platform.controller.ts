@@ -110,6 +110,30 @@ const getActivity = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const getAdmins = catchAsync(async (_req: Request, res: Response) => {
+    const result = await PlatformService.getAdmins();
+    sendResponse(res, {
+        success: true,
+        httpStatus: status.OK,
+        message: "Platform admins retrieved successfully",
+        data: result,
+    });
+});
+
+const setPermissions = catchAsync(async (req: Request, res: Response) => {
+    const result = await PlatformService.setPermissions(
+        req.params.id as string,
+        req.body,
+        req.user as IRequestUser
+    );
+    sendResponse(res, {
+        success: true,
+        httpStatus: status.OK,
+        message: "Access updated",
+        data: result,
+    });
+});
+
 export const PlatformController = {
     getPlans,
     createPlan,
@@ -120,4 +144,6 @@ export const PlatformController = {
     createCompany,
     getOverview,
     getActivity,
+    getAdmins,
+    setPermissions,
 };

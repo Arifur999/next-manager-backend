@@ -1,5 +1,6 @@
 import z from "zod";
 import { SubscriptionStatus } from "../../../generated/prisma/enums.js";
+import { PLATFORM_PERMISSIONS } from "./platform.permissions.js";
 
 export const createPlanZodSchema = z.object({
     code: z
@@ -88,3 +89,16 @@ export const createCompanyZodSchema = z.object({
 });
 
 export type ICreateCompanyPayload = z.infer<typeof createCompanyZodSchema>;
+
+/**
+ * Setting what a platform operator may do.
+ *
+ * The enum is the control. `User.permissions` has accepted any string since
+ * the first week, and a typo stored there is a permission that grants nothing
+ * while looking configured.
+ */
+export const setPlatformPermissionsZodSchema = z.object({
+    permissions: z.array(z.enum(PLATFORM_PERMISSIONS, "Unknown permission")),
+});
+
+export type ISetPlatformPermissionsPayload = z.infer<typeof setPlatformPermissionsZodSchema>;

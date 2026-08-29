@@ -30,7 +30,17 @@ export const requirePermission = (...allowed: string[]) =>
             return next(new AppError(status.UNAUTHORIZED, "Unauthorized access! No user on the request."));
         }
 
-        if (user.role === Role.admin || user.role === Role.super_admin) {
+        // A company admin always passes. Locking an admin out of their own
+        // company with a checkbox is never the intent, and there would be no
+        // way back in.
+        //
+        // super_admin is deliberately NOT here, though it was until this layer
+        // was first used. A platform team is exactly the case these checks
+        // exist for - "you look after billing, not the customer list" - and a
+        // blanket bypass for the only role that reaches these routes would
+        // have made the whole permissions screen decorative. The empty-list
+        // hatch below is what keeps the first operator from being locked out.
+        if (user.role === Role.admin) {
             return next();
         }
 

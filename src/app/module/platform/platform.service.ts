@@ -9,6 +9,7 @@ import { passwordUtils } from "../../utils/password.js";
 import {
     ICreateCompanyPayload,
     ICreatePlanPayload,
+    ISetPlatformPermissionsPayload,
     ISetSubscriptionPayload,
     IUpdatePlanPayload,
 } from "./platform.validation.js";
@@ -590,6 +591,102 @@ const getActivity = async (filters: { entityType?: string; actorId?: string }, l
         take: Math.min(limit, 500),
     });
 
+// ---------------------------------------------------------------------------
+// The platform team
+// ---------------------------------------------------------------------------
+
+const ADMIN_FIELDS = {
+    id: true,
+    full_name: true,
+    email: true,
+    permissions: true,
+    status: true,
+    created_at: true,
+} as const;
+
+const getAdmins = async () =>
+    prisma.user.findMany({
+        where: { role: Role.super_admin, deleted_at: null },
+        select: ADMIN_FIELDS,
+        orderBy: { created_at: "asc" },
+    });
+
+/**
+ * Set what one operator may do.
+ *
+ * An empty list means "everything", not "nothing" - that is the hatch in
+ * requirePermission, and it is what keeps the first operator from locking
+ * themselves out on the day this shipped. The screen has to say so, because
+ * the opposite reading is the obvious one.
+ *
+ * Two guards, both about not stranding the platform:
+ */
+const setPermissions = async (
+    id: string,
+    payload: ISetPlatformPermissionsPayload,
+    user: IRequestUser
+) => {
+    const target = await prisma.user.findFirst({
+        where: { id, role: Role.super_admin, deleted_at: null },
+        select: { id: true, full_name: true, email: true, permissions: true },
+    });
+
+    if (!target) {
+        throw new AppError(status.NOT_FOUND, "Platform admin not found");
+    }
+
+    const nextGrantsAdminManage =
+        payload.permissions.length === 0 || payload.permissions.includes("platform.admins.manage");
+
+    if (!nextGrantsAdminManage) {
+        // Somebody has to be able to hand permissions out. If this change would
+        // leave nobody who can, the platform is stuck with whatever it has -
+        // and the fix would be a database edit.
+        const others = await prisma.user.count({
+            where: {
+                role: Role.super_admin,
+                deleted_at: null,
+                id: { not: id },
+                OR: [
+                    { permissions: { isEmpty: true } },
+                    { permissions: { has: "platform.admins.manage" } },
+                ],
+            },
+        });
+
+        if (others === 0) {
+            throw new AppError(
+                status.CONFLICT,
+                "This is the only account that can manage the platform team. Give somebody else that permission first."
+            );
+        }
+    }
+
+    return prisma.$transaction(async (tx) => {
+        const updated = await tx.user.update({
+            where: { id },
+            data: { permissions: payload.permissions },
+            select: ADMIN_FIELDS,
+        });
+
+        await logPlatformActivity(
+            tx,
+            {
+                entityType: "admin",
+                entityId: id,
+                action: "updated",
+                summary:
+                    payload.permissions.length === 0
+                        ? `Gave ${target.full_name} full access`
+                        : `Set ${target.full_name}'s access to: ${payload.permissions.join(", ")}`,
+            },
+            user
+        );
+
+        return updated;
+    });
+};
+
 export const PlatformService = {
     getPlans,
     createPlan,
@@ -601,4 +698,6 @@ export const PlatformService = {
     createCompany,
     getOverview,
     getActivity,
+    getAdmins,
+    setPermissions,
 };

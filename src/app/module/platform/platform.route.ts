@@ -1,11 +1,13 @@
 import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
+import { requirePermission } from "../../middleware/requirePermission.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { PlatformController } from "./platform.controller.js";
 import {
     createCompanyZodSchema,
     createPlanZodSchema,
+    setPlatformPermissionsZodSchema,
     setSubscriptionZodSchema,
     updatePlanZodSchema,
 } from "./platform.validation.js";
@@ -21,29 +23,51 @@ const router = Router();
 router.get("/subscription", checkAuth(), PlatformController.getMySubscription);
 
 // Everything below is the platform's own console.
-router.get("/plans", checkAuth(Role.super_admin), PlatformController.getPlans);
+router.get(
+    "/plans",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.companies.view"),
+    PlatformController.getPlans
+);
 router.post(
     "/plans",
     checkAuth(Role.super_admin),
+    requirePermission("platform.plans.manage"),
     validateRequest(createPlanZodSchema),
     PlatformController.createPlan
 );
 router.patch(
     "/plans/:id",
     checkAuth(Role.super_admin),
+    requirePermission("platform.plans.manage"),
     validateRequest(updatePlanZodSchema),
     PlatformController.updatePlan
 );
 
 // What the operator opens the console to see: how many companies, what they
 // pay, and which trials are about to lapse.
-router.get("/overview", checkAuth(Role.super_admin), PlatformController.getOverview);
+router.get(
+    "/overview",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.companies.view"),
+    PlatformController.getOverview
+);
 
 // What the platform team has been doing. GET only - a history somebody can
 // edit answers nothing.
-router.get("/activity", checkAuth(Role.super_admin), PlatformController.getActivity);
+router.get(
+    "/activity",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.companies.view"),
+    PlatformController.getActivity
+);
 
-router.get("/companies", checkAuth(Role.super_admin), PlatformController.getCompanies);
+router.get(
+    "/companies",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.companies.view"),
+    PlatformController.getCompanies
+);
 
 // Provisioning by hand, for a company that agreed a price before it ever saw
 // the sign-up form. Creates the workspace, its first admin and its
@@ -52,14 +76,32 @@ router.get("/companies", checkAuth(Role.super_admin), PlatformController.getComp
 router.post(
     "/companies",
     checkAuth(Role.super_admin),
+    requirePermission("platform.companies.manage"),
     validateRequest(createCompanyZodSchema),
     PlatformController.createCompany
 );
 router.patch(
     "/companies/:organizationId/subscription",
     checkAuth(Role.super_admin),
+    requirePermission("platform.companies.manage"),
     validateRequest(setSubscriptionZodSchema),
     PlatformController.setSubscription
+);
+
+// The platform team. Managing it is its own permission, and it is the one that
+// can grant every other - including itself.
+router.get(
+    "/admins",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.admins.manage"),
+    PlatformController.getAdmins
+);
+router.patch(
+    "/admins/:id/permissions",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.admins.manage"),
+    validateRequest(setPlatformPermissionsZodSchema),
+    PlatformController.setPermissions
 );
 
 export const PlatformRoutes = router;

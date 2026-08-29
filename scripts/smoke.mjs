@@ -989,6 +989,96 @@ if (!superEmail || !superPassword) {
   r = await call("GET", "/platform/activity");
   check("a company admin cannot read it", r.status === 403, `${r.status}`);
 
+  // ---- permissions, and the hatch that stops them locking you out ----
+  //
+  // Written before the middleware is mounted, per the risk in the plan. The
+  // seeded operator has an empty permission list, and MUST keep reaching
+  // everything - otherwise turning this layer on locks the only account that
+  // could turn it back off.
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+
+  r = await call("GET", "/auth/me");
+  check(
+    "the first operator has no permissions stored",
+    Array.isArray(r.json.data?.permissions) && r.json.data.permissions.length === 0,
+    JSON.stringify(r.json.data?.permissions)
+  );
+
+  for (const path of [
+    "/platform/companies",
+    "/platform/plans",
+    "/platform/overview",
+    "/platform/activity",
+  ]) {
+    r = await call("GET", path);
+    check(`and still reaches ${path}`, r.status === 200, `${r.status}`);
+  }
+
+  r = await call("POST", "/platform/plans", {
+    code: `hatch${stamp}`,
+    name: "Hatch",
+    max_seats: 3,
+  });
+  check("and can still write", r.status === 201, `${r.status} ${r.json.message}`);
+
+  // Now the layer itself. The seeded operator is the only platform admin, so
+  // the guards that stop the platform being stranded are what can be checked
+  // here; a second operator arrives with the invite flow.
+  r = await call("GET", "/platform/admins");
+  const admins = r.json.data ?? [];
+  check("the platform team is listable", r.status === 200 && admins.length >= 1, `${r.status}`);
+
+  const me = admins[0];
+
+  r = await call("PATCH", `/platform/admins/${me?.id}/permissions`, {
+    permissions: ["platform.finance.view"],
+  });
+  check(
+    "the only account that can manage the team cannot drop that permission",
+    r.status === 409,
+    `${r.status} ${r.json.message}`
+  );
+  check(
+    "and the refusal says to give somebody else it first",
+    /give somebody else/i.test(r.json.message ?? ""),
+    r.json.message
+  );
+
+  r = await call("PATCH", `/platform/admins/${me?.id}/permissions`, {
+    permissions: ["platform.admins.manage", "not.a.real.permission"],
+  });
+  check("an unknown permission is refused, not stored", r.status === 400, `${r.status}`);
+
+  // Narrowing to a real subset that keeps admins.manage is allowed, and the
+  // gate then actually bites.
+  r = await call("PATCH", `/platform/admins/${me?.id}/permissions`, {
+    permissions: ["platform.admins.manage", "platform.companies.view"],
+  });
+  check("a real subset can be set", r.status === 200, `${r.status} ${r.json.message}`);
+
+  r = await call("GET", "/platform/companies");
+  check("companies.view still opens the customer list", r.status === 200, `${r.status}`);
+
+  r = await call("POST", "/platform/plans", { code: `gated${stamp}`, name: "Gated" });
+  check(
+    "but without plans.manage a plan cannot be created",
+    r.status === 403,
+    `${r.status} ${r.json.message}`
+  );
+  check(
+    "and the refusal names the permission to ask for",
+    /platform\.plans\.manage/.test(r.json.message ?? ""),
+    r.json.message
+  );
+
+  // Put it back, or every later run of this suite starts gated.
+  r = await call("PATCH", `/platform/admins/${me?.id}/permissions`, { permissions: [] });
+  check("clearing the list restores full access", r.status === 200, `${r.status}`);
+
+  r = await call("POST", "/platform/plans", { code: `restored${stamp}`, name: "Restored" });
+  check("and writing works again", r.status === 201, `${r.status} ${r.json.message}`);
+
   // ---- the operator's own screens ----
   cookie = "";
   await call("POST", "/auth/login", { email: superEmail, password: superPassword });

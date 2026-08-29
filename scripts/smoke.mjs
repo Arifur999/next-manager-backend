@@ -749,5 +749,30 @@ check(
   JSON.stringify(r.json.data?.projects?.[0])
 );
 
+// Editing your own record. The allow-list is the security control here, so it
+// is checked directly rather than trusted.
+cookie = opsCookie;
+r = await call("PATCH", "/auth/me", { full_name: "Ops Renamed", phone: "01700000000" });
+check("anyone can edit their own name", r.status === 200, `${r.status} ${r.json.message}`);
+check(
+  "and the change is what comes back from /auth/me",
+  r.json.data?.full_name === "Ops Renamed",
+  JSON.stringify(r.json.data)
+);
+
+// The whole reason this endpoint is separate from PATCH /users/:id.
+r = await call("PATCH", "/auth/me", { full_name: "Ops", role: "admin" });
+check("but cannot promote themselves", r.status === 400, `${r.status} ${r.json.message}`);
+
+r = await call("GET", "/auth/me");
+check(
+  "and the role is untouched after the attempt",
+  r.json.data?.role === "operations",
+  JSON.stringify({ role: r.json.data?.role })
+);
+
+r = await call("PATCH", "/auth/me", { is_active: false });
+check("nor deactivate fields they do not own", r.status === 400, `${r.status} ${r.json.message}`);
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

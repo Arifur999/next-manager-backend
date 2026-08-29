@@ -6,7 +6,12 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { jwtUtils } from "../../utils/jwt.js";
 import { passwordUtils } from "../../utils/password.js";
-import { IChangePasswordPayload, ILoginPayload, IRegisterPayload } from "./auth.validation.js";
+import {
+    IChangePasswordPayload,
+    ILoginPayload,
+    IRegisterPayload,
+    IUpdateMePayload,
+} from "./auth.validation.js";
 
 // Everything the client is allowed to know about the signed-in user. Anything
 // not listed here - the password hash above all - never leaves the service.
@@ -139,6 +144,30 @@ const getMe = async (user: IRequestUser) => {
     return found;
 };
 
+/**
+ * A person editing their own record.
+ *
+ * Separate from updateUser, which is admin-only and can move a role. Only the
+ * three fields the schema allows ever reach here - see updateMeZodSchema for
+ * why that allow-list is the control rather than a convenience.
+ */
+const updateMe = async (payload: IUpdateMePayload, user: IRequestUser) => {
+    const found = await prisma.user.findFirst({
+        where: { id: user.userId, deleted_at: null },
+        select: { id: true },
+    });
+
+    if (!found) {
+        throw new AppError(status.NOT_FOUND, "User not found");
+    }
+
+    return prisma.user.update({
+        where: { id: user.userId },
+        data: payload,
+        select: PUBLIC_USER_FIELDS,
+    });
+};
+
 const changePassword = async (payload: IChangePasswordPayload, user: IRequestUser) => {
     const found = await prisma.user.findUnique({ where: { id: user.userId } });
 
@@ -168,5 +197,6 @@ export const AuthService = {
     login,
     refreshToken,
     getMe,
+    updateMe,
     changePassword,
 };

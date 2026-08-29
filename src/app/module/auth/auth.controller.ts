@@ -66,6 +66,16 @@ const getMe = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const updateMe = catchAsync(async (req: Request, res: Response) => {
+    const result = await AuthService.updateMe(req.body, req.user as IRequestUser);
+    sendResponse(res, {
+        success: true,
+        httpStatus: status.OK,
+        message: "Profile updated successfully",
+        data: result,
+    });
+});
+
 const changePassword = catchAsync(async (req: Request, res: Response) => {
     const result = await AuthService.changePassword(req.body, req.user as IRequestUser);
 
@@ -87,5 +97,6 @@ export const AuthController = {
     refreshToken,
     logout,
     getMe,
+    updateMe,
     changePassword,
 };

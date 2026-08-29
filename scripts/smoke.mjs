@@ -1093,6 +1093,18 @@ if (!superEmail || !superPassword) {
   const opInviteId = r.json.data?.invite?.id;
   check("an operator can be invited", r.status === 201, `${r.status} ${r.json.message}`);
   check(
+    "and the link is emailed to them, not left to be copied by hand",
+    typeof r.json.data?.email?.delivered === "boolean",
+    JSON.stringify(r.json.data?.email)
+  );
+  check(
+    // Mail can be filtered or the domain unverified. An operator with no way
+    // to pass the link on is stuck waiting on somebody else's spam folder.
+    "while the link still comes back, so a failed send is not a dead end",
+    typeof r.json.data?.join_url === "string" && r.json.data.join_url.includes("/platform-join/"),
+    r.json.data?.join_url
+  );
+  check(
     "with the access they will start with, not everything",
     r.json.data?.invite?.permissions?.length === 2,
     JSON.stringify(r.json.data?.invite?.permissions)
@@ -1140,6 +1152,13 @@ if (!superEmail || !superPassword) {
     password: "Passw0rd123",
   });
   check("the invite cannot be used twice", r.status === 404, `${r.status}`);
+
+  r = await call("GET", `/platform-join/${opToken}`);
+  check(
+    "and the join page itself stops opening, not only the accept",
+    r.status === 404,
+    `${r.status} ${r.json.message}`
+  );
 
   // Approve, then confirm the permissions came from the invite rather than
   // defaulting to everything.

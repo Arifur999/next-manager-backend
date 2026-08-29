@@ -5,7 +5,9 @@ import { Role, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { platformInviteMail, sendMail } from "../../lib/mailer.js";
 import { logPlatformActivity } from "../../shared/platformActivity.js";
+import { getBrand } from "../../shared/platformSettings.js";
 import { passwordUtils } from "../../utils/password.js";
 import {
     IAcceptPlatformInvitePayload,
@@ -65,14 +67,16 @@ const createInvite = async (payload: ICreatePlatformInvitePayload, user: IReques
 
     const token = randomBytes(32).toString("hex");
     const days = payload.expires_in_days ?? DEFAULT_EXPIRY_DAYS;
+    const joinUrl = `${env.FRONTEND_URL.split(",")[0]}/platform-join/${token}`;
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
-    return prisma.$transaction(async (tx) => {
+    const created = await prisma.$transaction(async (tx) => {
         const invite = await tx.platformInvite.create({
             data: {
                 email,
                 permissions: payload.permissions ?? [],
                 token_hash: hashToken(token),
-                expires_at: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
+                expires_at: expiresAt,
                 created_by: user.userId,
             },
             select: INVITE_FIELDS,
@@ -92,12 +96,30 @@ const createInvite = async (payload: ICreatePlatformInvitePayload, user: IReques
             user,
         );
 
-        return {
-            invite,
-            // The only time this is readable. Nothing stores the token itself.
-            join_url: `${env.FRONTEND_URL.split(",")[0]}/platform-join/${token}`,
-        };
+        return invite;
     });
+
+    // Outside the transaction on purpose. Mail is a call to somebody else's
+    // server and can hang for as long as it likes; holding a database
+    // transaction open across it is how a connection pool dies. The invite
+    // existing without its email having been sent is also the right failure -
+    // the link below still works and can be sent by hand.
+    const mail = await sendMail({
+        to: email,
+        ...platformInviteMail(joinUrl, expiresAt, user.name, await getBrand()),
+    });
+
+    return {
+        invite: created,
+        // Still returned even when the mail went out. Mail is not guaranteed:
+        // it can be filtered, or the sending domain can be unverified, and an
+        // operator with no way to pass the link on is stuck waiting on
+        // somebody else's spam folder.
+        join_url: joinUrl,
+        email: mail.delivered
+            ? { delivered: true as const, reason: null }
+            : { delivered: false as const, reason: mail.reason },
+    };
 };
 
 const getInvites = async () =>

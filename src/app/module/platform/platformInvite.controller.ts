@@ -7,10 +7,16 @@ import { PlatformInviteService } from "./platformInvite.service.js";
 
 const createInvite = catchAsync(async (req: Request, res: Response) => {
     const result = await PlatformInviteService.createInvite(req.body, req.user as IRequestUser);
+
+    // Says which actually happened. "Send them the link" when the mail went out
+    // makes the operator do a job already done; "emailed" when it did not makes
+    // them wait for something that is never arriving.
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
-        message: "Invite created. Send them the link.",
+        message: result.email.delivered
+            ? `Invite emailed to ${result.invite.email}`
+            : "Invite created, but the email could not be sent - copy the link below to them",
         data: result,
     });
 });

@@ -166,6 +166,50 @@ export const passwordResetMail = (
 });
 
 /**
+ * The invite to join the platform team.
+ *
+ * Says the link is single-use and that approval still follows, because both
+ * are true and both surprise people otherwise: somebody who accepts and then
+ * cannot sign in has been left to guess whether it worked.
+ *
+ * The address is not repeated back as "click here to create an account for
+ * you@example.com" - the link is already bound to it server-side, and printing
+ * it only helps whoever the mail was misdelivered to.
+ */
+export const platformInviteMail = (
+    joinUrl: string,
+    expiresAt: Date,
+    invitedBy: string,
+    brand: PlatformBrand
+): Omit<Mail, "to"> => {
+    const expires = expiresAt.toUTCString();
+
+    return {
+        subject: `You have been invited to run ${brand.productName}`,
+        text: [
+            `${invitedBy} has invited you to the ${brand.productName} platform team.`,
+            "",
+            `Open this link to set your password: ${joinUrl}`,
+            "",
+            `It works once and expires on ${expires}.`,
+            "After you accept, somebody already on the team has to approve you before you can sign in.",
+            "",
+            "If you were not expecting this, ignore it - the link does nothing until it is used.",
+            "",
+            signOff(brand),
+        ].join("\n"),
+        html: `
+        <p>${escapeHtml(invitedBy)} has invited you to the ${escapeHtml(brand.productName)} platform team.</p>
+        <p><a href="${joinUrl}">Set your password</a></p>
+        <p>It works once and expires on ${escapeHtml(expires)}.</p>
+        <p>After you accept, somebody already on the team has to approve you before you can sign in.</p>
+        <p>If you were not expecting this, ignore it - the link does nothing until it is used.</p>
+        <p style="color:#666;font-size:13px">${escapeHtml(signOff(brand))}</p>
+    `,
+    };
+};
+
+/**
  * A platform announcement, emailed.
  *
  * Blank lines become paragraphs and nothing else does. A notice to customers is

@@ -102,3 +102,41 @@ export const setPlatformPermissionsZodSchema = z.object({
 });
 
 export type ISetPlatformPermissionsPayload = z.infer<typeof setPlatformPermissionsZodSchema>;
+
+/**
+ * Inviting a platform operator.
+ *
+ * The permissions they will start with are chosen here rather than defaulting
+ * to everything. An empty list means full access - the hatch in
+ * requirePermission - so leaving it empty is a deliberate act, not the path of
+ * least resistance.
+ */
+export const createPlatformInviteZodSchema = z.object({
+    email: z.string("Email must be a string").email("Enter a valid email address"),
+    permissions: z.array(z.enum(PLATFORM_PERMISSIONS, "Unknown permission")).optional(),
+    expires_in_days: z
+        .number("Expiry must be a number")
+        .int()
+        .min(1, "An invite that expires today is not useful")
+        .max(30, "An invite living longer than a month is a credential nobody is watching")
+        .optional(),
+});
+
+/**
+ * Accepting one.
+ *
+ * No email field: it comes from the invite. Taking it from the form would let
+ * whoever holds a leaked link create a platform account under any address -
+ * and a platform account can suspend every customer you have.
+ */
+export const acceptPlatformInviteZodSchema = z.object({
+    full_name: z.string("Name must be a string").min(1, "Your name is required"),
+    password: z
+        .string("Password must be a string")
+        .min(8, "Password must be at least 8 characters")
+        .regex(/[A-Za-z]/, "Password must contain a letter")
+        .regex(/[0-9]/, "Password must contain a number"),
+});
+
+export type ICreatePlatformInvitePayload = z.infer<typeof createPlatformInviteZodSchema>;
+export type IAcceptPlatformInvitePayload = z.infer<typeof acceptPlatformInviteZodSchema>;

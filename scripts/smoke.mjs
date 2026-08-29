@@ -1079,6 +1079,125 @@ if (!superEmail || !superPassword) {
   r = await call("POST", "/platform/plans", { code: `restored${stamp}`, name: "Restored" });
   check("and writing works again", r.status === 201, `${r.status} ${r.json.message}`);
 
+  // ---- growing the platform team ----
+  //
+  // Two steps, the same as the operations join flow and for a stronger reason:
+  // a platform operator can suspend any customer, so a leaked link must not by
+  // itself create one.
+  const opEmail = `operator${stamp}@agencio.test`;
+  r = await call("POST", "/platform/invites", {
+    email: opEmail,
+    permissions: ["platform.companies.view", "platform.finance.view"],
+  });
+  const opJoinUrl = r.json.data?.join_url;
+  const opInviteId = r.json.data?.invite?.id;
+  check("an operator can be invited", r.status === 201, `${r.status} ${r.json.message}`);
+  check(
+    "with the access they will start with, not everything",
+    r.json.data?.invite?.permissions?.length === 2,
+    JSON.stringify(r.json.data?.invite?.permissions)
+  );
+
+  const opToken = opJoinUrl?.split("/platform-join/")[1];
+
+  r = await call("GET", "/platform/invites");
+  check(
+    "the token never appears again after the create",
+    !JSON.stringify(r.json.data ?? []).includes(opToken),
+    "token found in the invite list"
+  );
+
+  // Public, signed out.
+  cookie = "";
+  r = await call("GET", `/platform-join/${opToken}`);
+  check("the join page reads the invite signed out", r.status === 200, `${r.status}`);
+  check(
+    "and learns only the address it was sent to",
+    r.json.data?.email === opEmail && Object.keys(r.json.data ?? {}).length === 1,
+    JSON.stringify(r.json.data)
+  );
+
+  r = await call("POST", `/platform-join/${opToken}/accept`, {
+    full_name: "New Operator",
+    password: "Passw0rd123",
+    email: "attacker@evil.test",
+  });
+  check("accepting creates the operator", r.status === 201, `${r.status} ${r.json.message}`);
+  check(
+    "under the invited address, ignoring any email in the body",
+    r.json.data?.email === opEmail,
+    r.json.data?.email
+  );
+  check("as pending, not active", r.json.data?.status === "pending", r.json.data?.status);
+  const newOperatorId = r.json.data?.id;
+
+  // The point of the second step.
+  r = await call("POST", "/auth/login", { email: opEmail, password: "Passw0rd123" });
+  check("a pending operator cannot sign in", r.status === 401, `${r.status} ${r.json.message}`);
+
+  r = await call("POST", `/platform-join/${opToken}/accept`, {
+    full_name: "Again",
+    password: "Passw0rd123",
+  });
+  check("the invite cannot be used twice", r.status === 404, `${r.status}`);
+
+  // Approve, then confirm the permissions came from the invite rather than
+  // defaulting to everything.
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+  r = await call("POST", `/platform/admins/${newOperatorId}/approve`);
+  check("an existing operator approves", r.status === 200, `${r.status} ${r.json.message}`);
+  check(
+    "and they start with the invited access",
+    r.json.data?.permissions?.includes("platform.finance.view") &&
+      !r.json.data?.permissions?.includes("platform.plans.manage"),
+    JSON.stringify(r.json.data?.permissions)
+  );
+
+  const operatorLogin = await call("POST", "/auth/login", {
+    email: opEmail,
+    password: "Passw0rd123",
+  });
+  check("now they can sign in", operatorLogin.status === 200, `${operatorLogin.status}`);
+  const operatorCookie = cookie;
+
+  // And the permissions actually bite for a real second operator - the case
+  // that could not be tested while there was only one.
+  r = await call("GET", "/platform/companies");
+  check("the new operator sees the customer list", r.status === 200, `${r.status}`);
+
+  r = await call("POST", "/platform/plans", { code: `nope${stamp}`, name: "Nope" });
+  check("but cannot edit plans", r.status === 403, `${r.status} ${r.json.message}`);
+
+  r = await call("GET", "/platform/admins");
+  check("nor manage the team", r.status === 403, `${r.status}`);
+
+  // Guards against a stranded platform.
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+
+  r = await call("DELETE", `/platform/admins/${me?.id}`);
+  check("nobody removes their own account", r.status === 409, `${r.status} ${r.json.message}`);
+
+  r = await call("DELETE", `/platform/admins/${newOperatorId}`);
+  check("but another operator can be removed", r.status === 200, `${r.status} ${r.json.message}`);
+
+  cookie = operatorCookie;
+  r = await call("GET", "/platform/companies");
+  check("and their access stops immediately", r.status === 401, `${r.status}`);
+
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+  r = await call("DELETE", `/platform/invites/${opInviteId}`);
+  check("a used invite cannot be revoked", r.status === 409, `${r.status} ${r.json.message}`);
+
+  r = await call("GET", "/platform/activity?entity_type=admin");
+  check(
+    "every team change is in the audit trail",
+    r.json.data?.length >= 4,
+    `${r.json.data?.length} admin entries`
+  );
+
   // ---- the operator's own screens ----
   cookie = "";
   await call("POST", "/auth/login", { email: superEmail, password: superPassword });

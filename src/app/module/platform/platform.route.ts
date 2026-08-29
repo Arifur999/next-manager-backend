@@ -3,9 +3,13 @@ import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
+import { authRateLimit } from "../../middleware/rateLimit.js";
 import { PlatformController } from "./platform.controller.js";
+import { PlatformInviteController } from "./platformInvite.controller.js";
 import {
+    acceptPlatformInviteZodSchema,
     createCompanyZodSchema,
+    createPlatformInviteZodSchema,
     createPlanZodSchema,
     setPlatformPermissionsZodSchema,
     setSubscriptionZodSchema,
@@ -104,4 +108,57 @@ router.patch(
     PlatformController.setPermissions
 );
 
+// Growing the team. Every one of these is behind platform.admins.manage - the
+// permission that can grant every other, including itself.
+router.get(
+    "/invites",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.admins.manage"),
+    PlatformInviteController.getInvites
+);
+router.post(
+    "/invites",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.admins.manage"),
+    validateRequest(createPlatformInviteZodSchema),
+    PlatformInviteController.createInvite
+);
+router.delete(
+    "/invites/:id",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.admins.manage"),
+    PlatformInviteController.revokeInvite
+);
+
+router.post(
+    "/admins/:id/approve",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.admins.manage"),
+    PlatformInviteController.approveAdmin
+);
+router.delete(
+    "/admins/:id",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.admins.manage"),
+    PlatformInviteController.removeAdmin
+);
+
 export const PlatformRoutes = router;
+
+// ---------------------------------------------------------------------------
+// Public. Whoever opens the link has no account yet.
+// ---------------------------------------------------------------------------
+//
+// Its own token space, separate from the company join routes: the two never
+// mix, and a token for one can never be mistaken for the other.
+const publicRouter = Router();
+
+publicRouter.get("/:token", authRateLimit, PlatformInviteController.getInviteByToken);
+publicRouter.post(
+    "/:token/accept",
+    authRateLimit,
+    validateRequest(acceptPlatformInviteZodSchema),
+    PlatformInviteController.acceptInvite
+);
+
+export const PublicPlatformInviteRoutes = publicRouter;

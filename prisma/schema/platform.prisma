@@ -105,3 +105,35 @@ model PlatformActivityLog {
   @@index([entity_type, created_at(sort: Desc)])
   @@map("platform_activity_logs")
 }
+
+/// An invitation to join the platform team.
+///
+/// Its own table rather than a nullable `organization_id` on TeamInvite: a
+/// platform operator belongs to no company, and making that column nullable
+/// would put an "is this an org invite or not" branch into every query that
+/// touches it.
+///
+/// Otherwise identical, and for identical reasons - hashed token, bound to one
+/// email, single use, expiring. The stakes are higher here: a platform admin
+/// sees every customer and can suspend any of them, so an accepted invite
+/// still lands as `pending` and waits for an existing operator to approve it.
+/// A link that leaks must not by itself create somebody who can cut off a
+/// paying customer.
+model PlatformInvite {
+  id         String    @id @default(uuid())
+  email      String
+  token_hash String    @unique
+  /// Copied onto the account at approval. Set by whoever sends the invite, so
+  /// a new operator starts with the access they were meant to have rather than
+  /// with everything.
+  permissions String[] @default([])
+  expires_at DateTime
+  used_at    DateTime?
+  revoked_at DateTime?
+  created_by String?
+  created_at DateTime  @default(now())
+
+  /// The outstanding list, and refusing a second live invite to one address.
+  @@index([email, used_at])
+  @@map("platform_invites")
+}

@@ -17,7 +17,7 @@ import { LeadSourceRoutes } from "../module/leadSource/leadSource.route.js";
 import { LeadRoutes } from "../module/lead/lead.route.js";
 import { MilestoneRoutes } from "../module/milestone/milestone.route.js";
 import { OwnerWithdrawalRoutes } from "../module/ownerWithdrawal/ownerWithdrawal.route.js";
-import { PlatformRoutes } from "../module/platform/platform.route.js";
+import { PlatformRoutes, PublicPlatformInviteRoutes } from "../module/platform/platform.route.js";
 import { PaymentRoutes } from "../module/payment/payment.route.js";
 import { ProjectRoutes } from "../module/project/project.route.js";
 import { ProjectMemberRoutes } from "../module/projectMember/projectMember.route.js";
@@ -62,5 +62,7 @@ router.use("/reports", ReportRoutes);
 router.use("/settings", SettingsRoutes);
 router.use("/activity", ActivityRoutes);
 router.use("/platform", PlatformRoutes);
+// Public: joining the platform team, before any account exists.
+router.use("/platform-join", PublicPlatformInviteRoutes);
 
 export const indexRoute = router;

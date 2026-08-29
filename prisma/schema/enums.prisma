@@ -166,3 +166,17 @@ enum KpiPeriod {
   quarter
   year
 }
+
+// Where a company stands with the platform.
+//
+// `suspended` and `cancelled` are kept apart on purpose: suspended is the
+// platform withholding access (unpaid, or a decision), cancelled is the
+// company having left. They look the same to a blocked request and mean
+// completely different things to whoever has to fix it.
+enum SubscriptionStatus {
+  trialing
+  active
+  past_due  // period ended, inside the grace window - still gets in
+  suspended // no access, by the platform's decision
+  cancelled // no access, by the company's
+}

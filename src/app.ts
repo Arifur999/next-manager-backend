@@ -5,6 +5,7 @@ import cron from "node-cron";
 import { apiRateLimit } from "./app/middleware/rateLimit.js";
 import { globalErrorHandler } from "./app/middleware/globalErrorHandler.js";
 import notFound from "./app/middleware/notFound.js";
+import { PlatformService } from "./app/module/platform/platform.service.js";
 import { indexRoute } from "./app/routes/index.js";
 import { syncTodaysRate } from "./app/utils/currencyRate.js";
 import { env } from "./config/env.js";
@@ -26,6 +27,25 @@ cron.schedule("30 0 * * *", async () => {
         }
     } catch (error) {
         console.error("[currency] daily sync failed:", (error as Error).message);
+    }
+});
+
+// Subscriptions that have run out.
+//
+// An hour after the rate sync so the two never contend for the same startup
+// moment. Idempotent by construction - it moves rows whose date has already
+// passed, so a missed night is caught by the next one rather than needing a
+// backfill.
+cron.schedule("30 1 * * *", async () => {
+    try {
+        const result = await PlatformService.expireSubscriptions();
+        if (result.moved_to_past_due > 0 || result.suspended > 0) {
+            console.log(
+                `[billing] ${result.moved_to_past_due} moved to past_due, ${result.suspended} suspended`
+            );
+        }
+    } catch (error) {
+        console.error("[billing] expiry sweep failed:", (error as Error).message);
     }
 });
 

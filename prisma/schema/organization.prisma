@@ -27,6 +27,7 @@ model Organization {
   leads     Lead[]
   projects  Project[]
   accounts  Account[]
+  subscription Subscription?
 
   @@map("organizations")
 }

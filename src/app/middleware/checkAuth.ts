@@ -5,6 +5,7 @@ import { Role } from "../../generated/prisma/enums.js";
 import AppError from "../errorHelpers/AppError.js";
 import { prisma } from "../lib/prisma.js";
 import { cookieUtils } from "../utils/cookie.js";
+import { enforceSubscription } from "./checkSubscription.js";
 import { jwtUtils } from "../utils/jwt.js";
 
 /**
@@ -88,6 +89,17 @@ export const checkAuth = (...authRoles: Role[]) => async (req: Request, res: Res
             tokenVersion: user.token_version,
             permissions: user.permissions ?? [],
         };
+
+        // Subscription is checked here rather than mounted alongside the
+        // routes, and the reason is ordering: checkAuth runs INSIDE each route
+        // definition, so any middleware mounted around a sub-router runs
+        // before it and would have no req.user to work with. Calling it as the
+        // last step of the gate gives every protected route the check for free
+        // and makes it impossible to add a route that forgets it.
+        //
+        // The logic itself stays in its own module, where its exemptions are
+        // written down and can be read without wading through auth.
+        await enforceSubscription(req);
 
         next();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

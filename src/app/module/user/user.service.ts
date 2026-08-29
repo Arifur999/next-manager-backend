@@ -3,6 +3,7 @@ import { Prisma } from "../../../generated/prisma/client.js";
 import { Role } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
+import { assertSeatAvailable } from "../../middleware/checkSubscription.js";
 import { prisma } from "../../lib/prisma.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { passwordUtils } from "../../utils/password.js";
@@ -81,6 +82,11 @@ const createUser = async (payload: ICreateUserPayload, user: IRequestUser) => {
     if (existing) {
         throw new AppError(status.CONFLICT, "An account with this email already exists");
     }
+
+    // Checked here rather than in a route guard: the seat count and the insert
+    // belong together, and a limit enforced on the way in is a limit two admins
+    // can walk past simultaneously.
+    await assertSeatAvailable(user.organizationId);
 
     return prisma.user.create({
         data: {

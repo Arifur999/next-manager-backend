@@ -22,9 +22,15 @@ export const authRateLimit = rateLimit({
     },
 });
 
+// Same reasoning as above, now that the smoke suite has outgrown 300 requests
+// a minute: a single full run trips this and every check after the trip fails
+// with a rate-limit message rather than a real result, which is worse than
+// useless - it looks like 26 broken features.
+//
+// Production keeps 300/min. That is the number that has to be right.
 export const apiRateLimit = rateLimit({
     windowMs: 60 * 1000,
-    limit: 300,
+    limit: isProduction ? 300 : 3000,
     standardHeaders: "draft-7",
     legacyHeaders: false,
     message: {

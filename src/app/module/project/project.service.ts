@@ -3,6 +3,7 @@ import { Prisma } from "../../../generated/prisma/client.js";
 import { InvoiceStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
+import { assertProjectAvailable } from "../../middleware/checkSubscription.js";
 import { prisma } from "../../lib/prisma.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import {
@@ -149,6 +150,8 @@ const createProject = async (payload: ICreateProjectPayload, user: IRequestUser)
     if (!client) {
         throw new AppError(status.NOT_FOUND, "Client not found");
     }
+
+    await assertProjectAvailable(user.organizationId);
 
     const duplicate = await prisma.project.findFirst({
         where: { organization_id: user.organizationId, code: payload.code },

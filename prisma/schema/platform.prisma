@@ -1,0 +1,74 @@
+// What the platform charges a company for using AGENCIO.
+//
+// Deliberately not in billing.prisma, which despite the name is about
+// invoices a company sends its OWN clients. Money flowing out to an agency's
+// customers and money flowing in from the agency are different subjects, and
+// one file called "billing" holding both would make every future reader guess
+// which one they are looking at.
+//
+// Only super_admin touches anything here. A company can read its own
+// subscription - being told "you are out of seats" is useless without being
+// able to see the limit - but cannot change it.
+
+/// A tier somebody can be sold.
+///
+/// Limits are stored on the plan rather than on the subscription, so raising
+/// what Starter includes lifts every company on Starter at once. A company
+/// that negotiated something different gets its own plan row, not an override
+/// column that would silently diverge from the tier it claims to be on.
+model Plan {
+  id          String  @id @default(uuid())
+  /// Stable identifier used in code and messages. The display name can change
+  /// for marketing reasons without breaking a check that reads the code.
+  code        String  @unique
+  name        String
+  description String  @default("")
+  price_usd   Decimal @default(0) @db.Decimal(10, 2)
+  /// Null means no limit, which is different from zero. A plan with
+  /// max_seats: 0 would be a plan nobody can use.
+  max_seats     Int?
+  max_projects  Int?
+  /// Free-text capability flags. Not an enum: what a tier includes changes
+  /// with pricing decisions, and each change should not need a migration.
+  features    String[] @default([])
+  is_active   Boolean  @default(true)
+  sort_order  Int      @default(0)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+/// One company's standing with the platform.
+///
+/// One per organization, enforced by the unique index. A company with two
+/// subscriptions has two answers to "are you allowed in", and nothing
+/// downstream could pick between them.
+model Subscription {
+  id              String             @id @default(uuid())
+  organization_id String             @unique
+  plan_id         String
+  status          SubscriptionStatus @default(trialing)
+  /// When the trial runs out. Null once a real period has started.
+  trial_ends_at   DateTime?
+  /// The date access is paid up to. The nightly job compares against this and
+  /// nothing else, so extending a company means moving this one field.
+  current_period_end DateTime?
+  /// Recorded rather than deleted: why a company left is worth being able to
+  /// answer later, and the row is what proves they were ever a customer.
+  cancelled_at    DateTime?
+  notes           String   @default("")
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  plan         Plan         @relation(fields: [plan_id], references: [id], onDelete: Restrict)
+
+  /// The nightly expiry sweep: find everything whose paid-up date has passed.
+  @@index([status, current_period_end])
+  @@index([status, trial_ends_at])
+  @@index([plan_id])
+  @@map("subscriptions")
+}

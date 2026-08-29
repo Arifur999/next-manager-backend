@@ -13,6 +13,7 @@ import { KpiTargetRoutes } from "../module/kpiTarget/kpiTarget.route.js";
 import { LeadRoutes } from "../module/lead/lead.route.js";
 import { MilestoneRoutes } from "../module/milestone/milestone.route.js";
 import { OwnerWithdrawalRoutes } from "../module/ownerWithdrawal/ownerWithdrawal.route.js";
+import { PlatformRoutes } from "../module/platform/platform.route.js";
 import { PaymentRoutes } from "../module/payment/payment.route.js";
 import { ProjectRoutes } from "../module/project/project.route.js";
 import { ProjectMemberRoutes } from "../module/projectMember/projectMember.route.js";
@@ -50,5 +51,6 @@ router.use("/due-payments", DuePaymentRoutes);
 router.use("/vault", VaultRoutes);
 router.use("/reports", ReportRoutes);
 router.use("/settings", SettingsRoutes);
+router.use("/platform", PlatformRoutes);
 
 export const indexRoute = router;

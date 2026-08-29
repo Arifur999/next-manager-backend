@@ -48,6 +48,8 @@ check("register creates company + first admin", r.status === 201, `${r.status} $
 // role inside it.
 check("admin role assigned", r.json.data?.role === "admin", r.json.data?.role);
 check("organization_id set", Boolean(r.json.data?.organization_id));
+// Kept for the billing checks at the end, which have to name a company.
+const orgId = r.json.data?.organization_id;
 
 r = await call("POST", "/auth/login", { email, password: "Passw0rd123" });
 check("login", r.status === 200, `${r.status} ${r.json.message}`);
@@ -773,6 +775,155 @@ check(
 
 r = await call("PATCH", "/auth/me", { is_active: false });
 check("nor deactivate fields they do not own", r.status === 400, `${r.status} ${r.json.message}`);
+
+// ---------------------------------------------------------------------------
+// Billing. The dangerous direction here is over-blocking, so most of these
+// check that something is still ALLOWED.
+// ---------------------------------------------------------------------------
+
+cookie = adminCookie;
+r = await call("GET", "/platform/subscription");
+check(
+  "a company can read its own standing",
+  r.status === 200 && r.json.data?.usage !== undefined,
+  `${r.status} ${JSON.stringify(r.json.data?.usage)}`
+);
+check(
+  "seats used is counted, not stored",
+  typeof r.json.data?.usage?.seats_used === "number" && r.json.data.usage.seats_used > 0,
+  JSON.stringify(r.json.data?.usage)
+);
+
+r = await call("GET", "/platform/companies");
+check("an admin cannot read the platform console", r.status === 403, `${r.status}`);
+
+r = await call("GET", "/platform/plans");
+check("nor the plan list", r.status === 403, `${r.status}`);
+
+// The rest needs the platform operator. Read from the same env the seed uses,
+// and skipped rather than failed when it is absent — a missing local credential
+// is not a broken build.
+const superEmail = process.env.SUPER_ADMIN_EMAIL;
+const superPassword = process.env.SUPER_ADMIN_PASSWORD;
+
+if (!superEmail || !superPassword) {
+  console.log("  SKIP  platform console checks (no SUPER_ADMIN_EMAIL/PASSWORD in env)");
+} else {
+  cookie = "";
+  const superLogin = await call("POST", "/auth/login", {
+    email: superEmail,
+    password: superPassword,
+  });
+  check("the platform operator can sign in", superLogin.status === 200, `${superLogin.status}`);
+
+  r = await call("GET", "/platform/companies");
+  check("and sees every company", r.status === 200 && Array.isArray(r.json.data), `${r.status}`);
+
+  const mine = r.json.data?.find((row) => row.id === orgId);
+  check(
+    "with usage counted against the plan",
+    mine !== undefined && typeof mine.usage?.seats_used === "number",
+    JSON.stringify(mine?.usage)
+  );
+
+  // The console must NOT expose a company's money. This is the boundary that
+  // makes the product sellable, so it is asserted rather than assumed.
+  const leaked = JSON.stringify(r.json.data ?? []);
+  check(
+    "and no company's money anywhere in the payload",
+    !/amount_usd|balance|opening_balance|account_type/i.test(leaked),
+    leaked.slice(0, 200)
+  );
+
+  r = await call("GET", "/platform/plans");
+  const plans = r.json.data ?? [];
+  check("plans are listed", r.status === 200 && plans.length >= 4, `${r.status} n=${plans.length}`);
+
+  const scale = plans.find((p) => p.code === "scale");
+  check("and an unlimited plan has null seats, not zero", scale?.max_seats === null, JSON.stringify(scale));
+
+  // Squeeze the company onto a one-seat plan and confirm the next invite is
+  // refused with the plan named — a limit with an anonymous message leaves the
+  // reader nowhere to go.
+  r = await call("POST", "/platform/plans", {
+    code: `tiny${stamp}`,
+    name: "Tiny",
+    max_seats: 1,
+    max_projects: 1,
+  });
+  const tinyPlanId = r.json.data?.id;
+  check("a plan can be created", r.status === 201, `${r.status} ${r.json.message}`);
+
+  r = await call("POST", "/platform/plans", { code: `tiny${stamp}`, name: "Tiny again" });
+  check("but not twice with the same code", r.status === 409, `${r.status} ${r.json.message}`);
+
+  r = await call("POST", "/platform/plans", { code: `zero${stamp}`, name: "Zero", max_seats: 0 });
+  check(
+    "and a zero-seat plan is refused as unusable",
+    r.status === 400,
+    `${r.status} ${r.json.message}`
+  );
+
+  r = await call("PATCH", `/platform/companies/${orgId}/subscription`, {
+    plan_id: tinyPlanId,
+    status: "active",
+  });
+  check("a company can be moved onto a plan", r.status === 200, `${r.status} ${r.json.message}`);
+
+  cookie = adminCookie;
+  r = await call("POST", "/users", {
+    full_name: "One Too Many",
+    email: `over${stamp}@agencio.test`,
+    password: "Passw0rd123",
+    role: "operations",
+  });
+  check("the seat limit refuses the next invite", r.status === 402, `${r.status} ${r.json.message}`);
+  check(
+    "and names the plan, so the reader knows what to change",
+    /Tiny/.test(r.json.message ?? ""),
+    r.json.message
+  );
+
+  // Suspension blocks writing and never blocks reading. Locking a company out
+  // of its own books over a payment is holding data hostage, not billing.
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+  await call("PATCH", `/platform/companies/${orgId}/subscription`, {
+    plan_id: tinyPlanId,
+    status: "suspended",
+  });
+
+  cookie = adminCookie;
+  r = await call("GET", "/clients");
+  check("a suspended company can still read its own records", r.status === 200, `${r.status}`);
+
+  r = await call("POST", "/clients", { name: "Blocked Co" });
+  check("but cannot write", r.status === 402, `${r.status} ${r.json.message}`);
+
+  r = await call("GET", "/platform/subscription");
+  check(
+    "and can still see why it is suspended",
+    r.status === 200 && r.json.data?.subscription?.status === "suspended",
+    `${r.status} ${JSON.stringify(r.json.data?.subscription?.status)}`
+  );
+
+  // Restore, so the rest of the suite is not left against a suspended company.
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+  r = await call("PATCH", `/platform/companies/${orgId}/subscription`, {
+    plan_id: tinyPlanId,
+    status: "active",
+  });
+  check(
+    "restoring clears the cancellation date",
+    r.status === 200 && r.json.data?.cancelled_at === null,
+    JSON.stringify({ status: r.json.data?.status, cancelled_at: r.json.data?.cancelled_at })
+  );
+
+  cookie = adminCookie;
+  r = await call("POST", "/clients", { name: "Unblocked Co" });
+  check("and writing works again", r.status === 201, `${r.status} ${r.json.message}`);
+}
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

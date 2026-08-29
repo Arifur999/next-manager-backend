@@ -71,6 +71,7 @@ model User {
   kpi_targets        KpiTarget[]         @relation("KpiTargetUser")
   activities         ActivityLog[]
   reset_tokens       PasswordResetToken[]
+  platform_actions   PlatformActivityLog[] @relation("PlatformActor")
 
   @@index([organization_id])
   /// The team list, newest first.

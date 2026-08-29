@@ -16,7 +16,7 @@ const getPlans = catchAsync(async (_req: Request, res: Response) => {
 });
 
 const createPlan = catchAsync(async (req: Request, res: Response) => {
-    const result = await PlatformService.createPlan(req.body);
+    const result = await PlatformService.createPlan(req.body, req.user as IRequestUser);
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -26,7 +26,11 @@ const createPlan = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updatePlan = catchAsync(async (req: Request, res: Response) => {
-    const result = await PlatformService.updatePlan(req.params.id as string, req.body);
+    const result = await PlatformService.updatePlan(
+        req.params.id as string,
+        req.body,
+        req.user as IRequestUser
+    );
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -48,7 +52,8 @@ const getCompanies = catchAsync(async (_req: Request, res: Response) => {
 const setSubscription = catchAsync(async (req: Request, res: Response) => {
     const result = await PlatformService.setSubscription(
         req.params.organizationId as string,
-        req.body
+        req.body,
+        req.user as IRequestUser
     );
     sendResponse(res, {
         success: true,
@@ -69,7 +74,7 @@ const getMySubscription = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createCompany = catchAsync(async (req: Request, res: Response) => {
-    const result = await PlatformService.createCompany(req.body);
+    const result = await PlatformService.createCompany(req.body, req.user as IRequestUser);
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -88,6 +93,23 @@ const getOverview = catchAsync(async (_req: Request, res: Response) => {
     });
 });
 
+const getActivity = catchAsync(async (req: Request, res: Response) => {
+    const query = req.query as Record<string, unknown>;
+    const result = await PlatformService.getActivity(
+        {
+            entityType: typeof query.entity_type === "string" ? query.entity_type : undefined,
+            actorId: typeof query.actor_id === "string" ? query.actor_id : undefined,
+        },
+        typeof query.limit === "string" ? Number(query.limit) || 100 : 100
+    );
+    sendResponse(res, {
+        success: true,
+        httpStatus: status.OK,
+        message: "Activity retrieved successfully",
+        data: result,
+    });
+});
+
 export const PlatformController = {
     getPlans,
     createPlan,
@@ -97,4 +119,5 @@ export const PlatformController = {
     getMySubscription,
     createCompany,
     getOverview,
+    getActivity,
 };

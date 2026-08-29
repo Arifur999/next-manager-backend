@@ -948,6 +948,47 @@ if (!superEmail || !superPassword) {
   r = await call("POST", "/clients", { name: "Unblocked Co" });
   check("and writing works again", r.status === 201, `${r.status} ${r.json.message}`);
 
+  // ---- the platform audit trail ----
+  //
+  // Every platform mutation above should have left an entry. Nothing recorded
+  // what an operator did before now, which was survivable with one operator
+  // and is not with a team.
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+
+  r = await call("GET", "/platform/activity");
+  check("the platform keeps an audit trail", r.status === 200, `${r.status} ${r.json.message}`);
+  check(
+    "and moving a company between plans was recorded",
+    r.json.data?.some((row) => row.entity_type === "subscription"),
+    r.json.data?.map((row) => row.entity_type).join(", ")
+  );
+  check(
+    "each entry names who did it",
+    r.json.data?.[0]?.actor?.email !== undefined,
+    JSON.stringify(r.json.data?.[0]?.actor)
+  );
+  check(
+    "and names the company rather than only its id",
+    r.json.data?.some((row) => /Provisioned Co|Console Made Co|Tiny/.test(row.summary ?? "")),
+    r.json.data?.slice(0, 3).map((row) => row.summary).join(" | ")
+  );
+
+  r = await call("GET", "/platform/activity?entity_type=plan");
+  check(
+    "it filters by what was touched",
+    Array.isArray(r.json.data) && r.json.data.every((row) => row.entity_type === "plan"),
+    r.json.data?.map((row) => row.entity_type).join(", ")
+  );
+
+  // Read-only by design, the same as the company audit log.
+  r = await call("DELETE", "/platform/activity/anything");
+  check("the trail cannot be deleted", r.status === 404, `${r.status}`);
+
+  cookie = adminCookie;
+  r = await call("GET", "/platform/activity");
+  check("a company admin cannot read it", r.status === 403, `${r.status}`);
+
   // ---- the operator's own screens ----
   cookie = "";
   await call("POST", "/auth/login", { email: superEmail, password: superPassword });

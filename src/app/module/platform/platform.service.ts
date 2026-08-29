@@ -4,6 +4,7 @@ import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { seedLeadSources } from "../../shared/defaultLeadSources.js";
+import { logPlatformActivity } from "../../shared/platformActivity.js";
 import { passwordUtils } from "../../utils/password.js";
 import {
     ICreateCompanyPayload,
@@ -42,7 +43,7 @@ const PLAN_FIELDS = {
 const getPlans = async () =>
     prisma.plan.findMany({ select: PLAN_FIELDS, orderBy: { sort_order: "asc" } });
 
-const createPlan = async (payload: ICreatePlanPayload) => {
+const createPlan = async (payload: ICreatePlanPayload, user: IRequestUser) => {
     const existing = await prisma.plan.findUnique({
         where: { code: payload.code },
         select: { id: true },
@@ -52,30 +53,85 @@ const createPlan = async (payload: ICreatePlanPayload) => {
         throw new AppError(status.CONFLICT, `A plan with the code "${payload.code}" already exists`);
     }
 
-    return prisma.plan.create({
-        data: {
-            code: payload.code,
-            name: payload.name,
-            description: payload.description ?? "",
-            price_usd: payload.price_usd ?? 0,
-            max_seats: payload.max_seats ?? null,
-            max_projects: payload.max_projects ?? null,
-            features: payload.features ?? [],
-            is_active: payload.is_active ?? true,
-            sort_order: payload.sort_order ?? 0,
-        },
-        select: PLAN_FIELDS,
+    return prisma.$transaction(async (tx) => {
+        const plan = await tx.plan.create({
+            data: {
+                code: payload.code,
+                name: payload.name,
+                description: payload.description ?? "",
+                price_usd: payload.price_usd ?? 0,
+                max_seats: payload.max_seats ?? null,
+                max_projects: payload.max_projects ?? null,
+                features: payload.features ?? [],
+                is_active: payload.is_active ?? true,
+                sort_order: payload.sort_order ?? 0,
+            },
+            select: PLAN_FIELDS,
+        });
+
+        await logPlatformActivity(
+            tx,
+            {
+                entityType: "plan",
+                entityId: plan.id,
+                action: "created",
+                summary: `Created the ${plan.name} plan at $${plan.price_usd}/month`,
+            },
+            user
+        );
+
+        return plan;
     });
 };
 
-const updatePlan = async (id: string, payload: IUpdatePlanPayload) => {
-    const existing = await prisma.plan.findUnique({ where: { id }, select: { id: true } });
+const updatePlan = async (id: string, payload: IUpdatePlanPayload, user: IRequestUser) => {
+    const existing = await prisma.plan.findUnique({
+        where: { id },
+        select: { id: true, name: true, price_usd: true, max_seats: true },
+    });
 
     if (!existing) {
         throw new AppError(status.NOT_FOUND, "Plan not found");
     }
 
-    return prisma.plan.update({ where: { id }, data: payload, select: PLAN_FIELDS });
+    return prisma.$transaction(async (tx) => {
+        const plan = await tx.plan.update({ where: { id }, data: payload, select: PLAN_FIELDS });
+
+        // Names what actually moved. Editing a plan changes what every company
+        // on it is charged and limited to, so "updated the Growth plan" is not
+        // enough to reconstruct afterwards.
+        const changes: string[] = [];
+
+        if (!existing.price_usd.equals(plan.price_usd)) {
+            changes.push(`price $${existing.price_usd} to $${plan.price_usd}`);
+        }
+
+        if (existing.max_seats !== plan.max_seats) {
+            changes.push(
+                `seats ${existing.max_seats ?? "unlimited"} to ${plan.max_seats ?? "unlimited"}`
+            );
+        }
+
+        if (existing.name !== plan.name) {
+            changes.push(`renamed from ${existing.name}`);
+        }
+
+        await logPlatformActivity(
+            tx,
+            {
+                entityType: "plan",
+                entityId: id,
+                action: "updated",
+                summary:
+                    changes.length > 0
+                        ? `Changed the ${plan.name} plan: ${changes.join(", ")}`
+                        : `Edited the ${plan.name} plan`,
+            },
+            user
+        );
+
+        return plan;
+    });
 };
 
 // ---------------------------------------------------------------------------
@@ -138,10 +194,26 @@ const getCompanies = async () => {
  * exactly one subscription and the two branches would only differ in which
  * error they threw.
  */
-const setSubscription = async (organizationId: string, payload: ISetSubscriptionPayload) => {
-    const [organization, plan] = await Promise.all([
-        prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true } }),
-        prisma.plan.findUnique({ where: { id: payload.plan_id }, select: { id: true } }),
+const setSubscription = async (
+    organizationId: string,
+    payload: ISetSubscriptionPayload,
+    user: IRequestUser
+) => {
+    const [organization, plan, before] = await Promise.all([
+        // The name is read for the audit entry, not for the update. "Suspended
+        // a4f2-…-9c1b" answers nothing an operator scanning the feed is asking.
+        prisma.organization.findUnique({
+            where: { id: organizationId },
+            select: { id: true, name: true },
+        }),
+        prisma.plan.findUnique({
+            where: { id: payload.plan_id },
+            select: { id: true, name: true },
+        }),
+        prisma.subscription.findUnique({
+            where: { organization_id: organizationId },
+            select: { status: true, plan: { select: { name: true } } },
+        }),
     ]);
 
     if (!organization) throw new AppError(status.NOT_FOUND, "Company not found");
@@ -162,28 +234,63 @@ const setSubscription = async (organizationId: string, payload: ISetSubscription
             : {}),
     };
 
-    return prisma.subscription.upsert({
-        where: { organization_id: organizationId },
-        create: {
-            organization_id: organizationId,
-            plan_id: payload.plan_id,
-            status: nextStatus,
-            notes: payload.notes ?? "",
-            ...dates,
-        },
-        update: {
-            plan_id: payload.plan_id,
-            status: nextStatus,
-            // Restoring a company clears the cancellation. Leaving it set
-            // would show an active subscription with a cancellation date on
-            // it, which reads as a bug to whoever looks next.
-            ...(nextStatus === SubscriptionStatus.cancelled
-                ? { cancelled_at: new Date() }
-                : { cancelled_at: null }),
-            ...(payload.notes !== undefined ? { notes: payload.notes } : {}),
-            ...dates,
-        },
-        include: { plan: { select: PLAN_FIELDS } },
+    return prisma.$transaction(async (tx) => {
+        const subscription = await tx.subscription.upsert({
+            where: { organization_id: organizationId },
+            create: {
+                organization_id: organizationId,
+                plan_id: payload.plan_id,
+                status: nextStatus,
+                notes: payload.notes ?? "",
+                ...dates,
+            },
+            update: {
+                plan_id: payload.plan_id,
+                status: nextStatus,
+                // Restoring a company clears the cancellation. Leaving it set
+                // would show an active subscription with a cancellation date on
+                // it, which reads as a bug to whoever looks next.
+                ...(nextStatus === SubscriptionStatus.cancelled
+                    ? { cancelled_at: new Date() }
+                    : { cancelled_at: null }),
+                ...(payload.notes !== undefined ? { notes: payload.notes } : {}),
+                ...dates,
+            },
+            include: { plan: { select: PLAN_FIELDS } },
+        });
+
+        // Both halves named, because either can move and the two mean very
+        // different things: a plan change is commercial, a status change is
+        // whether they can work today.
+        const moved: string[] = [];
+
+        if (before && before.status !== nextStatus) {
+            moved.push(`${before.status} to ${nextStatus}`);
+        } else if (!before) {
+            moved.push(`set up as ${nextStatus}`);
+        }
+
+        if (before && before.plan.name !== plan.name) {
+            moved.push(`${before.plan.name} to ${plan.name}`);
+        } else if (!before) {
+            moved.push(`on ${plan.name}`);
+        }
+
+        await logPlatformActivity(
+            tx,
+            {
+                entityType: "subscription",
+                entityId: organizationId,
+                action: "status_changed",
+                summary:
+                    moved.length > 0
+                        ? `${organization.name}: ${moved.join(", ")}`
+                        : `Edited ${organization.name}'s subscription`,
+            },
+            user
+        );
+
+        return subscription;
     });
 };
 
@@ -275,7 +382,7 @@ const expireSubscriptions = async (now: Date = new Date()) => {
  * an admin with no subscription - is a support ticket rather than a state
  * anybody would notice.
  */
-const createCompany = async (payload: ICreateCompanyPayload) => {
+const createCompany = async (payload: ICreateCompanyPayload, user: IRequestUser) => {
     const existingUser = await prisma.user.findUnique({
         where: { email: payload.admin_email },
         select: { id: true },
@@ -340,6 +447,17 @@ const createCompany = async (payload: ICreateCompanyPayload) => {
             },
             include: { plan: { select: PLAN_FIELDS } },
         });
+
+        await logPlatformActivity(
+            tx,
+            {
+                entityType: "company",
+                entityId: organization.id,
+                action: "created",
+                summary: `Created ${organization.name} on ${subscription.plan.name}, admin ${admin.email}`,
+            },
+            user
+        );
 
         return { organization, admin, subscription };
     });
@@ -445,6 +563,33 @@ const getOverview = async () => {
     };
 };
 
+/**
+ * What the platform team has been doing.
+ *
+ * Read-only, like the company audit log and for the same reason: a history
+ * somebody can edit answers no question worth asking. There is no update and
+ * no delete here, not even for the operator who wrote the entry.
+ */
+const getActivity = async (filters: { entityType?: string; actorId?: string }, limit = 100) =>
+    prisma.platformActivityLog.findMany({
+        where: {
+            ...(filters.entityType ? { entity_type: filters.entityType } : {}),
+            ...(filters.actorId ? { actor_id: filters.actorId } : {}),
+        },
+        select: {
+            id: true,
+            entity_type: true,
+            entity_id: true,
+            action: true,
+            summary: true,
+            created_at: true,
+            // Null once the operator is gone - the entry outlives them.
+            actor: { select: { id: true, full_name: true, email: true } },
+        },
+        orderBy: { created_at: "desc" },
+        take: Math.min(limit, 500),
+    });
+
 export const PlatformService = {
     getPlans,
     createPlan,
@@ -455,4 +600,5 @@ export const PlatformService = {
     expireSubscriptions,
     createCompany,
     getOverview,
+    getActivity,
 };

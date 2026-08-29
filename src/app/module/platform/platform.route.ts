@@ -39,6 +39,10 @@ router.patch(
 // pay, and which trials are about to lapse.
 router.get("/overview", checkAuth(Role.super_admin), PlatformController.getOverview);
 
+// What the platform team has been doing. GET only - a history somebody can
+// edit answers nothing.
+router.get("/activity", checkAuth(Role.super_admin), PlatformController.getActivity);
+
 router.get("/companies", checkAuth(Role.super_admin), PlatformController.getCompanies);
 
 // Provisioning by hand, for a company that agreed a price before it ever saw

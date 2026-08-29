@@ -72,3 +72,36 @@ model Subscription {
   @@index([plan_id])
   @@map("subscriptions")
 }
+
+/// What a platform operator did.
+///
+/// ActivityLog is organization-scoped and cannot hold these: suspending a
+/// company, moving it between plans, editing a tier and inviting a colleague
+/// all happen outside any tenant. With one operator that gap was survivable.
+/// With a team it is the difference between "who suspended them" having an
+/// answer and not.
+///
+/// `summary` is written at the time of the action and never recomputed, the
+/// same rule ActivityLog follows - so the entry still reads correctly after
+/// the company it names has been renamed or removed.
+model PlatformActivityLog {
+  id          String   @id @default(uuid())
+  /// Null once the operator's account is gone. The entry outlives them, the
+  /// same way the company audit log does.
+  actor_id    String?
+  /// "company", "plan", "subscription", "admin", "campaign" - a plain string
+  /// rather than an enum so adding a screen does not need a migration.
+  entity_type String
+  entity_id   String?
+  action      String
+  summary     String
+  created_at  DateTime @default(now())
+
+  actor User? @relation("PlatformActor", fields: [actor_id], references: [id], onDelete: SetNull)
+
+  /// The feed: newest first.
+  @@index([created_at(sort: Desc)])
+  @@index([actor_id])
+  @@index([entity_type, created_at(sort: Desc)])
+  @@map("platform_activity_logs")
+}

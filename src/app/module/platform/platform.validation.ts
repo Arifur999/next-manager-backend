@@ -178,3 +178,36 @@ export const updateAnnouncementZodSchema = createAnnouncementZodSchema.partial()
 
 export type ICreateAnnouncementPayload = z.infer<typeof createAnnouncementZodSchema>;
 export type IUpdateAnnouncementPayload = z.infer<typeof updateAnnouncementZodSchema>;
+
+/**
+ * The platform's own configuration.
+ *
+ * SMTP is absent on purpose: mail credentials belong in the environment, where
+ * they can be rotated without a database write. The screen reads their status
+ * back, never their values.
+ *
+ * `default_plan_id` accepts null explicitly - that is "leave new sign-ups
+ * unprovisioned and set them up by hand", which is a real choice and the one
+ * this installation started with.
+ */
+export const updatePlatformSettingsZodSchema = z.object({
+    product_name: z
+        .string("Product name must be a string")
+        .min(1, "The product needs a name")
+        .max(60, "That will not fit in an email subject line")
+        .optional(),
+    // Empty is allowed and means "say nothing". An address invented to fill the
+    // gap is worse than no address: somebody writes to it and nobody reads it.
+    support_email: z
+        .union([z.literal(""), z.email("That is not a valid email address")])
+        .optional(),
+    default_plan_id: z.uuid("Plan id must be a uuid").nullable().optional(),
+    default_trial_days: z
+        .number("Trial length must be a number")
+        .int()
+        .min(0, "A trial cannot be negative - use 0 for no trial")
+        .max(365, "A trial longer than a year is not a trial")
+        .optional(),
+});
+
+export type IUpdatePlatformSettingsPayload = z.infer<typeof updatePlatformSettingsZodSchema>;

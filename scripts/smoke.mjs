@@ -1362,6 +1362,98 @@ if (!superEmail || !superPassword) {
   r = await call("GET", "/auth/me");
   check("but still reaches its own account", r.status === 200, `${r.status}`);
 
+  // ---- settings, and the one thing they actually change ----
+
+  r = await call("GET", "/platform/settings");
+  check("the operator reads the settings", r.status === 200, `${r.status} ${r.json.message}`);
+  check(
+    "including whether email works at all",
+    typeof r.json.data?.smtp?.configured === "boolean",
+    JSON.stringify(r.json.data?.smtp)
+  );
+  check(
+    "without ever reading the password back",
+    !JSON.stringify(r.json.data ?? {}).toLowerCase().includes("password"),
+    "a credential appeared in the settings payload"
+  );
+
+  const settingsPlanId = r.json.data?.plans?.[0]?.id ?? null;
+  const priorPlanId = r.json.data?.default_plan_id ?? null;
+  const priorTrialDays = r.json.data?.default_trial_days ?? 14;
+
+  r = await call("PATCH", "/platform/settings", { default_trial_days: 400 });
+  check("a year-long trial is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+  r = await call("PATCH", "/platform/settings", { support_email: "not-an-address" });
+  check("so is a support address that is not one", r.status === 400, `${r.status} ${r.json.message}`);
+
+  r = await call("PATCH", "/platform/settings", { support_email: "" });
+  check(
+    "but an empty one is allowed - it means say nothing",
+    r.status === 200,
+    `${r.status} ${r.json.message}`
+  );
+
+  r = await call("PATCH", "/platform/settings", {
+    default_plan_id: "00000000-0000-4000-8000-000000000000",
+  });
+  check("a plan that does not exist is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+  // The point of the whole screen: a sign-up that used to land unprovisioned
+  // now starts a trial by itself.
+  if (settingsPlanId) {
+    r = await call("PATCH", "/platform/settings", {
+      default_plan_id: settingsPlanId,
+      default_trial_days: 7,
+    });
+    check("the default plan can be set", r.status === 200, `${r.status} ${r.json.message}`);
+
+    const selfEmail = `selfsignup${stamp}@agencio.test`;
+    cookie = "";
+    r = await call("POST", "/auth/register", {
+      organization_name: "Self Signup Co",
+      full_name: "Self Signer",
+      email: selfEmail,
+      password: "Passw0rd123",
+    });
+    check("somebody signs themselves up", r.status === 201, `${r.status} ${r.json.message}`);
+
+    await call("POST", "/auth/login", { email: selfEmail, password: "Passw0rd123" });
+    r = await call("GET", "/platform/subscription");
+    check(
+      "and lands on a trial rather than unprovisioned",
+      r.json.data?.subscription?.status === "trialing",
+      JSON.stringify(r.json.data?.subscription?.status)
+    );
+
+    // Restore, so the suite leaves the installation as it found it.
+    cookie = "";
+    await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+    await call("PATCH", "/platform/settings", {
+      default_plan_id: priorPlanId,
+      default_trial_days: priorTrialDays,
+    });
+
+    const bareEmail = `baresignup${stamp}@agencio.test`;
+    cookie = "";
+    await call("POST", "/auth/register", {
+      organization_name: "Bare Signup Co",
+      full_name: "Bare Signer",
+      email: bareEmail,
+      password: "Passw0rd123",
+    });
+    await call("POST", "/auth/login", { email: bareEmail, password: "Passw0rd123" });
+    r = await call("GET", "/platform/subscription");
+    check(
+      "and with no default set they are left unprovisioned, as before",
+      r.json.data?.subscription === null,
+      JSON.stringify(r.json.data?.subscription)
+    );
+  }
+
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+
   // ---- announcements: the console writes, the customer's bell reads ----
 
   r = await call("POST", "/platform/announcements", {

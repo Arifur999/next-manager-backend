@@ -452,6 +452,11 @@ const createCompany = async (payload: ICreateCompanyPayload, user: IRequestUser)
     // Chosen, or the cheapest active one - never nothing. A company with no
     // subscription row passes every check, which is right for a workspace
     // predating billing and wrong for one created after it.
+    //
+    // Deliberately NOT the platform default plan: that setting is about a
+    // company signing itself up. This form is somebody provisioning a customer
+    // who already agreed a price, and the price they agreed is the one typed
+    // in, not whatever the sign-up page happens to offer this week.
     const plan = payload.plan_id
         ? await prisma.plan.findUnique({ where: { id: payload.plan_id }, select: { id: true } })
         : await prisma.plan.findFirst({

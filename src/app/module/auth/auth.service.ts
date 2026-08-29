@@ -1,11 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
 import status from "http-status";
 import { env } from "../../../config/env.js";
-import { Role, UserStatus } from "../../../generated/prisma/enums.js";
+import { Role, SubscriptionStatus, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { passwordResetMail, sendMail } from "../../lib/mailer.js";
 import { prisma } from "../../lib/prisma.js";
+import { getBrand, getPlatformSettings } from "../../shared/platformSettings.js";
 import { seedLeadSources } from "../../shared/defaultLeadSources.js";
 import { jwtUtils } from "../../utils/jwt.js";
 import { passwordUtils } from "../../utils/password.js";
@@ -69,6 +70,12 @@ const register = async (payload: IRegisterPayload) => {
 
     const hashedPassword = await passwordUtils.hashPassword(payload.password);
 
+    // What a company that signs up itself is put on. Null is a real choice and
+    // the one this installation started with: they get in, and somebody
+    // provisions them by hand - they show up as "unprovisioned" on the console
+    // until that happens rather than silently having no plan.
+    const settings = await getPlatformSettings();
+
     return prisma.$transaction(async (tx) => {
         const organization = await tx.organization.create({
             data: {
@@ -78,6 +85,25 @@ const register = async (payload: IRegisterPayload) => {
         });
 
         await seedLeadSources(tx, organization.id);
+
+        if (settings.default_plan_id) {
+            const trialDays = settings.default_trial_days;
+
+            await tx.subscription.create({
+                data: {
+                    organization_id: organization.id,
+                    plan_id: settings.default_plan_id,
+                    // Zero days is "no trial, start paying" - a real setting,
+                    // and not the same as a trial that ends today.
+                    status: trialDays > 0 ? SubscriptionStatus.trialing : SubscriptionStatus.active,
+                    trial_ends_at:
+                        trialDays > 0
+                            ? new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000)
+                            : null,
+                    notes: "Started on sign-up, from the platform's default plan.",
+                },
+            });
+        }
 
         return tx.user.create({
             data: {
@@ -283,7 +309,10 @@ const forgotPassword = async (
     });
 
     const resetUrl = `${env.FRONTEND_URL.split(",")[0]}/reset-password?token=${token}`;
-    const result = await sendMail({ to: user.email, ...passwordResetMail(resetUrl, RESET_TTL_MINUTES) });
+    const result = await sendMail({
+        to: user.email,
+        ...passwordResetMail(resetUrl, RESET_TTL_MINUTES, await getBrand()),
+    });
 
     // Logged, not returned. The caller gets the same sentence either way -
     // telling an anonymous form that delivery failed would leak that the

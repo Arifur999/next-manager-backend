@@ -10,6 +10,7 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { announcementMail, sendMail } from "../../lib/mailer.js";
 import { prisma } from "../../lib/prisma.js";
 import { logPlatformActivity } from "../../shared/platformActivity.js";
+import { getBrand } from "../../shared/platformSettings.js";
 import {
     ICreateAnnouncementPayload,
     IUpdateAnnouncementPayload,
@@ -232,6 +233,7 @@ const publishAnnouncement = async (user: IRequestUser, id: string) => {
         select: { email: true, full_name: true },
     });
 
+    const brand = await getBrand();
     let delivered = 0;
     const failures: string[] = [];
 
@@ -240,7 +242,7 @@ const publishAnnouncement = async (user: IRequestUser, id: string) => {
     for (const recipient of recipients) {
         const result = await sendMail({
             to: recipient.email,
-            ...announcementMail(existing.title, existing.body, recipient.full_name),
+            ...announcementMail(existing.title, existing.body, recipient.full_name, brand),
         });
 
         if (result.delivered) delivered += 1;

@@ -37,6 +37,7 @@ model Plan {
   updated_at  DateTime @updatedAt
 
   subscriptions Subscription[]
+  default_for     PlatformSetting[]
 
   @@map("plans")
 }
@@ -244,4 +245,41 @@ model AnnouncementRead {
   @@unique([announcement_id, user_id])
   @@index([user_id])
   @@map("announcement_reads")
+}
+
+/// How this installation is set up.
+///
+/// One row, always. Settings that vary per company belong on Organization;
+/// this is the platform talking about itself - what it is called in the mail it
+/// sends, who customers write to for help, and what a new sign-up is put on.
+///
+/// SMTP is deliberately absent. Mail credentials stay in the environment, where
+/// they can be rotated without a database write and never appear in a backup of
+/// this table. The settings screen reads their status back, not their values.
+model PlatformSetting {
+  /// Fixed. A second row would be a second answer to questions that have one.
+  id String @id @default("singleton")
+
+  product_name  String @default("AGENCIO")
+  /// Where customers are told to write. Empty means the mail says nothing
+  /// rather than inventing an address nobody reads.
+  support_email String @default("")
+
+  /// What a company that signs up itself is put on.
+  ///
+  /// Null means leave them unprovisioned, which is what happened before this
+  /// existed: they get in, and somebody sets them up by hand. Setting a plan
+  /// turns sign-up into a trial that starts itself.
+  default_plan_id    String?
+  default_trial_days Int     @default(14)
+
+  updated_at DateTime @updatedAt
+  updated_by String?
+
+  /// Restrict, not SetNull: a plan quietly disappearing from under new
+  /// sign-ups is a change to what every future customer gets, and it should
+  /// take a deliberate edit here rather than a delete somewhere else.
+  default_plan Plan? @relation(fields: [default_plan_id], references: [id], onDelete: Restrict)
+
+  @@map("platform_settings")
 }

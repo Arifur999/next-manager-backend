@@ -1,5 +1,6 @@
 import nodemailer, { type Transporter } from "nodemailer";
 import { env } from "../../config/env.js";
+import type { PlatformBrand } from "../shared/platformSettings.js";
 
 /**
  * Sending mail, with an honest answer when it cannot.
@@ -30,6 +31,28 @@ type Mail = {
 };
 
 const isConfigured = () => Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD);
+
+/**
+ * Whether mail works, without going near the credentials.
+ *
+ * The settings screen shows this so an operator can tell that email is dead
+ * before a customer tells them. Host, port and the from-address only - the
+ * password is never read back out of the process that holds it, and there is
+ * no version of "let me just check the password on screen" worth building.
+ */
+export const getMailerStatus = () => ({
+    configured: isConfigured(),
+    host: env.SMTP_HOST || "",
+    port: Number(env.SMTP_PORT) || 587,
+    /** What recipients see in the From line. */
+    from: env.MAIL_FROM || env.SMTP_USER || "",
+    /** Which piece is missing, when one is. */
+    missing: [
+        env.SMTP_HOST ? null : "SMTP_HOST",
+        env.SMTP_USER ? null : "SMTP_USER",
+        env.SMTP_PASSWORD ? null : "SMTP_PASSWORD",
+    ].filter((name): name is string => name !== null),
+});
 
 let transporter: Transporter | null = null;
 
@@ -99,14 +122,30 @@ const escapeHtml = (value: string) =>
         .replace(/"/g, "&quot;");
 
 /**
+ * The last line of every message.
+ *
+ * The support address is only mentioned when there is one. "Reply to  for
+ * help" is worse than saying nothing, and an address invented to fill the gap
+ * is worse still - somebody writes to it and nobody ever reads it.
+ */
+const signOff = (brand: PlatformBrand) =>
+    brand.supportEmail
+        ? `- The ${brand.productName} team. Questions: ${brand.supportEmail}`
+        : `- The ${brand.productName} team`;
+
+/**
  * The reset email.
  *
  * Kept plain on purpose: a password-reset message that looks like marketing is
  * the one people have been trained to distrust, and it is also the one most
  * likely to be filtered.
  */
-export const passwordResetMail = (resetUrl: string, expiresInMinutes: number): Omit<Mail, "to"> => ({
-    subject: "Reset your AGENCIO password",
+export const passwordResetMail = (
+    resetUrl: string,
+    expiresInMinutes: number,
+    brand: PlatformBrand
+): Omit<Mail, "to"> => ({
+    subject: `Reset your ${brand.productName} password`,
     text: [
         "Somebody asked to reset the password on this account.",
         "",
@@ -114,12 +153,15 @@ export const passwordResetMail = (resetUrl: string, expiresInMinutes: number): O
         "",
         `The link works once and expires in ${expiresInMinutes} minutes.`,
         "If this was not you, nothing has changed and you can ignore this message.",
+        "",
+        signOff(brand),
     ].join("\n"),
     html: `
         <p>Somebody asked to reset the password on this account.</p>
         <p><a href="${resetUrl}">Choose a new password</a></p>
         <p>The link works once and expires in ${expiresInMinutes} minutes.</p>
         <p>If this was not you, nothing has changed and you can ignore this message.</p>
+        <p style="color:#666;font-size:13px">${escapeHtml(signOff(brand))}</p>
     `,
 });
 
@@ -134,10 +176,11 @@ export const passwordResetMail = (resetUrl: string, expiresInMinutes: number): O
 export const announcementMail = (
     title: string,
     body: string,
-    recipientName: string
+    recipientName: string,
+    brand: PlatformBrand
 ): Omit<Mail, "to"> => ({
     subject: title,
-    text: [`Hi ${recipientName},`, "", body, "", "- The AGENCIO team"].join("\n"),
+    text: [`Hi ${recipientName},`, "", body, "", signOff(brand)].join("\n"),
     html: `
         <p>Hi ${escapeHtml(recipientName)},</p>
         <h2 style="font-size:18px;margin:16px 0 8px">${escapeHtml(title)}</h2>
@@ -145,6 +188,6 @@ export const announcementMail = (
             .split(/\n{2,}/)
             .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`)
             .join("\n        ")}
-        <p style="color:#666;font-size:13px">- The AGENCIO team</p>
+        <p style="color:#666;font-size:13px">${escapeHtml(signOff(brand))}</p>
     `,
 });

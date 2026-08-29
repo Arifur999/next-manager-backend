@@ -17,6 +17,7 @@ export const PLATFORM_PERMISSIONS = [
     "platform.expenses.manage",
     "platform.admins.manage",
     "platform.campaigns.send",
+    "platform.settings.manage",
 ] as const;
 
 export type PlatformPermission = (typeof PLATFORM_PERMISSIONS)[number];
@@ -63,6 +64,12 @@ export const PLATFORM_PERMISSION_INFO: Record<
         area: "Customers",
         label: "Send announcements",
         description: "Publish notices to customers, and email them.",
+    },
+    "platform.settings.manage": {
+        area: "Platform",
+        label: "Change how the platform is set up",
+        description:
+            "The product name and support address on every email it sends, and what a company that signs up itself is put on. One edit here changes what every future customer gets.",
     },
 };
 

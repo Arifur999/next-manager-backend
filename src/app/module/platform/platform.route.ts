@@ -8,6 +8,7 @@ import { AnnouncementController } from "./announcement.controller.js";
 import { PlatformController } from "./platform.controller.js";
 import { PlatformFinanceController } from "./platformFinance.controller.js";
 import { PlatformInviteController } from "./platformInvite.controller.js";
+import { PlatformSettingsController } from "./platformSettings.controller.js";
 import {
     acceptPlatformInviteZodSchema,
     createAnnouncementZodSchema,
@@ -19,6 +20,7 @@ import {
     setSubscriptionZodSchema,
     updateAnnouncementZodSchema,
     updatePlanZodSchema,
+    updatePlatformSettingsZodSchema,
     updatePlatformExpenseZodSchema,
 } from "./platform.validation.js";
 
@@ -230,6 +232,27 @@ router.delete(
     checkAuth(Role.super_admin),
     requirePermission("platform.campaigns.send"),
     AnnouncementController.deleteAnnouncement
+);
+
+// ---------------------------------------------------------------------------
+// How this installation is set up
+// ---------------------------------------------------------------------------
+//
+// Its own permission rather than folding into admins.manage: one edit here
+// changes what every future customer is put on and what every email this
+// server sends, which is a wider blast radius than adding a colleague.
+router.get(
+    "/settings",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.settings.manage"),
+    PlatformSettingsController.getSettings
+);
+router.patch(
+    "/settings",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.settings.manage"),
+    validateRequest(updatePlatformSettingsZodSchema),
+    PlatformSettingsController.updateSettings
 );
 
 export const PlatformRoutes = router;

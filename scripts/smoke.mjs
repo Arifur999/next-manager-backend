@@ -372,6 +372,11 @@ check("create project for timesheet", r.status === 201, `${r.status} ${r.json.me
 const opsCookie = roleCookies.operations;
 const pmCookie = roleCookies.project_manager;
 
+// Needed later to assign a task to this person and check what they may change
+// about it.
+cookie = opsCookie;
+const opsUserId = (await call("GET", "/auth/me")).json.data?.id;
+
 cookie = opsCookie;
 r = await call("POST", "/time-entries", {
   project_id: timeProjectId,
@@ -924,6 +929,56 @@ if (!superEmail || !superPassword) {
   r = await call("POST", "/clients", { name: "Unblocked Co" });
   check("and writing works again", r.status === 201, `${r.status} ${r.json.message}`);
 }
+
+// ---------------------------------------------------------------------------
+// What a role may CHANGE, not just what it may reach. Tasks are already scoped
+// to their assignee; this is about the fields inside one.
+// ---------------------------------------------------------------------------
+
+cookie = pmCookie;
+r = await call("POST", "/tasks", {
+  project_id: timeProjectId,
+  title: "Field guard",
+  due_date: "2026-09-30",
+  priority: "high",
+});
+const guardedTaskId = r.json.data?.id;
+check("project manager creates a task", r.status === 201, `${r.status} ${r.json.message}`);
+
+r = await call("PATCH", `/tasks/${guardedTaskId}`, { assignee_id: opsUserId });
+check("and assigns it", r.status === 200, `${r.status} ${r.json.message}`);
+
+cookie = opsCookie;
+r = await call("PATCH", `/tasks/${guardedTaskId}`, { status: "in_progress" });
+check("operations can move its status", r.status === 200, `${r.status} ${r.json.message}`);
+
+r = await call("PATCH", `/tasks/${guardedTaskId}`, { description: "picked this up" });
+check("and edit the description", r.status === 200, `${r.status} ${r.json.message}`);
+
+// The point of the whole change: the person being measured on a deadline
+// cannot move it.
+r = await call("PATCH", `/tasks/${guardedTaskId}`, { due_date: "2026-12-31" });
+check("but cannot move its due date", r.status === 400, `${r.status} ${r.json.message}`);
+
+r = await call("PATCH", `/tasks/${guardedTaskId}`, { assignee_id: null });
+check("nor hand it to somebody else", r.status === 400, `${r.status} ${r.json.message}`);
+
+r = await call("PATCH", `/tasks/${guardedTaskId}`, { priority: "low" });
+check("nor re-prioritise it", r.status === 400, `${r.status} ${r.json.message}`);
+
+cookie = adminCookie;
+r = await call("GET", `/tasks?project_id=${timeProjectId}`);
+const guarded = r.json.data?.find((task) => task.id === guardedTaskId);
+check(
+  "and after all that the due date is untouched",
+  guarded?.due_date?.startsWith("2026-09-30"),
+  JSON.stringify({ due_date: guarded?.due_date, priority: guarded?.priority })
+);
+
+// The wider role keeps the whole schema.
+cookie = pmCookie;
+r = await call("PATCH", `/tasks/${guardedTaskId}`, { due_date: "2026-10-15" });
+check("the project manager still moves dates", r.status === 200, `${r.status} ${r.json.message}`);
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

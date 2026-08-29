@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
-import { validateRequest } from "../../middleware/validateRequest.js";
+import { validateRequest, validateRequestBy } from "../../middleware/validateRequest.js";
 import { TaskController } from "./task.controller.js";
-import { createTaskZodSchema, updateTaskZodSchema } from "./task.validation.js";
+import { createTaskZodSchema, taskUpdateSchemaFor } from "./task.validation.js";
 
 const router = Router();
 
@@ -14,7 +14,10 @@ const router = Router();
 router.get("/", checkAuth(), TaskController.getAllTasks);
 
 // Operations can move their own task along but not create or delete work.
-router.patch("/:id", checkAuth(), validateRequest(updateTaskZodSchema), TaskController.updateTask);
+// Anyone signed in may edit a task they can reach - and what "edit" means
+// depends on who they are. Operations gets status and description; the fields
+// that define the commitment stay with whoever owns the schedule.
+router.patch("/:id", checkAuth(), validateRequestBy(taskUpdateSchemaFor), TaskController.updateTask);
 
 router.post("/", checkAuth(Role.admin, Role.project_manager), validateRequest(createTaskZodSchema), TaskController.createTask);
 router.delete("/:id", checkAuth(Role.admin, Role.project_manager), TaskController.deleteTask);

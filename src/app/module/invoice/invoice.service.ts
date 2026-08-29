@@ -4,6 +4,7 @@ import { InvoiceStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { logActivity, money } from "../../shared/activity.js";
 import { isOverdue, recalcInvoiceStatus } from "../../shared/invoiceStatus.js";
 import { dateRangeWhere, escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateInvoicePayload, IUpdateInvoicePayload } from "./invoice.validation.js";
@@ -311,9 +312,24 @@ const deleteInvoice = async (id: string, user: IRequestUser) => {
         );
     }
 
-    await prisma.invoice.update({
-        where: { id },
-        data: { deleted_at: new Date(), deleted_by: user.userId },
+    // In a transaction with the audit entry, per the rule in shared/activity:
+    // an entry for a deletion that then failed to save is worse than none.
+    await prisma.$transaction(async (tx) => {
+        await tx.invoice.update({
+            where: { id },
+            data: { deleted_at: new Date(), deleted_by: user.userId },
+        });
+
+        await logActivity(
+            tx,
+            {
+                entityType: "invoice",
+                entityId: id,
+                action: "deleted",
+                summary: `Deleted invoice ${existing.invoice_number} for ${money(existing.total, "USD")}`,
+            },
+            user
+        );
     });
 
     return { message: "Invoice deleted successfully" };

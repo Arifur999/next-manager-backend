@@ -4,6 +4,7 @@ import { Currency, LedgerSource } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { logActivity, money } from "../../shared/activity.js";
 import { assertAccount, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
 import { dateRangeWhere, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateTeamPayoutPayload, IUpdateTeamPayoutPayload } from "./teamPayout.validation.js";
@@ -184,6 +185,20 @@ const deletePayout = async (id: string, user: IRequestUser) => {
             where: { id },
             data: { deleted_at: new Date(), deleted_by: user.userId },
         });
+
+        // The amount is named in the summary because the row it came from is
+        // now soft-deleted and every list filters it out. Without it the entry
+        // reads "a payout was deleted" and answers nothing.
+        await logActivity(
+            tx,
+            {
+                entityType: "team_payout",
+                entityId: id,
+                action: "deleted",
+                summary: `Deleted a team payout of ${money(existing.amount_bdt, "BDT")}`,
+            },
+            user
+        );
 
         return { message: "Payout deleted successfully" };
     });

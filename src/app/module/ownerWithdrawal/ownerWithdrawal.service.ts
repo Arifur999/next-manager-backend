@@ -4,6 +4,7 @@ import { Currency, LedgerSource } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { logActivity, money } from "../../shared/activity.js";
 import { assertAccount, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
 import { dateRangeWhere, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import {
@@ -158,6 +159,20 @@ const deleteWithdrawal = async (id: string, user: IRequestUser) => {
             where: { id },
             data: { deleted_at: new Date(), deleted_by: user.userId },
         });
+
+        // Withdrawals are the one place money leaves the company entirely, so
+        // an unexplained one is the first thing anybody reviewing the books
+        // will ask about.
+        await logActivity(
+            tx,
+            {
+                entityType: "owner_withdrawal",
+                entityId: id,
+                action: "deleted",
+                summary: `Deleted a withdrawal of ${money(existing.amount_bdt, "BDT")}`,
+            },
+            user
+        );
 
         return { message: "Withdrawal deleted successfully" };
     });

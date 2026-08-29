@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { AccountRoutes } from "../module/account/account.route.js";
+import { ActivityRoutes } from "../module/activity/activity.route.js";
 import { AuthRoutes } from "../module/auth/auth.route.js";
 import { ClientRoutes } from "../module/client/client.route.js";
 import { DashboardRoutes } from "../module/dashboard/dashboard.route.js";
@@ -51,6 +52,7 @@ router.use("/due-payments", DuePaymentRoutes);
 router.use("/vault", VaultRoutes);
 router.use("/reports", ReportRoutes);
 router.use("/settings", SettingsRoutes);
+router.use("/activity", ActivityRoutes);
 router.use("/platform", PlatformRoutes);
 
 export const indexRoute = router;

@@ -1023,5 +1023,65 @@ check(
 r = await call("POST", "/auth/reset-password", { token: "abc", new_password: "short" });
 check("a weak new password is refused", r.status === 400, `${r.status}`);
 
+// ---------------------------------------------------------------------------
+// The audit trail. Rows have been written since the first module shipped and
+// nothing could read them, so both halves are checked: that it records, and
+// that somebody can ask.
+// ---------------------------------------------------------------------------
+
+cookie = adminCookie;
+r = await call("GET", "/activity");
+check("admin can read the activity feed", r.status === 200, `${r.status} ${r.json.message}`);
+check(
+  "and it is not empty - things have been happening all along",
+  Array.isArray(r.json.data) && r.json.data.length > 0,
+  `${r.json.data?.length} rows`
+);
+check(
+  "each entry names who did it",
+  r.json.data?.[0]?.user?.full_name !== undefined,
+  JSON.stringify(r.json.data?.[0]?.user)
+);
+
+// The gap this closed: destructive actions left no trace at all.
+const auditTask = await call("POST", "/tasks", {
+  project_id: timeProjectId,
+  title: "Task to be deleted",
+});
+await call("DELETE", `/tasks/${auditTask.json.data?.id}`);
+
+r = await call("GET", "/activity?entity_type=task&action=deleted");
+check(
+  "deleting a task is now recorded",
+  r.json.data?.some((row) => row.entity_id === auditTask.json.data?.id),
+  `${r.json.data?.length} task deletions found`
+);
+check(
+  "with the title frozen into the summary, not joined to a soft-deleted row",
+  /Task to be deleted/.test(r.json.data?.[0]?.summary ?? ""),
+  r.json.data?.[0]?.summary
+);
+
+r = await call("GET", "/activity/filters");
+check(
+  "the filter lists are built from the data, not hardcoded",
+  r.status === 200 && r.json.data?.entity_types?.length > 1,
+  JSON.stringify(r.json.data?.entity_types?.map((t) => t.value))
+);
+
+// The feed names money across the whole company, so it stays with admin.
+cookie = roleCookies.sales;
+r = await call("GET", "/activity");
+check("sales cannot read the activity feed", r.status === 403, `${r.status}`);
+
+cookie = pmCookie;
+r = await call("GET", "/activity");
+check("nor can the project manager", r.status === 403, `${r.status}`);
+
+// Read-only by design: a history somebody can edit answers nothing.
+cookie = adminCookie;
+r = await call("DELETE", "/activity/some-id");
+check("the trail cannot be deleted, even by admin", r.status === 404, `${r.status}`);
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

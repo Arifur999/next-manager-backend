@@ -5,6 +5,7 @@ import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { assertProjectAvailable } from "../../middleware/checkSubscription.js";
 import { prisma } from "../../lib/prisma.js";
+import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import {
     ICreateProjectPayload,
@@ -270,9 +271,22 @@ const deleteProject = async (id: string, user: IRequestUser) => {
         );
     }
 
-    await prisma.project.update({
-        where: { id },
-        data: { deleted_at: new Date(), deleted_by: user.userId },
+    await prisma.$transaction(async (tx) => {
+        await tx.project.update({
+            where: { id },
+            data: { deleted_at: new Date(), deleted_by: user.userId },
+        });
+
+        await logActivity(
+            tx,
+            {
+                entityType: "project",
+                entityId: id,
+                action: "deleted",
+                summary: `Deleted the project ${existing.name} (${existing.code})`,
+            },
+            user
+        );
     });
 
     return { message: "Project deleted successfully" };

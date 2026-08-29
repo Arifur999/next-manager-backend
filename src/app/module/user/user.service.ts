@@ -5,6 +5,7 @@ import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { assertSeatAvailable } from "../../middleware/checkSubscription.js";
 import { prisma } from "../../lib/prisma.js";
+import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { passwordUtils } from "../../utils/password.js";
 import { ICreateUserPayload, IUpdateUserPayload } from "./user.validation.js";
@@ -180,9 +181,25 @@ const deleteUser = async (id: string, user: IRequestUser) => {
 
     // Soft delete, and deactivate in the same write: a row that is only flagged
     // deleted but still `is_active` would keep passing checkAuth.
-    await prisma.user.update({
-        where: { id },
-        data: { deleted_at: new Date(), deleted_by: user.userId, is_active: false },
+    await prisma.$transaction(async (tx) => {
+        await tx.user.update({
+            where: { id },
+            data: { deleted_at: new Date(), deleted_by: user.userId, is_active: false },
+        });
+
+        // The role is named because removing somebody is also removing an
+        // access level, and "who took away the last project manager" is the
+        // question this entry exists to answer.
+        await logActivity(
+            tx,
+            {
+                entityType: "user",
+                entityId: id,
+                action: "deleted",
+                summary: `Removed ${existing.full_name} (${existing.role}) from the team`,
+            },
+            user
+        );
     });
 
     return { message: "User deleted successfully" };

@@ -4,6 +4,7 @@ import { Role, TaskStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateTaskPayload, IUpdateTaskPayload } from "./task.validation.js";
 
@@ -158,9 +159,25 @@ const deleteTask = async (id: string, user: IRequestUser) => {
         throw new AppError(status.NOT_FOUND, "Task not found");
     }
 
-    await prisma.task.update({
-        where: { id },
-        data: { deleted_at: new Date() },
+    await prisma.$transaction(async (tx) => {
+        await tx.task.update({
+            where: { id },
+            data: { deleted_at: new Date() },
+        });
+
+        // The title is copied into the summary rather than joined to later:
+        // the row is soft-deleted and every read filters it out, so a join
+        // would render this entry blank.
+        await logActivity(
+            tx,
+            {
+                entityType: "task",
+                entityId: id,
+                action: "deleted",
+                summary: `Deleted the task "${existing.title}"`,
+            },
+            user
+        );
     });
 
     return { message: "Task deleted successfully" };

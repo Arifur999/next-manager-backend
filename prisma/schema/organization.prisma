@@ -65,10 +65,47 @@ model User {
   capacity           Capacity?
   kpi_targets        KpiTarget[]         @relation("KpiTargetUser")
   activities         ActivityLog[]
+  reset_tokens       PasswordResetToken[]
 
   @@index([organization_id])
   /// The team list, newest first.
   @@index([organization_id, created_at(sort: Desc)])
   @@index([email])
   @@map("users")
+}
+
+/// A one-time link for somebody who cannot sign in.
+///
+/// The token is stored HASHED, never in plaintext. A reset table read from a
+/// database backup or a stray log would otherwise be a list of working keys to
+/// every account that had asked for one - the same reason passwords are not
+/// stored either.
+///
+/// A row per request rather than a column on User, so an audit can answer "how
+/// many resets did this account ask for, and were any used" - the shape of an
+/// account somebody is trying to take over.
+model PasswordResetToken {
+  id         String    @id @default(uuid())
+  user_id    String
+  /// SHA-256 of the token that was emailed. Unique so a lookup is one index
+  /// hit rather than a scan through every outstanding request.
+  token_hash String    @unique
+  expires_at DateTime
+  /// Set the moment it is spent. A token is single-use: the second attempt
+  /// with the same link is refused even inside its expiry window, because a
+  /// link that keeps working is a link that can be replayed from an inbox.
+  used_at    DateTime?
+  /// What asked for it. Not identifying anybody - it is here so a burst of
+  /// requests from one place is visible afterwards.
+  requested_ip String  @default("")
+  created_at DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  /// Invalidating every outstanding token for one person, which happens on
+  /// every successful reset.
+  @@index([user_id])
+  /// The nightly sweep for expired rows.
+  @@index([expires_at])
+  @@map("password_reset_tokens")
 }

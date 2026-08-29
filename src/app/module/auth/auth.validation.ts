@@ -55,3 +55,19 @@ export const updateMeZodSchema = z
     .strict();
 
 export type IUpdateMePayload = z.infer<typeof updateMeZodSchema>;
+
+export const forgotPasswordZodSchema = z.object({
+    email: z.string("Email must be string").email("Enter a valid email address"),
+});
+
+export const resetPasswordZodSchema = z.object({
+    token: z.string("Token must be string").min(1, "Token is required"),
+    new_password: z
+        .string("New password must be string")
+        .min(8, "Password must be at least 8 characters")
+        .regex(/[A-Za-z]/, "Password must contain a letter")
+        .regex(/[0-9]/, "Password must contain a number"),
+});
+
+export type IForgotPasswordPayload = z.infer<typeof forgotPasswordZodSchema>;
+export type IResetPasswordPayload = z.infer<typeof resetPasswordZodSchema>;

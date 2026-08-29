@@ -91,6 +91,26 @@ const changePassword = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const forgotPassword = catchAsync(async (req: Request, res: Response) => {
+    const result = await AuthService.forgotPassword(req.body, { ip: req.ip });
+    sendResponse(res, {
+        success: true,
+        httpStatus: status.OK,
+        message: result.message,
+        data: result,
+    });
+});
+
+const resetPassword = catchAsync(async (req: Request, res: Response) => {
+    const result = await AuthService.resetPassword(req.body);
+    sendResponse(res, {
+        success: true,
+        httpStatus: status.OK,
+        message: result.message,
+        data: result,
+    });
+});
+
 export const AuthController = {
     register,
     login,
@@ -99,4 +119,6 @@ export const AuthController = {
     getMe,
     updateMe,
     changePassword,
+    forgotPassword,
+    resetPassword,
 };

@@ -980,5 +980,48 @@ cookie = pmCookie;
 r = await call("PATCH", `/tasks/${guardedTaskId}`, { due_date: "2026-10-15" });
 check("the project manager still moves dates", r.status === 200, `${r.status} ${r.json.message}`);
 
+// ---------------------------------------------------------------------------
+// Password recovery. The property that matters most is what it does NOT say.
+// ---------------------------------------------------------------------------
+
+cookie = "";
+const forgotKnown = await call("POST", "/auth/forgot-password", { email });
+const forgotUnknown = await call("POST", "/auth/forgot-password", {
+  email: `nobody${stamp}@agencio.test`,
+});
+
+check(
+  "a reset request for a real address is accepted",
+  forgotKnown.status === 200,
+  `${forgotKnown.status} ${forgotKnown.json.message}`
+);
+check(
+  "an unknown address gets the identical answer",
+  forgotUnknown.status === forgotKnown.status &&
+    forgotUnknown.json.message === forgotKnown.json.message,
+  `${forgotUnknown.status} "${forgotUnknown.json.message}" vs "${forgotKnown.json.message}"`
+);
+check(
+  "and the answer never confirms the account exists",
+  !/found|exists|no account|not registered/i.test(forgotKnown.json.message ?? ""),
+  forgotKnown.json.message
+);
+
+// A token that was never issued, an expired one and a spent one are all the
+// same refusal - which kind of wrong it is helps nobody legitimate.
+r = await call("POST", "/auth/reset-password", {
+  token: "not-a-real-token",
+  new_password: "Passw0rd456",
+});
+check("an invented token is refused", r.status === 400, `${r.status} ${r.json.message}`);
+check(
+  "and the refusal does not say which kind of wrong it was",
+  !/expired|used|unknown/i.test(r.json.message ?? ""),
+  r.json.message
+);
+
+r = await call("POST", "/auth/reset-password", { token: "abc", new_password: "short" });
+check("a weak new password is refused", r.status === 400, `${r.status}`);
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

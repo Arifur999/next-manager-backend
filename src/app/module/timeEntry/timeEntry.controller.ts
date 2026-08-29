@@ -123,7 +123,7 @@ const getCapacities = catchAsync(async (req: Request, res: Response) => {
 const setCapacity = catchAsync(async (req: Request, res: Response) => {
     const result = await TimeEntryService.setCapacity(
         req.params.userId as string,
-        req.body.weekly_hours,
+        req.body,
         req.user as IRequestUser
     );
     sendResponse(res, {

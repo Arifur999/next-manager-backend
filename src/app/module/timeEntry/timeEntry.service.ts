@@ -6,7 +6,11 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { DEFAULT_WEEKLY_HOURS, loadCapacityRows } from "../../shared/capacity.js";
 import { dateRangeWhere, pageSlice, type ListOptions } from "../../shared/listQuery.js";
-import { ICreateTimeEntryPayload, IUpdateTimeEntryPayload } from "./timeEntry.validation.js";
+import {
+    ICreateTimeEntryPayload,
+    ISetCapacityPayload,
+    IUpdateTimeEntryPayload,
+} from "./timeEntry.validation.js";
 
 /**
  * Logged hours.
@@ -319,7 +323,11 @@ const getCapacities = async (user: IRequestUser) => {
     });
 };
 
-const setCapacity = async (userId: string, weeklyHours: number, user: IRequestUser) => {
+const setCapacity = async (
+    userId: string,
+    payload: ISetCapacityPayload,
+    user: IRequestUser
+) => {
     const member = await prisma.user.findFirst({
         where: { id: userId, organization_id: user.organizationId, deleted_at: null },
         select: { id: true },
@@ -329,10 +337,25 @@ const setCapacity = async (userId: string, weeklyHours: number, user: IRequestUs
         throw new AppError(status.NOT_FOUND, "Team member not found");
     }
 
+    // Either field can be sent alone, so an untouched one keeps its stored
+    // value rather than being reset to the column default - setting a rate
+    // must not silently return a part-timer to a 40-hour week.
     return prisma.capacity.upsert({
         where: { user_id: userId },
-        create: { organization_id: user.organizationId, user_id: userId, weekly_hours: weeklyHours },
-        update: { weekly_hours: weeklyHours },
+        create: {
+            organization_id: user.organizationId,
+            user_id: userId,
+            ...(payload.weekly_hours !== undefined ? { weekly_hours: payload.weekly_hours } : {}),
+            ...(payload.standard_rate_usd !== undefined
+                ? { standard_rate_usd: payload.standard_rate_usd }
+                : {}),
+        },
+        update: {
+            ...(payload.weekly_hours !== undefined ? { weekly_hours: payload.weekly_hours } : {}),
+            ...(payload.standard_rate_usd !== undefined
+                ? { standard_rate_usd: payload.standard_rate_usd }
+                : {}),
+        },
     });
 };
 

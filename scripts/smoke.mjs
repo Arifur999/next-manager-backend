@@ -679,5 +679,35 @@ check(
 r = await call("GET", "/kpi/me?from=2026-09-01&to=2026-08-01");
 check("a backwards date range is refused", r.status === 400, `${r.status} ${r.json.message}`);
 
+// A bill rate is what makes realization computable at all, and setting one
+// must not quietly reset the hours beside it.
+cookie = adminCookie;
+r = await call("GET", "/time-entries/capacity");
+const capacityUserId = r.json.data?.[0]?.user?.id;
+
+r = await call("PATCH", `/time-entries/capacity/${capacityUserId}`, { weekly_hours: 20 });
+check("capacity hours are settable", r.status === 200, `${r.status} ${r.json.message}`);
+
+r = await call("PATCH", `/time-entries/capacity/${capacityUserId}`, { standard_rate_usd: 50 });
+check("a bill rate can be set on its own", r.status === 200, `${r.status} ${r.json.message}`);
+
+r = await call("GET", "/time-entries/capacity");
+const updatedCapacity = r.json.data?.find((row) => row.user?.id === capacityUserId);
+check(
+  "and setting it does not reset the hours beside it",
+  updatedCapacity?.weekly_hours === 20 && updatedCapacity?.standard_rate_usd === 50,
+  JSON.stringify(updatedCapacity)
+);
+
+r = await call("PATCH", `/time-entries/capacity/${capacityUserId}`, {});
+check("an empty capacity update is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+r = await call("GET", `/kpi/agency?${kpiRange}`);
+check(
+  "realization becomes computable once a rate exists",
+  r.json.data?.context?.people_with_a_bill_rate === 1,
+  JSON.stringify(r.json.data?.context)
+);
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

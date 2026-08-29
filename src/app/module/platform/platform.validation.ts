@@ -1,5 +1,5 @@
 import z from "zod";
-import { SubscriptionStatus } from "../../../generated/prisma/enums.js";
+import { AnnouncementAudience, SubscriptionStatus } from "../../../generated/prisma/enums.js";
 import { PLATFORM_PERMISSIONS } from "./platform.permissions.js";
 
 export const createPlanZodSchema = z.object({
@@ -155,3 +155,26 @@ export const updatePlatformExpenseZodSchema = createPlatformExpenseZodSchema.par
 
 export type ICreatePlatformExpensePayload = z.infer<typeof createPlatformExpenseZodSchema>;
 export type IUpdatePlatformExpensePayload = z.infer<typeof updatePlatformExpenseZodSchema>;
+
+/**
+ * A notice to customers.
+ *
+ * `send_email` is part of the draft rather than the publish call on purpose:
+ * the decision to mail thousands of people should be made while writing, in
+ * front of the audience picker, not as an afterthought on the button that
+ * cannot be undone.
+ */
+export const createAnnouncementZodSchema = z.object({
+    title: z
+        .string("Title must be a string")
+        .min(1, "Give it a title")
+        .max(120, "A title longer than this is a body"),
+    body: z.string("Body must be a string").min(1, "Say something"),
+    audience: z.enum(AnnouncementAudience, "Pick who this is for").optional(),
+    send_email: z.boolean("Send email must be true or false").optional(),
+});
+
+export const updateAnnouncementZodSchema = createAnnouncementZodSchema.partial();
+
+export type ICreateAnnouncementPayload = z.infer<typeof createAnnouncementZodSchema>;
+export type IUpdateAnnouncementPayload = z.infer<typeof updateAnnouncementZodSchema>;

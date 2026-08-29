@@ -192,3 +192,56 @@ model PlatformMetricSnapshot {
 
   @@map("platform_metric_snapshots")
 }
+
+/// Something the platform wants customers to know.
+///
+/// Audience is resolved at read time against the company's subscription
+/// status, not fanned out to a recipient table at publish. A company that
+/// starts paying tomorrow then sees the notice aimed at paying customers
+/// without anybody re-sending it, and a company that leaves stops seeing it.
+///
+/// Kept as a draft until `published_at` is set, so a half-written notice is
+/// not on somebody's screen while it is being written.
+model Announcement {
+  id           String               @id @default(uuid())
+  title        String
+  body         String
+  audience     AnnouncementAudience @default(all)
+  /// Whether it was also emailed. Recorded rather than assumed, because
+  /// delivery can fail and "we sent it" needs to survive that being true.
+  send_email   Boolean              @default(false)
+  /// Null while it is a draft. Set once, when it goes out.
+  published_at DateTime?
+  /// How many addresses the mail actually reached. Null when no email was
+  /// asked for; zero is a real, and bad, answer.
+  emailed_count Int?
+  created_by   String?
+  deleted_at   DateTime?
+  created_at   DateTime             @default(now())
+  updated_at   DateTime             @updatedAt
+
+  reads AnnouncementRead[]
+
+  /// The customer's feed: published, newest first.
+  @@index([published_at(sort: Desc)])
+  @@map("announcements")
+}
+
+/// Who has seen what.
+///
+/// Without this the bell never clears and everybody learns to ignore it,
+/// which makes the next genuinely important notice invisible too.
+model AnnouncementRead {
+  id              String   @id @default(uuid())
+  announcement_id String
+  user_id         String
+  read_at         DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcement_id], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  /// One row per person per notice - reading it twice is not two readings.
+  @@unique([announcement_id, user_id])
+  @@index([user_id])
+  @@map("announcement_reads")
+}

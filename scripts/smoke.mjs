@@ -1362,6 +1362,135 @@ if (!superEmail || !superPassword) {
   r = await call("GET", "/auth/me");
   check("but still reaches its own account", r.status === 200, `${r.status}`);
 
+  // ---- announcements: the console writes, the customer's bell reads ----
+
+  r = await call("POST", "/platform/announcements", {
+    title: `Maintenance window ${stamp}`,
+    body: "We are moving servers on Sunday.\n\nNothing you need to do.",
+    audience: "all",
+  });
+  const draftId = r.json.data?.id;
+  check("the operator drafts an announcement", r.status === 201, `${r.status} ${r.json.message}`);
+  check(
+    "and it is a draft, not something customers can already see",
+    r.json.data?.published_at === null,
+    `published_at=${r.json.data?.published_at}`
+  );
+
+  r = await call("PATCH", `/platform/announcements/${draftId}`, { body: "Sunday, 02:00 UTC." });
+  check("a draft can be rewritten", r.status === 200, `${r.status} ${r.json.message}`);
+
+  // Before publishing: the bell must be empty. A draft that already shows up is
+  // the worst version of this feature.
+  cookie = adminCookie;
+  r = await call("GET", "/notifications");
+  const draftLeaked = (r.json.data ?? []).some((row) => row.id === draftId);
+  check("a customer cannot see an unpublished draft", r.status === 200 && !draftLeaked, `${r.status}`);
+
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+  r = await call("POST", `/platform/announcements/${draftId}/publish`, {});
+  check("publishing it works", r.status === 200, `${r.status} ${r.json.message}`);
+  check(
+    "and no email is claimed when none was asked for",
+    r.json.data?.email === null,
+    JSON.stringify(r.json.data?.email)
+  );
+
+  r = await call("POST", `/platform/announcements/${draftId}/publish`, {});
+  check("it cannot be published twice", r.status === 400, `${r.status} ${r.json.message}`);
+
+  r = await call("PATCH", `/platform/announcements/${draftId}`, { body: "Actually Monday." });
+  check(
+    "and once out, it cannot be quietly rewritten",
+    r.status === 400,
+    `${r.status} ${r.json.message}`
+  );
+
+  // The customer side.
+  cookie = adminCookie;
+  r = await call("GET", "/notifications/unread-count");
+  check("the customer's bell counts it", r.json.data?.unread >= 1, JSON.stringify(r.json.data));
+
+  r = await call("GET", "/notifications");
+  const notice = (r.json.data ?? []).find((row) => row.id === draftId);
+  check("the notice is in their list", Boolean(notice), `${r.status}`);
+  check("and starts unread", notice?.read_at === null, `read_at=${notice?.read_at}`);
+
+  r = await call("POST", `/notifications/${draftId}/read`, {});
+  check("reading it works", r.status === 200, `${r.status} ${r.json.message}`);
+
+  r = await call("POST", `/notifications/${draftId}/read`, {});
+  check("and reading it twice is not an error", r.status === 200, `${r.status} ${r.json.message}`);
+
+  r = await call("GET", "/notifications");
+  const readNotice = (r.json.data ?? []).find((row) => row.id === draftId);
+  check("the bell clears", readNotice?.read_at !== null, `read_at=${readNotice?.read_at}`);
+
+  // The whole company, not only the person who pays: whoever works on Sunday
+  // needs to know the servers move on Sunday.
+  cookie = opsCookie;
+  r = await call("GET", "/notifications");
+  check(
+    "operations sees it too, not just the admin",
+    (r.json.data ?? []).some((row) => row.id === draftId),
+    `${r.status}`
+  );
+
+  r = await call("POST", "/notifications/read-all", {});
+  check("and can clear the lot at once", r.status === 200, `${r.status} ${r.json.message}`);
+  r = await call("GET", "/notifications/unread-count");
+  check("leaving nothing unread", r.json.data?.unread === 0, JSON.stringify(r.json.data));
+
+  // Targeting. A notice for paying customers must not reach a trial.
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+  r = await call("POST", "/platform/announcements", {
+    title: `Paid-only notice ${stamp}`,
+    body: "For customers on a paid plan.",
+    audience: "active",
+  });
+  const paidOnlyId = r.json.data?.id;
+  await call("POST", `/platform/announcements/${paidOnlyId}/publish`, {});
+
+  cookie = "";
+  r = await call("POST", "/auth/login", { email: provisionEmail, password: "Passw0rd123" });
+  r = await call("GET", "/notifications");
+  check(
+    "a notice aimed at paying customers stays away from a trial",
+    !(r.json.data ?? []).some((row) => row.id === paidOnlyId),
+    `${r.status}`
+  );
+
+  // Permission, not role: campaigns.send is what gates this, and an operator
+  // without it is refused even though they are super_admin.
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+  // Keeping admins.manage: the last operator cannot be stripped of it - that
+  // guard fires first, and the permission under test would never change.
+  await call("PATCH", `/platform/admins/${me?.id}/permissions`, {
+    permissions: ["platform.admins.manage", "platform.finance.view"],
+  });
+  r = await call("POST", "/platform/announcements", { title: "Nope", body: "Nope" });
+  check(
+    "writing to customers needs campaigns.send",
+    r.status === 403,
+    `${r.status} ${r.json.message}`
+  );
+  await call("PATCH", `/platform/admins/${me?.id}/permissions`, { permissions: [] });
+
+  r = await call("DELETE", `/platform/announcements/${paidOnlyId}`);
+  check("an announcement can be withdrawn", r.status === 200, `${r.status} ${r.json.message}`);
+
+  cookie = adminCookie;
+  r = await call("GET", "/notifications");
+  check(
+    "and it leaves the customers' bells when it is",
+    !(r.json.data ?? []).some((row) => row.id === paidOnlyId),
+    `${r.status}`
+  );
+
+
   cookie = adminCookie;
 }
 

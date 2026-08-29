@@ -193,3 +193,15 @@ enum UserStatus {
   active
   suspended // was in, is not any more
 }
+
+// Who a platform announcement is for.
+//
+// Matched against a company's subscription status when the notice is read,
+// rather than fanned out to a recipient table when it is published. A company
+// that starts paying tomorrow should see the notice aimed at paying customers
+// without anybody re-sending it.
+enum AnnouncementAudience {
+  all
+  trialing
+  active
+}

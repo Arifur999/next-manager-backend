@@ -4,17 +4,20 @@ import { checkAuth } from "../../middleware/checkAuth.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { authRateLimit } from "../../middleware/rateLimit.js";
+import { AnnouncementController } from "./announcement.controller.js";
 import { PlatformController } from "./platform.controller.js";
 import { PlatformFinanceController } from "./platformFinance.controller.js";
 import { PlatformInviteController } from "./platformInvite.controller.js";
 import {
     acceptPlatformInviteZodSchema,
+    createAnnouncementZodSchema,
     createCompanyZodSchema,
     createPlatformExpenseZodSchema,
     createPlatformInviteZodSchema,
     createPlanZodSchema,
     setPlatformPermissionsZodSchema,
     setSubscriptionZodSchema,
+    updateAnnouncementZodSchema,
     updatePlanZodSchema,
     updatePlatformExpenseZodSchema,
 } from "./platform.validation.js";
@@ -188,7 +191,67 @@ router.delete(
     PlatformFinanceController.deleteExpense
 );
 
+// ---------------------------------------------------------------------------
+// Announcements
+// ---------------------------------------------------------------------------
+//
+// The console half. Writing a draft and sending it are the same permission,
+// because a draft nobody may publish is a document, not a feature.
+router.get(
+    "/announcements",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.campaigns.send"),
+    AnnouncementController.getAnnouncements
+);
+router.post(
+    "/announcements",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.campaigns.send"),
+    validateRequest(createAnnouncementZodSchema),
+    AnnouncementController.createAnnouncement
+);
+router.patch(
+    "/announcements/:id",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.campaigns.send"),
+    validateRequest(updateAnnouncementZodSchema),
+    AnnouncementController.updateAnnouncement
+);
+// Its own endpoint rather than a flag on the edit: this is the one that cannot
+// be taken back, and it should not be reachable by a form that autosaves.
+router.post(
+    "/announcements/:id/publish",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.campaigns.send"),
+    AnnouncementController.publishAnnouncement
+);
+router.delete(
+    "/announcements/:id",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.campaigns.send"),
+    AnnouncementController.deleteAnnouncement
+);
+
 export const PlatformRoutes = router;
+
+// ---------------------------------------------------------------------------
+// The customer half: the bell.
+// ---------------------------------------------------------------------------
+//
+// `checkAuth()` with no role, because a notice about Sunday maintenance is for
+// whoever works on Sunday, not only for whoever pays. Nothing here is scoped to
+// an organization - the audience is worked out from the reader's own company -
+// so requireCompany would add a way to fail and nothing else.
+const notificationRouter = Router();
+
+notificationRouter.get("/", checkAuth(), AnnouncementController.getMyAnnouncements);
+// Its own endpoint because the badge is polled: counting by fetching the list
+// would pull every body text across the wire to render one number.
+notificationRouter.get("/unread-count", checkAuth(), AnnouncementController.getUnreadCount);
+notificationRouter.post("/read-all", checkAuth(), AnnouncementController.markAllRead);
+notificationRouter.post("/:id/read", checkAuth(), AnnouncementController.markRead);
+
+export const NotificationRoutes = notificationRouter;
 
 // ---------------------------------------------------------------------------
 // Public. Whoever opens the link has no account yet.

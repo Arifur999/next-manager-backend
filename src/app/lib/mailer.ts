@@ -84,6 +84,21 @@ export const sendMail = async (mail: Mail): Promise<MailResult> => {
 };
 
 /**
+ * Free text on its way into an HTML body.
+ *
+ * The reset mail below interpolates URLs this server built. Announcements do
+ * not: their title and body are typed by a person, and typing `<` into a
+ * subject line should produce a `<`, not an unclosed tag that eats the rest of
+ * the message.
+ */
+const escapeHtml = (value: string) =>
+    value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
+/**
  * The reset email.
  *
  * Kept plain on purpose: a password-reset message that looks like marketing is
@@ -105,5 +120,31 @@ export const passwordResetMail = (resetUrl: string, expiresInMinutes: number): O
         <p><a href="${resetUrl}">Choose a new password</a></p>
         <p>The link works once and expires in ${expiresInMinutes} minutes.</p>
         <p>If this was not you, nothing has changed and you can ignore this message.</p>
+    `,
+});
+
+/**
+ * A platform announcement, emailed.
+ *
+ * Blank lines become paragraphs and nothing else does. A notice to customers is
+ * written in a textarea by somebody who wants to say a thing, not compose a
+ * layout, and every formatting feature added here is one more way for the
+ * message to arrive looking broken.
+ */
+export const announcementMail = (
+    title: string,
+    body: string,
+    recipientName: string
+): Omit<Mail, "to"> => ({
+    subject: title,
+    text: [`Hi ${recipientName},`, "", body, "", "- The AGENCIO team"].join("\n"),
+    html: `
+        <p>Hi ${escapeHtml(recipientName)},</p>
+        <h2 style="font-size:18px;margin:16px 0 8px">${escapeHtml(title)}</h2>
+        ${body
+            .split(/\n{2,}/)
+            .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`)
+            .join("\n        ")}
+        <p style="color:#666;font-size:13px">- The AGENCIO team</p>
     `,
 });

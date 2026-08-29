@@ -72,6 +72,7 @@ model User {
   activities         ActivityLog[]
   reset_tokens       PasswordResetToken[]
   platform_actions   PlatformActivityLog[] @relation("PlatformActor")
+  announcement_reads AnnouncementRead[]
 
   @@index([organization_id])
   /// The team list, newest first.

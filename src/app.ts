@@ -6,6 +6,7 @@ import { apiRateLimit } from "./app/middleware/rateLimit.js";
 import { globalErrorHandler } from "./app/middleware/globalErrorHandler.js";
 import notFound from "./app/middleware/notFound.js";
 import { PlatformService } from "./app/module/platform/platform.service.js";
+import { PlatformFinanceService } from "./app/module/platform/platformFinance.service.js";
 import { indexRoute } from "./app/routes/index.js";
 import { syncTodaysRate } from "./app/utils/currencyRate.js";
 import { env } from "./config/env.js";
@@ -46,6 +47,23 @@ cron.schedule("30 1 * * *", async () => {
         }
     } catch (error) {
         console.error("[billing] expiry sweep failed:", (error as Error).message);
+    }
+});
+
+// A photograph of the platform's own numbers, once a day.
+//
+// The MRR trend cannot be computed backwards - subscriptions carry no history,
+// and a line derived from created_at could never dip. So it is accumulated
+// forward from here, one row per day, upserted so a double fire corrects
+// rather than doubles.
+cron.schedule("45 1 * * *", async () => {
+    try {
+        const snapshot = await PlatformFinanceService.takeSnapshot();
+        console.log(
+            `[platform] snapshot: MRR $${snapshot.mrr_usd}, ${snapshot.companies_total} companies`
+        );
+    } catch (error) {
+        console.error("[platform] snapshot failed:", (error as Error).message);
     }
 });
 

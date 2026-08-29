@@ -5,15 +5,18 @@ import { requirePermission } from "../../middleware/requirePermission.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { authRateLimit } from "../../middleware/rateLimit.js";
 import { PlatformController } from "./platform.controller.js";
+import { PlatformFinanceController } from "./platformFinance.controller.js";
 import { PlatformInviteController } from "./platformInvite.controller.js";
 import {
     acceptPlatformInviteZodSchema,
     createCompanyZodSchema,
+    createPlatformExpenseZodSchema,
     createPlatformInviteZodSchema,
     createPlanZodSchema,
     setPlatformPermissionsZodSchema,
     setSubscriptionZodSchema,
     updatePlanZodSchema,
+    updatePlatformExpenseZodSchema,
 } from "./platform.validation.js";
 
 const router = Router();
@@ -141,6 +144,48 @@ router.delete(
     checkAuth(Role.super_admin),
     requirePermission("platform.admins.manage"),
     PlatformInviteController.removeAdmin
+);
+
+// AGENCIO's own books. Reading the numbers and recording what is spent are
+// separate permissions: somebody can be shown how the business is doing
+// without being able to change what it says.
+router.get(
+    "/finance",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.finance.view"),
+    PlatformFinanceController.getReport
+);
+router.get(
+    "/trend",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.companies.view"),
+    PlatformFinanceController.getTrend
+);
+router.get(
+    "/expenses",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.finance.view", "platform.expenses.manage"),
+    PlatformFinanceController.getExpenses
+);
+router.post(
+    "/expenses",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.expenses.manage"),
+    validateRequest(createPlatformExpenseZodSchema),
+    PlatformFinanceController.createExpense
+);
+router.patch(
+    "/expenses/:id",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.expenses.manage"),
+    validateRequest(updatePlatformExpenseZodSchema),
+    PlatformFinanceController.updateExpense
+);
+router.delete(
+    "/expenses/:id",
+    checkAuth(Role.super_admin),
+    requirePermission("platform.expenses.manage"),
+    PlatformFinanceController.deleteExpense
 );
 
 export const PlatformRoutes = router;

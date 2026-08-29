@@ -140,3 +140,18 @@ export const acceptPlatformInviteZodSchema = z.object({
 
 export type ICreatePlatformInvitePayload = z.infer<typeof createPlatformInviteZodSchema>;
 export type IAcceptPlatformInvitePayload = z.infer<typeof acceptPlatformInviteZodSchema>;
+
+export const createPlatformExpenseZodSchema = z.object({
+    date: z.iso.date("Date must be YYYY-MM-DD"),
+    category: z.string("Category must be a string").optional(),
+    description: z.string("Description must be a string").min(1, "Say what it was for"),
+    // USD, matching subscription revenue. Net profit only means something when
+    // both sides of the subtraction are the same currency.
+    amount_usd: z.number("Amount must be a number").positive("An expense of zero is not an expense"),
+    notes: z.string("Notes must be a string").optional(),
+});
+
+export const updatePlatformExpenseZodSchema = createPlatformExpenseZodSchema.partial();
+
+export type ICreatePlatformExpensePayload = z.infer<typeof createPlatformExpenseZodSchema>;
+export type IUpdatePlatformExpensePayload = z.infer<typeof updatePlatformExpenseZodSchema>;

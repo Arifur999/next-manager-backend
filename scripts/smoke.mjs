@@ -1198,6 +1198,107 @@ if (!superEmail || !superPassword) {
     `${r.json.data?.length} admin entries`
   );
 
+  // ---- AGENCIO's own books ----
+  r = await call("POST", "/platform/expenses", {
+    date: "2026-09-01",
+    category: "Infrastructure",
+    description: "Server and database",
+    amount_usd: 240,
+  });
+  const expenseId = r.json.data?.id;
+  check("an expense can be recorded", r.status === 201, `${r.status} ${r.json.message}`);
+
+  r = await call("POST", "/platform/expenses", {
+    date: "2026-09-01",
+    description: "Free thing",
+    amount_usd: 0,
+  });
+  check("a zero expense is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+  r = await call("GET", "/platform/finance?from=2026-09-01&to=2026-09-30");
+  const finance = r.json.data;
+  check("the financial report loads", r.status === 200, `${r.status} ${r.json.message}`);
+  check(
+    "revenue counts active and past due, not trials",
+    typeof finance?.mrr_usd === "number" && finance.arr_usd === finance.mrr_usd * 12,
+    JSON.stringify({ mrr: finance?.mrr_usd, arr: finance?.arr_usd })
+  );
+  check(
+    "net is revenue minus what was spent in the window",
+    Math.abs(finance.net_usd - (finance.mrr_usd - finance.expenses_usd)) < 0.01,
+    JSON.stringify({
+      mrr: finance?.mrr_usd,
+      spent: finance?.expenses_usd,
+      net: finance?.net_usd,
+    })
+  );
+  check(
+    "the expense recorded above is in it",
+    finance?.expenses_usd >= 240,
+    String(finance?.expenses_usd)
+  );
+  check(
+    "revenue per company is null with nobody paying, never a false zero",
+    finance?.paying_companies > 0
+      ? typeof finance.arpa_usd === "number"
+      : finance.arpa_usd === null,
+    JSON.stringify({ paying: finance?.paying_companies, arpa: finance?.arpa_usd })
+  );
+
+  // The boundary this whole console rests on.
+  const financeBody = JSON.stringify(finance ?? {});
+  check(
+    "and no customer's money anywhere in the report",
+    !/amount_usd.*payment|balance|opening_balance|amount_bdt/i.test(financeBody),
+    financeBody.slice(0, 160)
+  );
+
+  r = await call("DELETE", `/platform/expenses/${expenseId}`);
+  check("an expense can be removed", r.status === 200, `${r.status} ${r.json.message}`);
+
+  // ---- the trend ----
+  r = await call("GET", "/platform/trend");
+  const trend = r.json.data;
+  check("the trend endpoint loads", r.status === 200, `${r.status} ${r.json.message}`);
+  check(
+    "signups per month are real without any snapshot",
+    Array.isArray(trend?.signups) && trend.signups.length > 0,
+    JSON.stringify(trend?.signups?.slice(0, 2))
+  );
+  check(
+    "revenue by plan is real too",
+    Array.isArray(trend?.revenue_by_plan),
+    typeof trend?.revenue_by_plan
+  );
+  check(
+    "and the MRR series says how far back it goes, so an empty chart can explain itself",
+    "snapshots_since" in (trend ?? {}),
+    JSON.stringify(Object.keys(trend ?? {}))
+  );
+
+  // Reading the numbers and recording spend are separate permissions.
+  r = await call("PATCH", `/platform/admins/${me?.id}/permissions`, {
+    permissions: ["platform.admins.manage", "platform.finance.view"],
+  });
+  check("access can be narrowed to read-only finance", r.status === 200, `${r.status}`);
+
+  r = await call("GET", "/platform/finance");
+  check("the report still opens", r.status === 200, `${r.status}`);
+
+  r = await call("POST", "/platform/expenses", {
+    date: "2026-09-02",
+    description: "Should be refused",
+    amount_usd: 10,
+  });
+  check(
+    "but recording spend is refused without expenses.manage",
+    r.status === 403,
+    `${r.status} ${r.json.message}`
+  );
+
+  r = await call("PATCH", `/platform/admins/${me?.id}/permissions`, { permissions: [] });
+  check("and full access restores it", r.status === 200, `${r.status}`);
+
   // ---- the operator's own screens ----
   cookie = "";
   await call("POST", "/auth/login", { email: superEmail, password: superPassword });

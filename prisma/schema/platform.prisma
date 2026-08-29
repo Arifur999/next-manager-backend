@@ -137,3 +137,58 @@ model PlatformInvite {
   @@index([email, used_at])
   @@map("platform_invites")
 }
+
+/// What running AGENCIO costs.
+///
+/// Deliberately flat, and USD only. This is the server bill, the domain, the
+/// mail plan and what the team is paid - not a second accounting system. The
+/// company-side expense model has categories, budgets and a ledger because an
+/// agency's books need them; this needs a date, a number and a note.
+///
+/// USD because subscription revenue is USD, and net profit is only meaningful
+/// when both sides are the same currency. The company books make the same
+/// choice in the other direction, computing margin in BDT because that is the
+/// one currency both sides of *that* subtraction exist in.
+model PlatformExpense {
+  id          String   @id @default(uuid())
+  date        DateTime @db.Date
+  /// Free text rather than an enum: what a platform spends on changes with the
+  /// stack, and each change should not need a migration.
+  category    String   @default("")
+  description String
+  amount_usd  Decimal  @db.Decimal(15, 2)
+  notes       String   @default("")
+  deleted_at  DateTime?
+  created_by  String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  /// The month-by-month read, newest first.
+  @@index([date(sort: Desc)])
+  @@map("platform_expenses")
+}
+
+/// A nightly photograph of the platform's own numbers.
+///
+/// MRR over time cannot be computed backwards. Subscriptions carry no history,
+/// so deriving a trend from `created_at` and today's price would draw a line
+/// that never dips - it cannot see anybody who left or downgraded. That is a
+/// confident, wrong chart, which is worse than no chart.
+///
+/// So the trend is accumulated forward from the day this ships. The chart
+/// starts empty and says so.
+model PlatformMetricSnapshot {
+  id                String   @id @default(uuid())
+  /// One row per day. Unique, so a cron that fires twice corrects the day
+  /// rather than doubling it.
+  date              DateTime @unique @db.Date
+  mrr_usd           Decimal  @db.Decimal(15, 2)
+  companies_total   Int
+  companies_active  Int
+  companies_trialing Int
+  companies_past_due Int
+  companies_suspended Int
+  created_at        DateTime @default(now())
+
+  @@map("platform_metric_snapshots")
+}

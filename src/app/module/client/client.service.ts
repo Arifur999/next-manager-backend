@@ -1,6 +1,6 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { InvoiceStatus } from "../../../generated/prisma/enums.js";
+import { InvoiceStatus, Role } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
@@ -8,10 +8,27 @@ import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateClientPayload, IUpdateClientPayload } from "./client.validation.js";
 
+/**
+ * Clients the caller may see.
+ *
+ * Operations sees only clients whose projects they are on. The full book - every
+ * client's name, email and phone - was readable by anyone with a login, which
+ * for an agency is its most sensitive list after the vault.
+ *
+ * Sales and the project manager keep the whole list: sales needs to know who
+ * the agency already works with before approaching anybody, and delivery needs
+ * to know whose work it is scheduling.
+ */
+const visibilityScope = (user: IRequestUser): Prisma.ClientWhereInput =>
+    user.role === Role.operations
+        ? { projects: { some: { members: { some: { user_id: user.userId } } } } }
+        : {};
+
 const getAllClients = async (user: IRequestUser, options: ListOptions = {}) => {
     const where: Prisma.ClientWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
+        ...visibilityScope(user),
         ...(options.search
             ? {
                 OR: [
@@ -45,7 +62,14 @@ const getAllClients = async (user: IRequestUser, options: ListOptions = {}) => {
 
 const getSingleClient = async (id: string, user: IRequestUser) => {
     const client = await prisma.client.findFirst({
-        where: { id, organization_id: user.organizationId, deleted_at: null },
+        // 404 rather than 403, like every other scoped read here: which clients
+        // exist is not information to hand out.
+        where: {
+            id,
+            organization_id: user.organizationId,
+            deleted_at: null,
+            ...visibilityScope(user),
+        },
         include: {
             projects: {
                 where: { deleted_at: null },

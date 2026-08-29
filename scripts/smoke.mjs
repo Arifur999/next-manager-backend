@@ -1083,5 +1083,62 @@ cookie = adminCookie;
 r = await call("DELETE", "/activity/some-id");
 check("the trail cannot be deleted, even by admin", r.status === 404, `${r.status}`);
 
+// ---------------------------------------------------------------------------
+// What operations can SEE. Tasks were scoped from the start; clients and
+// projects were not, so an agency's whole book was readable by anyone with a
+// login.
+// ---------------------------------------------------------------------------
+
+cookie = opsCookie;
+r = await call("GET", "/clients");
+check(
+  "operations sees no client it has no project with",
+  r.status === 200 && Array.isArray(r.json.data) && r.json.data.length === 0,
+  `${r.status} ${r.json.data?.length} clients`
+);
+
+r = await call("GET", "/projects");
+const opsProjectCount = r.json.data?.length ?? 0;
+check(
+  "and no project it is not a member of",
+  r.status === 200 && opsProjectCount === 0,
+  `${opsProjectCount} projects`
+);
+
+// Reaching for one directly reads as absent, not forbidden - which of a
+// company's clients exist is not information to hand out.
+r = await call("GET", `/clients/${clientId}`);
+check("a client it cannot see reads as not found", r.status === 404, `${r.status}`);
+
+r = await call("GET", `/projects/${timeProjectId}`);
+check("and so does a project", r.status === 404, `${r.status}`);
+
+// Put them on the project, and both appear - membership is the key, so being
+// on a team is enough without a task open that week.
+cookie = pmCookie;
+r = await call("POST", "/project-members", { project_id: timeProjectId, user_id: opsUserId });
+check("project manager adds operations to the project", r.status === 201, `${r.status} ${r.json.message}`);
+
+cookie = opsCookie;
+r = await call("GET", "/projects");
+check(
+  "now it sees the project it is on",
+  r.json.data?.length === 1 && r.json.data[0].id === timeProjectId,
+  `${r.json.data?.length} projects`
+);
+
+r = await call("GET", "/clients");
+check(
+  "and that project's client, and only that one",
+  r.json.data?.length === 1 && r.json.data[0].id === clientId,
+  `${r.json.data?.length} clients`
+);
+
+// The wider roles are untouched: sales needs the whole book to know who the
+// agency already works with.
+cookie = roleCookies.sales;
+r = await call("GET", "/clients");
+check("sales still sees every client", r.json.data?.length > 1, `${r.json.data?.length} clients`);
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

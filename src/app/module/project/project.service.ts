@@ -1,6 +1,6 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { InvoiceStatus } from "../../../generated/prisma/enums.js";
+import { InvoiceStatus, Role } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { assertProjectAvailable } from "../../middleware/checkSubscription.js";
@@ -13,10 +13,26 @@ import {
     IUpdateProjectPayload,
 } from "./project.validation.js";
 
+/**
+ * Projects the caller may see.
+ *
+ * Operations sees only the ones they are on. The same shape tasks already use,
+ * and it was missing here: an agency's whole project list, with client names
+ * and contract values attached, was readable by anyone with a login.
+ *
+ * Membership, not assignment - a person on the team of a project should see
+ * the project even on a week they have no task open on it.
+ */
+const visibilityScope = (user: IRequestUser): Prisma.ProjectWhereInput =>
+    user.role === Role.operations
+        ? { members: { some: { user_id: user.userId } } }
+        : {};
+
 const getAllProjects = async (user: IRequestUser, options: ListOptions = {}) => {
     const where: Prisma.ProjectWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
+        ...visibilityScope(user),
         ...(options.search
             ? {
                 OR: [
@@ -56,7 +72,15 @@ const getAllProjects = async (user: IRequestUser, options: ListOptions = {}) => 
 
 const getSingleProject = async (id: string, user: IRequestUser) => {
     const project = await prisma.project.findFirst({
-        where: { id, organization_id: user.organizationId, deleted_at: null },
+        // Scoped in the WHERE rather than checked after: a project they are not
+        // on reads as "not found", and which projects exist is not information
+        // to hand out.
+        where: {
+            id,
+            organization_id: user.organizationId,
+            deleted_at: null,
+            ...visibilityScope(user),
+        },
         include: {
             client: { select: { id: true, name: true, company: true, email: true } },
             members: {

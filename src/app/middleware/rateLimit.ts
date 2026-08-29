@@ -13,7 +13,12 @@ const isProduction = env.NODE_ENV === "production";
 // throttle. Production keeps the tight number, which is where it matters.
 export const authRateLimit = rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: isProduction ? 20 : 300,
+    // Production stays tight - 20 attempts in fifteen minutes is a password
+    // guesser, not a person. Development does not: one smoke run signs in as a
+    // dozen accounts, and three runs inside the window tripped this and made
+    // every check after the trip fail for a reason that had nothing to do with
+    // the code. Same reasoning as the api limiter below.
+    limit: isProduction ? 20 : 3000,
     standardHeaders: "draft-7",
     legacyHeaders: false,
     message: {

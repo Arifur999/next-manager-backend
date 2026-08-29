@@ -113,7 +113,15 @@ export type ISetPlatformPermissionsPayload = z.infer<typeof setPlatformPermissio
  */
 export const createPlatformInviteZodSchema = z.object({
     email: z.string("Email must be a string").email("Enter a valid email address"),
-    permissions: z.array(z.enum(PLATFORM_PERMISSIONS, "Unknown permission")).optional(),
+    // At least one, on purpose. An empty list means full access in
+    // requirePermission - the hatch that stops the FIRST operator, seeded from
+    // .env, locking themselves out. An invited operator always has somebody
+    // who can fix their access, so they never need that hatch, and letting an
+    // untouched form quietly grant everything is how somebody ends up with the
+    // run of the platform by not ticking a box.
+    permissions: z
+        .array(z.enum(PLATFORM_PERMISSIONS, "Unknown permission"))
+        .min(1, "Choose what they may do - an operator with nothing chosen would get everything"),
     expires_in_days: z
         .number("Expiry must be a number")
         .int()

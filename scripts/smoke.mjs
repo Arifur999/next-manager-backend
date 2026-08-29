@@ -1022,40 +1022,81 @@ if (!superEmail || !superPassword) {
   });
   check("and can still write", r.status === 201, `${r.status} ${r.json.message}`);
 
-  // Now the layer itself. The seeded operator is the only platform admin, so
-  // the guards that stop the platform being stranded are what can be checked
-  // here; a second operator arrives with the invite flow.
+  // The permissions layer.
+  //
+  // Every experiment below runs on a THROWAWAY operator this suite creates,
+  // never on the seeded account somebody actually signs in with. It used to
+  // narrow and then restore `admins[0]`, which worked only while that was the
+  // sole platform admin: add a second one and the last-manager guard correctly
+  // stops refusing, the narrowing goes through, and the restore then needs the
+  // very permission it just removed. One failed run left the real owner locked
+  // down with no way back through the API.
   r = await call("GET", "/platform/admins");
-  const admins = r.json.data ?? [];
-  check("the platform team is listable", r.status === 200 && admins.length >= 1, `${r.status}`);
+  check("the platform team is listable", r.status === 200, `${r.status}`);
 
-  const me = admins[0];
+  const managers = (r.json.data ?? []).filter(
+    (a) =>
+      a.status === "active" &&
+      (a.permissions.length === 0 || a.permissions.includes("platform.admins.manage"))
+  );
 
-  r = await call("PATCH", `/platform/admins/${me?.id}/permissions`, {
-    permissions: ["platform.finance.view"],
+  // The guard that stops the platform being stranded can only fire when one
+  // account is the last that can hand permissions out. Said out loud rather
+  // than skipped silently, because a skip reads like a pass.
+  if (managers.length === 1) {
+    r = await call("PATCH", `/platform/admins/${managers[0].id}/permissions`, {
+      permissions: ["platform.finance.view"],
+    });
+    check(
+      "the only account that can manage the team cannot drop that permission",
+      r.status === 409,
+      `${r.status} ${r.json.message}`
+    );
+    check(
+      "and the refusal says to give somebody else it first",
+      /give somebody else/i.test(r.json.message ?? ""),
+      r.json.message
+    );
+  } else {
+    check(
+      `the last-manager guard was not exercised - ${managers.length} accounts can manage the team`,
+      true,
+      "not a failure; this run could not put the platform in that state"
+    );
+  }
+
+  // A throwaway operator to experiment on.
+  const probeEmail = `gated${stamp}@agencio.test`;
+  r = await call("POST", "/platform/invites", {
+    email: probeEmail,
+    permissions: ["platform.companies.view"],
   });
-  check(
-    "the only account that can manage the team cannot drop that permission",
-    r.status === 409,
-    `${r.status} ${r.json.message}`
-  );
-  check(
-    "and the refusal says to give somebody else it first",
-    /give somebody else/i.test(r.json.message ?? ""),
-    r.json.message
-  );
+  const probeToken = r.json.data?.join_url?.split("/platform-join/")[1];
+  const ownerCookie = cookie;
 
-  r = await call("PATCH", `/platform/admins/${me?.id}/permissions`, {
+  cookie = "";
+  r = await call("POST", `/platform-join/${probeToken}/accept`, {
+    full_name: "Gated Operator",
+    password: "Passw0rd123",
+  });
+  const probeOperatorId = r.json.data?.id;
+  cookie = ownerCookie;
+  await call("POST", `/platform/admins/${probeOperatorId}/approve`);
+
+  r = await call("PATCH", `/platform/admins/${probeOperatorId}/permissions`, {
     permissions: ["platform.admins.manage", "not.a.real.permission"],
   });
   check("an unknown permission is refused, not stored", r.status === 400, `${r.status}`);
 
-  // Narrowing to a real subset that keeps admins.manage is allowed, and the
-  // gate then actually bites.
-  r = await call("PATCH", `/platform/admins/${me?.id}/permissions`, {
-    permissions: ["platform.admins.manage", "platform.companies.view"],
+  // Narrowing to a real subset, and the gate then actually bites - checked by
+  // signing in AS that operator rather than by reading the row back.
+  r = await call("PATCH", `/platform/admins/${probeOperatorId}/permissions`, {
+    permissions: ["platform.companies.view"],
   });
   check("a real subset can be set", r.status === 200, `${r.status} ${r.json.message}`);
+
+  cookie = "";
+  await call("POST", "/auth/login", { email: probeEmail, password: "Passw0rd123" });
 
   r = await call("GET", "/platform/companies");
   check("companies.view still opens the customer list", r.status === 200, `${r.status}`);
@@ -1072,12 +1113,11 @@ if (!superEmail || !superPassword) {
     r.json.message
   );
 
-  // Put it back, or every later run of this suite starts gated.
-  r = await call("PATCH", `/platform/admins/${me?.id}/permissions`, { permissions: [] });
-  check("clearing the list restores full access", r.status === 200, `${r.status}`);
+  cookie = ownerCookie;
 
-  r = await call("POST", "/platform/plans", { code: `restored${stamp}`, name: "Restored" });
-  check("and writing works again", r.status === 201, `${r.status} ${r.json.message}`);
+  // Kept alive: every later permission experiment uses this account too, and
+  // it is removed at the end of the platform section.
+  const ownerId = managers.find((a) => a.email === superEmail)?.id;
 
   // ---- growing the platform team ----
   //
@@ -1092,6 +1132,21 @@ if (!superEmail || !superPassword) {
   const opJoinUrl = r.json.data?.join_url;
   const opInviteId = r.json.data?.invite?.id;
   check("an operator can be invited", r.status === 201, `${r.status} ${r.json.message}`);
+  {
+    // An untouched form used to mean full access, because an empty list is the
+    // lockout hatch in requirePermission. That hatch is for the FIRST operator,
+    // seeded from .env - an invited one always has somebody who can fix their
+    // access, and should never get the run of the platform by omission.
+    const blank = await call("POST", "/platform/invites", {
+      email: `blank${stamp}@agencio.test`,
+      permissions: [],
+    });
+    check(
+      "an invite with nothing chosen is refused, not granted everything",
+      blank.status === 400,
+      `${blank.status} ${blank.json.message}`
+    );
+  }
   check(
     "and the link is emailed to them, not left to be copied by hand",
     typeof r.json.data?.email?.delivered === "boolean",
@@ -1195,7 +1250,7 @@ if (!superEmail || !superPassword) {
   cookie = "";
   await call("POST", "/auth/login", { email: superEmail, password: superPassword });
 
-  r = await call("DELETE", `/platform/admins/${me?.id}`);
+  r = await call("DELETE", `/platform/admins/${ownerId}`);
   check("nobody removes their own account", r.status === 409, `${r.status} ${r.json.message}`);
 
   r = await call("DELETE", `/platform/admins/${newOperatorId}`);
@@ -1295,11 +1350,16 @@ if (!superEmail || !superPassword) {
     JSON.stringify(Object.keys(trend ?? {}))
   );
 
-  // Reading the numbers and recording spend are separate permissions.
-  r = await call("PATCH", `/platform/admins/${me?.id}/permissions`, {
-    permissions: ["platform.admins.manage", "platform.finance.view"],
+  // Reading the numbers and recording spend are separate permissions. Tried on
+  // the throwaway, signed in as the throwaway - narrowing the account somebody
+  // really uses is how a failed run leaves them locked out.
+  r = await call("PATCH", `/platform/admins/${probeOperatorId}/permissions`, {
+    permissions: ["platform.finance.view"],
   });
   check("access can be narrowed to read-only finance", r.status === 200, `${r.status}`);
+
+  cookie = "";
+  await call("POST", "/auth/login", { email: probeEmail, password: "Passw0rd123" });
 
   r = await call("GET", "/platform/finance");
   check("the report still opens", r.status === 200, `${r.status}`);
@@ -1315,8 +1375,8 @@ if (!superEmail || !superPassword) {
     `${r.status} ${r.json.message}`
   );
 
-  r = await call("PATCH", `/platform/admins/${me?.id}/permissions`, { permissions: [] });
-  check("and full access restores it", r.status === 200, `${r.status}`);
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
 
   // ---- the operator's own screens ----
   cookie = "";
@@ -1577,18 +1637,20 @@ if (!superEmail || !superPassword) {
   // without it is refused even though they are super_admin.
   cookie = "";
   await call("POST", "/auth/login", { email: superEmail, password: superPassword });
-  // Keeping admins.manage: the last operator cannot be stripped of it - that
-  // guard fires first, and the permission under test would never change.
-  await call("PATCH", `/platform/admins/${me?.id}/permissions`, {
-    permissions: ["platform.admins.manage", "platform.finance.view"],
+  await call("PATCH", `/platform/admins/${probeOperatorId}/permissions`, {
+    permissions: ["platform.finance.view"],
   });
+  cookie = "";
+  await call("POST", "/auth/login", { email: probeEmail, password: "Passw0rd123" });
   r = await call("POST", "/platform/announcements", { title: "Nope", body: "Nope" });
   check(
     "writing to customers needs campaigns.send",
     r.status === 403,
     `${r.status} ${r.json.message}`
   );
-  await call("PATCH", `/platform/admins/${me?.id}/permissions`, { permissions: [] });
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+  await call("DELETE", `/platform/admins/${probeOperatorId}`);
 
   r = await call("DELETE", `/platform/announcements/${paidOnlyId}`);
   check("an announcement can be withdrawn", r.status === 200, `${r.status} ${r.json.message}`);

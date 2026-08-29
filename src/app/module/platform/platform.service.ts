@@ -1,5 +1,5 @@
 import status from "http-status";
-import { Role, SubscriptionStatus } from "../../../generated/prisma/enums.js";
+import { Role, SubscriptionStatus, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
@@ -704,6 +704,10 @@ const setPermissions = async (
             where: {
                 role: Role.super_admin,
                 deleted_at: null,
+                // Active only. A suspended operator cannot sign in, so counting
+                // one as somebody who can hand permissions out would strand the
+                // platform behind an account nobody can use.
+                status: UserStatus.active,
                 id: { not: id },
                 OR: [
                     { permissions: { isEmpty: true } },

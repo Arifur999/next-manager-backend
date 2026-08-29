@@ -1,3 +1,4 @@
+import { UserStatus } from "../../generated/prisma/enums.js";
 import { prisma } from "../lib/prisma.js";
 
 /**
@@ -35,7 +36,7 @@ export const loadCapacityRows = async (
             where: {
                 organization_id: organizationId,
                 deleted_at: null,
-                is_active: true,
+                status: UserStatus.active,
                 ...(userId ? { id: userId } : {}),
             },
             select: { id: true },

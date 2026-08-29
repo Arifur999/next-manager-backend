@@ -1,5 +1,5 @@
 import z from "zod";
-import { Role } from "../../../generated/prisma/enums.js";
+import { Role, UserStatus } from "../../../generated/prisma/enums.js";
 
 // Roles an admin may hand out. super_admin is deliberately absent - it is a
 // platform role and cannot be granted from inside a company.
@@ -22,7 +22,13 @@ export const updateUserZodSchema = createUserZodSchema
     .omit({ password: true, email: true })
     .partial()
     .extend({
-        is_active: z.boolean("is_active must be a boolean").optional(),
+        // Replaces is_active. `pending` is deliberately not assignable here:
+        // it is what the invite flow sets, and letting an admin push somebody
+        // back into it by hand would mean an active person losing access with
+        // nothing recording why.
+        status: z
+            .enum([UserStatus.active, UserStatus.suspended], "Choose a valid status")
+            .optional(),
     });
 
 export type ICreateUserPayload = z.infer<typeof createUserZodSchema>;

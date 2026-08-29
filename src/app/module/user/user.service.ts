@@ -1,6 +1,6 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { Role } from "../../../generated/prisma/enums.js";
+import { Role, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { assertSeatAvailable } from "../../middleware/checkSubscription.js";
@@ -17,7 +17,7 @@ const PUBLIC_USER_FIELDS = {
     phone: true,
     avatar_url: true,
     role: true,
-    is_active: true,
+    status: true,
     email_verified: true,
     permissions: true,
     created_at: true,
@@ -130,7 +130,7 @@ const assertNotLastAdmin = async (targetId: string, user: IRequestUser) => {
         where: {
             organization_id: user.organizationId,
             deleted_at: null,
-            is_active: true,
+            status: UserStatus.active,
             role: Role.admin,
         },
     });
@@ -156,7 +156,8 @@ const updateUser = async (id: string, payload: IUpdateUserPayload, user: IReques
     // admin's phone number is fine.
     const losingAdmin =
         existing.role === Role.admin &&
-        ((payload.role !== undefined && payload.role !== Role.admin) || payload.is_active === false);
+        ((payload.role !== undefined && payload.role !== Role.admin) ||
+            payload.status === UserStatus.suspended);
 
     if (losingAdmin) {
         await assertNotLastAdmin(id, user);
@@ -185,11 +186,11 @@ const deleteUser = async (id: string, user: IRequestUser) => {
     await assertNotLastAdmin(id, user);
 
     // Soft delete, and deactivate in the same write: a row that is only flagged
-    // deleted but still `is_active` would keep passing checkAuth.
+    // deleted but still active would keep passing checkAuth.
     await prisma.$transaction(async (tx) => {
         await tx.user.update({
             where: { id },
-            data: { deleted_at: new Date(), deleted_by: user.userId, is_active: false },
+            data: { deleted_at: new Date(), deleted_by: user.userId, status: UserStatus.suspended },
         });
 
         // The role is named because removing somebody is also removing an

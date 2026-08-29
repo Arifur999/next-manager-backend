@@ -42,7 +42,10 @@ model User {
   phone          String    @default("")
   avatar_url     String    @default("")
   role           Role      @default(operations)
-  is_active      Boolean   @default(true)
+  /// Anything but `active` cannot sign in - see checkAuth. Defaults to active
+  /// because the admin-created path hands somebody a password directly; the
+  /// invite path sets `pending` explicitly and waits for approval.
+  status         UserStatus @default(active)
   email_verified Boolean   @default(false)
   /// Bumped on every password change and compared against the claim inside the
   /// access token, so a password change ends sessions that were already open.

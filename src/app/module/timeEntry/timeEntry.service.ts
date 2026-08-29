@@ -1,6 +1,6 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { Role } from "../../../generated/prisma/enums.js";
+import { Role, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
@@ -324,7 +324,7 @@ const deleteEntry = async (id: string, user: IRequestUser) => {
 const getCapacities = async (user: IRequestUser) => {
     const [members, rows] = await Promise.all([
         prisma.user.findMany({
-            where: { organization_id: user.organizationId, deleted_at: null, is_active: true },
+            where: { organization_id: user.organizationId, deleted_at: null, status: UserStatus.active },
             select: { id: true, full_name: true, email: true, role: true },
             orderBy: { full_name: "asc" },
         }),

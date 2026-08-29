@@ -37,7 +37,7 @@ export type IChangePasswordPayload = z.infer<typeof changePasswordZodSchema>;
  *
  * The allow-list is the whole security control, and it is a `z.object` with
  * exactly three keys for a reason: Zod strips unknown keys, so a payload
- * carrying `role: "admin"` or `is_active` or `permissions` loses them here
+ * carrying `role: "admin"` or `status` or `permissions` loses them here
  * rather than reaching the update. A self-service endpoint that forwarded the
  * request body would be one POST away from privilege escalation.
  *

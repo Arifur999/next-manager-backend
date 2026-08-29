@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import status from "http-status";
 import { env } from "../../../config/env.js";
-import { Role } from "../../../generated/prisma/enums.js";
+import { Role, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { passwordResetMail, sendMail } from "../../lib/mailer.js";
@@ -26,7 +26,7 @@ const PUBLIC_USER_FIELDS = {
     phone: true,
     avatar_url: true,
     role: true,
-    is_active: true,
+    status: true,
     email_verified: true,
     organization_id: true,
     permissions: true,
@@ -101,8 +101,16 @@ const login = async (payload: ILoginPayload) => {
         throw new AppError(status.UNAUTHORIZED, "Invalid email or password");
     }
 
-    if (!user.is_active) {
-        throw new AppError(status.UNAUTHORIZED, "This account has been deactivated. Contact your administrator.");
+    // Told apart on purpose: "waiting for approval" and "you were removed"
+    // send somebody to two different people, and one message for both means
+    // they ask the wrong one.
+    if (user.status !== UserStatus.active) {
+        throw new AppError(
+            status.UNAUTHORIZED,
+            user.status === UserStatus.pending
+                ? "This account is waiting for an admin to approve it."
+                : "This account has been deactivated. Contact your administrator."
+        );
     }
 
     const tokens = issueTokens(user);
@@ -136,7 +144,7 @@ const refreshToken = async (token: string | undefined) => {
 
     const user = await prisma.user.findUnique({ where: { id: verified.decoded.userId } });
 
-    if (!user || !user.is_active) {
+    if (!user || user.status !== UserStatus.active) {
         throw new AppError(status.UNAUTHORIZED, "This account is no longer active");
     }
 
@@ -243,7 +251,7 @@ const forgotPassword = async (
     };
 
     const user = await prisma.user.findFirst({
-        where: { email: payload.email, deleted_at: null, is_active: true },
+        where: { email: payload.email, deleted_at: null, status: UserStatus.active },
         select: { id: true, email: true, full_name: true },
     });
 

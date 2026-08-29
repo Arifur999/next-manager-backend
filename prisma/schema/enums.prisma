@@ -180,3 +180,16 @@ enum SubscriptionStatus {
   suspended // no access, by the platform's decision
   cancelled // no access, by the company's
 }
+
+// Whether a person may sign in, and why not when they may not.
+//
+// Replaces the old `is_active` boolean rather than sitting beside it. Two
+// fields answering "can this person get in" disagree the first time one write
+// path forgets the other, and a boolean cannot tell "waiting to be let in"
+// apart from "let in and then removed" - which are the two states an admin
+// most needs to see differently.
+enum UserStatus {
+  pending   // signed up through an invite, waiting on an admin
+  active
+  suspended // was in, is not any more
+}

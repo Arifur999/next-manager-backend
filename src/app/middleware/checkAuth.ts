@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import status from "http-status";
 import { env } from "../../config/env.js";
-import { Role } from "../../generated/prisma/enums.js";
+import { Role, UserStatus } from "../../generated/prisma/enums.js";
 import AppError from "../errorHelpers/AppError.js";
 import { prisma } from "../lib/prisma.js";
 import { cookieUtils } from "../utils/cookie.js";
@@ -47,7 +47,7 @@ export const checkAuth = (...authRoles: Role[]) => async (req: Request, res: Res
                 full_name: true,
                 role: true,
                 organization_id: true,
-                is_active: true,
+                status: true,
                 email_verified: true,
                 token_version: true,
                 permissions: true,
@@ -58,8 +58,16 @@ export const checkAuth = (...authRoles: Role[]) => async (req: Request, res: Res
             throw new AppError(status.UNAUTHORIZED, "Unauthorized access! User not found.");
         }
 
-        if (!user.is_active) {
-            throw new AppError(status.UNAUTHORIZED, "Unauthorized access! User is not active.");
+        // The gate the whole invite flow rests on. A pending user has an
+        // account and a password and must still be refused, or approval is
+        // decoration and self-signup is open access.
+        if (user.status !== UserStatus.active) {
+            throw new AppError(
+                status.UNAUTHORIZED,
+                user.status === UserStatus.pending
+                    ? "This account is waiting for an admin to approve it."
+                    : "This account has been deactivated. Contact your administrator."
+            );
         }
 
         // A password change bumps token_version, which retires every token

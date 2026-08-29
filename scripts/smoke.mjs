@@ -797,7 +797,7 @@ check(
   JSON.stringify({ role: r.json.data?.role })
 );
 
-r = await call("PATCH", "/auth/me", { is_active: false });
+r = await call("PATCH", "/auth/me", { status: "suspended" });
 check("nor deactivate fields they do not own", r.status === 400, `${r.status} ${r.json.message}`);
 
 // ---------------------------------------------------------------------------
@@ -1232,6 +1232,68 @@ check(
   /add you to it/i.test(r.json.message ?? ""),
   r.json.message
 );
+
+// ---------------------------------------------------------------------------
+// The sign-in gate moved from `is_active` to `status`. It is the line the whole
+// invite flow will rest on, so it is checked here before anything is built on
+// top of it.
+// ---------------------------------------------------------------------------
+
+// Its own company: the billing section above put the main one on a one-seat
+// plan, and a seat limit refusing the create would read as a gate failure.
+cookie = "";
+const gateAdminEmail = `gate-admin${stamp}@agencio.test`;
+await call("POST", "/auth/register", {
+  organization_name: "Gate Co",
+  full_name: "Gate Admin",
+  email: gateAdminEmail,
+  password: "Passw0rd123",
+});
+await call("POST", "/auth/login", { email: gateAdminEmail, password: "Passw0rd123" });
+const gateAdminCookie = cookie;
+
+const gateEmail = `gate${stamp}@agencio.test`;
+r = await call("POST", "/users", {
+  full_name: "Gate Test",
+  email: gateEmail,
+  password: "Passw0rd123",
+  role: "operations",
+});
+const gateUserId = r.json.data?.id;
+check("a new member is active by default", r.json.data?.status === "active", r.json.data?.status);
+
+cookie = "";
+r = await call("POST", "/auth/login", { email: gateEmail, password: "Passw0rd123" });
+check("and can sign in", r.status === 200, `${r.status} ${r.json.message}`);
+
+cookie = gateAdminCookie;
+r = await call("PATCH", `/users/${gateUserId}`, { status: "suspended" });
+check("admin can suspend them", r.status === 200, `${r.status} ${r.json.message}`);
+
+cookie = "";
+r = await call("POST", "/auth/login", { email: gateEmail, password: "Passw0rd123" });
+check("a suspended member cannot sign in", r.status === 401, `${r.status} ${r.json.message}`);
+check(
+  "and is told they were deactivated, not that the password was wrong",
+  /deactivated/i.test(r.json.message ?? ""),
+  r.json.message
+);
+
+// `pending` is not assignable by hand - it is what the invite flow sets and
+// what approval clears, and letting an admin push somebody into it would take
+// away access with nothing recording why.
+cookie = gateAdminCookie;
+r = await call("PATCH", `/users/${gateUserId}`, { status: "pending" });
+check("but cannot put somebody into pending by hand", r.status === 400, `${r.status} ${r.json.message}`);
+
+r = await call("PATCH", `/users/${gateUserId}`, { status: "active" });
+check("restoring them works", r.status === 200, `${r.status} ${r.json.message}`);
+
+cookie = "";
+r = await call("POST", "/auth/login", { email: gateEmail, password: "Passw0rd123" });
+check("and they can sign in again", r.status === 200, `${r.status}`);
+
+cookie = adminCookie;
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

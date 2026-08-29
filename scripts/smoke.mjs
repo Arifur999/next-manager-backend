@@ -1295,5 +1295,150 @@ check("and they can sign in again", r.status === 200, `${r.status}`);
 
 cookie = adminCookie;
 
+// ---------------------------------------------------------------------------
+// The operations join flow: invite -> self-register -> pending -> approve.
+// Reuses the Gate Co company above, which is not on a one-seat plan.
+// ---------------------------------------------------------------------------
+
+const joinEmail = `join${stamp}@agencio.test`;
+
+cookie = gateAdminCookie;
+r = await call("POST", "/team-invites", { email: joinEmail });
+const joinUrl = r.json.data?.join_url;
+const inviteId = r.json.data?.invite?.id;
+check("admin creates an invite", r.status === 201, `${r.status} ${r.json.message}`);
+check("and gets a link back", typeof joinUrl === "string" && joinUrl.includes("/join/"), joinUrl);
+check(
+  "the invite is fixed to operations - a link cannot be edited into an admin one",
+  r.json.data?.invite?.role === "operations",
+  r.json.data?.invite?.role
+);
+
+const joinToken = joinUrl?.split("/join/")[1];
+
+// The token is returned exactly once. It must never come back from the list.
+r = await call("GET", "/team-invites");
+check(
+  "the token never appears again after the create",
+  !JSON.stringify(r.json.data ?? []).includes(joinToken),
+  "token found in the invite list"
+);
+
+// Public: no cookie at all, because the person has no account yet.
+cookie = "";
+r = await call("GET", `/join/${joinToken}`);
+check("the join page can read the invite signed out", r.status === 200, `${r.status}`);
+check(
+  "and learns the company name and its own address, nothing else",
+  r.json.data?.organization_name === "Gate Co" &&
+    r.json.data?.email === joinEmail &&
+    Object.keys(r.json.data ?? {}).length === 2,
+  JSON.stringify(r.json.data)
+);
+
+r = await call("GET", "/join/not-a-real-token");
+check("a made-up token is refused", r.status === 404, `${r.status}`);
+
+// Accepting takes a name and a password. Not an email - that comes from the
+// invite, so a leaked link cannot create an account under another address.
+r = await call("POST", `/join/${joinToken}/accept`, {
+  full_name: "Joined Member",
+  password: "Passw0rd123",
+  email: "attacker@evil.test",
+});
+check("accepting creates the account", r.status === 201, `${r.status} ${r.json.message}`);
+check(
+  "under the invited address, ignoring any email in the body",
+  r.json.data?.email === joinEmail,
+  r.json.data?.email
+);
+check("as pending, not active", r.json.data?.status === "pending", r.json.data?.status);
+const joinedUserId = r.json.data?.id;
+
+// The whole point of the flow.
+r = await call("POST", "/auth/login", { email: joinEmail, password: "Passw0rd123" });
+check("a pending member cannot sign in", r.status === 401, `${r.status} ${r.json.message}`);
+check(
+  "and is told they are waiting for approval, not that the password is wrong",
+  /approve/i.test(r.json.message ?? ""),
+  r.json.message
+);
+
+r = await call("POST", `/join/${joinToken}/accept`, {
+  full_name: "Second Try",
+  password: "Passw0rd123",
+});
+check("the same invite cannot be used twice", r.status === 404, `${r.status} ${r.json.message}`);
+
+cookie = gateAdminCookie;
+r = await call("GET", "/users?status=pending");
+check(
+  "the admin sees them in the pending queue",
+  r.json.data?.some((row) => row.id === joinedUserId),
+  `${r.json.data?.length} pending`
+);
+
+r = await call("POST", `/team-invites/members/${joinedUserId}/approve`);
+check("admin approves", r.status === 200 && r.json.data?.status === "active", `${r.status} ${r.json.message}`);
+
+cookie = "";
+r = await call("POST", "/auth/login", { email: joinEmail, password: "Passw0rd123" });
+check("and now they can sign in", r.status === 200, `${r.status} ${r.json.message}`);
+check("as operations", r.json.data?.user?.role === "operations", r.json.data?.user?.role);
+
+// Approving twice is not a thing - they are no longer pending.
+cookie = gateAdminCookie;
+r = await call("POST", `/team-invites/members/${joinedUserId}/approve`);
+check("approving an already-approved member is refused", r.status === 404, `${r.status}`);
+
+// Turning somebody down.
+const rejectEmail = `reject${stamp}@agencio.test`;
+r = await call("POST", "/team-invites", { email: rejectEmail });
+const rejectToken = r.json.data?.join_url?.split("/join/")[1];
+
+cookie = "";
+r = await call("POST", `/join/${rejectToken}/accept`, {
+  full_name: "Not Wanted",
+  password: "Passw0rd123",
+});
+const rejectedId = r.json.data?.id;
+
+cookie = gateAdminCookie;
+r = await call("POST", `/team-invites/members/${rejectedId}/reject`, { reason: "not hiring" });
+check("admin turns a request down", r.status === 200, `${r.status} ${r.json.message}`);
+
+cookie = "";
+r = await call("POST", "/auth/login", { email: rejectEmail, password: "Passw0rd123" });
+check("a rejected person cannot sign in", r.status === 401, `${r.status}`);
+
+// Revoking one that was never used.
+cookie = gateAdminCookie;
+r = await call("POST", "/team-invites", { email: `revoke${stamp}@agencio.test` });
+const revokeToken = r.json.data?.join_url?.split("/join/")[1];
+const revokeId = r.json.data?.invite?.id;
+r = await call("DELETE", `/team-invites/${revokeId}`);
+check("an unused invite can be revoked", r.status === 200, `${r.status} ${r.json.message}`);
+
+cookie = "";
+r = await call("GET", `/join/${revokeToken}`);
+check("and the link stops working immediately", r.status === 404, `${r.status}`);
+
+// A used invite is not revocable - the account exists, so suspending it is the
+// action, and offering revoke would imply it undoes something.
+cookie = gateAdminCookie;
+r = await call("DELETE", `/team-invites/${inviteId}`);
+check("a used invite cannot be revoked", r.status === 409, `${r.status} ${r.json.message}`);
+
+// Inviting somebody who is already on the team.
+r = await call("POST", "/team-invites", { email: joinEmail });
+check("cannot invite an existing member", r.status === 409, `${r.status} ${r.json.message}`);
+
+// Only admin decides who gets in.
+cookie = roleCookies.project_manager;
+r = await call("POST", "/team-invites", { email: `pm${stamp}@agencio.test` });
+check("a project manager cannot send invites", r.status === 403, `${r.status}`);
+
+cookie = adminCookie;
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

@@ -25,10 +25,17 @@ const PUBLIC_USER_FIELDS = {
 } as const;
 
 // Everyone in the caller's agency.
-const getAllUsers = async (user: IRequestUser, options: ListOptions = {}) => {
+const getAllUsers = async (
+    user: IRequestUser,
+    filters: { status?: UserStatus } = {},
+    options: ListOptions = {}
+) => {
     const where: Prisma.UserWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
+        // Unfiltered still means everybody, pending included - the team screen
+        // shows them so nobody is invisible while they wait.
+        ...(filters.status ? { status: filters.status } : {}),
         ...(options.search
             ? {
                 OR: [

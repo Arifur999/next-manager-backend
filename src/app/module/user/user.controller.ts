@@ -1,14 +1,27 @@
 import { Request, Response } from "express";
 import status from "http-status";
+import { UserStatus } from "../../../generated/prisma/enums.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { UserService } from "./user.service.js";
 
+const parseFilters = (query: Record<string, unknown>) => ({
+    status:
+        typeof query.status === "string" && query.status in UserStatus
+            ? (query.status as UserStatus)
+            : undefined,
+});
+
 const getAllUsers = catchAsync(async (req: Request, res: Response) => {
-    const options = parseListOptions(req.query as Record<string, unknown>);
-    const { rows, total } = await UserService.getAllUsers(req.user as IRequestUser, options);
+    const query = req.query as Record<string, unknown>;
+    const options = parseListOptions(query);
+    const { rows, total } = await UserService.getAllUsers(
+        req.user as IRequestUser,
+        parseFilters(query),
+        options
+    );
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

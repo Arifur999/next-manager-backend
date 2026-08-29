@@ -28,6 +28,7 @@ model Organization {
   projects  Project[]
   accounts  Account[]
   subscription Subscription?
+  invites   TeamInvite[]
 
   @@map("organizations")
 }
@@ -111,4 +112,43 @@ model PasswordResetToken {
   /// The nightly sweep for expired rows.
   @@index([expires_at])
   @@map("password_reset_tokens")
+}
+
+/// An invitation to join a company as an operations member.
+///
+/// Shaped exactly like PasswordResetToken, because it is the same kind of
+/// thing: a one-time credential that arrives out of band. The token is stored
+/// hashed for the same reason - an invite table read from a backup would
+/// otherwise be a set of working keys into live companies.
+///
+/// Bound to one email address. The join form asks for a name and a password
+/// and never for an email, so a link that leaks cannot be used to create an
+/// account under somebody else's address.
+///
+/// The role is stored but not chosen by the person accepting: every invite is
+/// for `operations`. Sales and project managers are created directly by an
+/// admin, who is deciding to hand out that authority rather than emailing it.
+model TeamInvite {
+  id              String    @id @default(uuid())
+  organization_id String
+  email           String
+  role            Role      @default(operations)
+  /// SHA-256 of the token in the link. Unique so a lookup is one index hit.
+  token_hash      String    @unique
+  expires_at      DateTime
+  /// Set when the account is created from it. Single-use: a link that keeps
+  /// working is a link that can be replayed out of an inbox months later.
+  used_at         DateTime?
+  /// Set when an admin revokes it before it was used.
+  revoked_at      DateTime?
+  created_by      String?
+  created_at      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  /// The outstanding-invites list.
+  @@index([organization_id, used_at])
+  /// Refusing a second invite to an address that already has one live.
+  @@index([organization_id, email])
+  @@map("team_invites")
 }

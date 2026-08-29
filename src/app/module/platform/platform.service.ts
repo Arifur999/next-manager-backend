@@ -3,6 +3,7 @@ import { Role, SubscriptionStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { seedLeadSources } from "../../shared/defaultLeadSources.js";
 import { passwordUtils } from "../../utils/password.js";
 import {
     ICreateCompanyPayload,
@@ -314,6 +315,8 @@ const createCompany = async (payload: ICreateCompanyPayload) => {
         const organization = await tx.organization.create({
             data: { name: payload.name, email: payload.email ?? payload.admin_email },
         });
+
+        await seedLeadSources(tx, organization.id);
 
         const admin = await tx.user.create({
             data: {

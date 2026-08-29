@@ -6,6 +6,7 @@ import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { passwordResetMail, sendMail } from "../../lib/mailer.js";
 import { prisma } from "../../lib/prisma.js";
+import { seedLeadSources } from "../../shared/defaultLeadSources.js";
 import { jwtUtils } from "../../utils/jwt.js";
 import { passwordUtils } from "../../utils/password.js";
 import {
@@ -75,6 +76,8 @@ const register = async (payload: IRegisterPayload) => {
                 email: payload.email,
             },
         });
+
+        await seedLeadSources(tx, organization.id);
 
         return tx.user.create({
             data: {

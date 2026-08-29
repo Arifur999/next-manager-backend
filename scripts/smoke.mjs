@@ -1440,5 +1440,128 @@ check("a project manager cannot send invites", r.status === 403, `${r.status}`);
 
 cookie = adminCookie;
 
+// ---------------------------------------------------------------------------
+// Where the work came from, and where the client's material lives.
+// ---------------------------------------------------------------------------
+
+cookie = roleCookies.sales;
+r = await call("GET", "/lead-sources");
+const seeded = r.json.data ?? [];
+check(
+  "every company starts with the common marketplaces",
+  r.status === 200 && seeded.some((row) => row.name === "Upwork"),
+  seeded.map((row) => row.name).join(", ")
+);
+
+const upwork = seeded.find((row) => row.name === "Upwork");
+
+// The whole reason this is a reference and not free text.
+r = await call("POST", "/lead-sources", { name: "upwork" });
+check(
+  "a differently-cased duplicate is refused, not created beside it",
+  r.status === 409,
+  `${r.status} ${r.json.message}`
+);
+
+r = await call("POST", "/leads", {
+  name: "Marketplace Lead",
+  stage: "new",
+  estimated_value_usd: 4000,
+  source_id: upwork?.id,
+});
+const sourcedLead = r.json.data?.id;
+check("a lead records where it came from", r.status === 201, `${r.status} ${r.json.message}`);
+
+r = await call("PATCH", `/leads/${sourcedLead}`, { stage: "won" });
+check("and it can be won", r.status === 200, `${r.status} ${r.json.message}`);
+
+cookie = adminCookie;
+r = await call("GET", `/kpi/sales?${kpiRange}`);
+const upworkRow = r.json.data?.by_source?.find((row) => row.name === "Upwork");
+check(
+  "the sales scope groups deals by marketplace",
+  Array.isArray(r.json.data?.by_source) && upworkRow !== undefined,
+  JSON.stringify(r.json.data?.by_source?.map((row) => row.name))
+);
+check(
+  "with the won count and value against it",
+  upworkRow?.won >= 1 && upworkRow?.won_value_usd >= 4000,
+  JSON.stringify(upworkRow)
+);
+check(
+  "an untried marketplace has no win rate rather than 0%",
+  r.json.data.by_source.every((row) => row.won + row.lost > 0 || row.win_rate_pct === null),
+  JSON.stringify(r.json.data.by_source.map((row) => [row.name, row.win_rate_pct]))
+);
+
+// Deleting a source that deals point at would erase where they came from.
+cookie = roleCookies.sales;
+r = await call("POST", "/lead-sources", { name: "Never Used" });
+const unusedSource = r.json.data?.id;
+check("a new marketplace can be added", r.status === 201, `${r.status} ${r.json.message}`);
+
+cookie = adminCookie;
+r = await call("DELETE", `/lead-sources/${upwork?.id}`);
+check(
+  "a marketplace with deals against it cannot be deleted",
+  r.status === 409,
+  `${r.status} ${r.json.message}`
+);
+check(
+  "and the refusal says to turn it off instead",
+  /turn it off/i.test(r.json.message ?? ""),
+  r.json.message
+);
+
+r = await call("DELETE", `/lead-sources/${unusedSource}`);
+check("an unused one can be", r.status === 200, `${r.status} ${r.json.message}`);
+
+// ---- client links ----
+cookie = roleCookies.sales;
+r = await call("POST", "/client-links", {
+  client_id: clientId,
+  label: "Brand folder",
+  url: "https://drive.example.com/acme",
+  notes: "logos and fonts",
+});
+const linkId = r.json.data?.id;
+check("sales stores a link against a client", r.status === 201, `${r.status} ${r.json.message}`);
+
+r = await call("POST", "/client-links", {
+  client_id: clientId,
+  label: "Sneaky",
+  url: "javascript:alert(1)",
+});
+check(
+  "a javascript: URL is refused before it can be stored",
+  r.status === 400,
+  `${r.status} ${r.json.message}`
+);
+
+r = await call("GET", `/client-links?client_id=${clientId}`);
+check(
+  "and it comes back on the client",
+  r.json.data?.some((row) => row.id === linkId),
+  `${r.json.data?.length} links`
+);
+
+// Operations reads the links of clients it works with, and no others.
+cookie = opsCookie;
+r = await call("GET", `/client-links?client_id=${clientId}`);
+check(
+  "operations can open the links for a client it works with",
+  r.status === 200 && r.json.data?.length === 1,
+  `${r.status} ${r.json.data?.length}`
+);
+
+r = await call("POST", "/client-links", {
+  client_id: clientId,
+  label: "Ops added",
+  url: "https://example.com/x",
+});
+check("but does not curate them", r.status === 403, `${r.status}`);
+
+cookie = adminCookie;
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

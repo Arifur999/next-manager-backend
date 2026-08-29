@@ -6,7 +6,10 @@ export const createLeadZodSchema = z.object({
     company: z.string("Company must be string").optional(),
     email: z.email("Enter a valid email address").optional().or(z.literal("")),
     phone: z.string("Phone must be string").optional(),
-    source: z.string("Source must be string").optional(),
+    // A reference now, not free text - see the LeadSource model for why.
+    // Null is allowed and means nobody said where it came from, which is a
+    // real answer and not the same as "Direct".
+    source_id: z.uuid("source_id must be a valid id").optional().nullable(),
     stage: z.enum(LeadStage, "Choose a valid stage").optional(),
     // Estimates are always USD - that is the currency the agency bills in.
     estimated_value_usd: z.number("Estimated value must be a number").nonnegative().optional(),

@@ -282,6 +282,52 @@ refused(
     }, a.cookie)
 );
 
+// The references added since this suite was written. Each is a new way to
+// write across a tenant line, and a foreign key stops none of them.
+const bSource = (await call("POST", "/lead-sources", { name: "B Marketplace" }, b.cookie)).json
+    .data as { id: string };
+const bLink = (
+    await call(
+        "POST",
+        "/client-links",
+        { client_id: b.client.id, label: "B Drive", url: "https://example.com/b" },
+        b.cookie
+    )
+).json.data as { id: string };
+
+refused(
+    "lead tagged with B's marketplace",
+    await call("POST", "/leads", { name: "Tagged", stage: "new", source_id: bSource.id }, a.cookie)
+);
+
+refused(
+    "link attached to B's client",
+    await call(
+        "POST",
+        "/client-links",
+        { client_id: b.client.id, label: "Stolen", url: "https://example.com/stolen" },
+        a.cookie
+    )
+);
+
+refused(
+    "edit B's link",
+    await call("PATCH", `/client-links/${bLink.id}`, { label: "Owned" }, a.cookie)
+);
+refused("delete B's link", await call("DELETE", `/client-links/${bLink.id}`, undefined, a.cookie));
+refused(
+    "edit B's marketplace",
+    await call("PATCH", `/lead-sources/${bSource.id}`, { name: "Owned" }, a.cookie)
+);
+
+// A list endpoint cannot 404, so this one is checked by what comes back.
+const linkList = await call("GET", `/client-links?client_id=${b.client.id}`, undefined, a.cookie);
+ok(
+    "A's link list carries none of B's",
+    Array.isArray(linkList.json.data) && (linkList.json.data as unknown[]).length === 0,
+    JSON.stringify(linkList.json.data)
+);
+
 console.log("\n--- A tries to MODIFY B's records ---");
 refused("edit B's client", await call("PATCH", `/clients/${b.client.id}`, { name: "Owned" }, a.cookie));
 refused("edit B's project", await call("PATCH", `/projects/${b.project.id}`, { name: "Owned" }, a.cookie));

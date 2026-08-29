@@ -21,12 +21,38 @@ model Client {
   invoices     Invoice[]
   credentials  Credential[]
   leads        Lead[]
+  links        ClientLink[]
 
   @@index([organization_id])
   @@index([organization_id, status])
   /// The clients list, in the order it is shown.
   @@index([organization_id, created_at(sort: Desc)])
   @@map("clients")
+}
+
+/// Where work is landed: Upwork, Fiverr, Freelancer, a referral, direct.
+///
+/// A per-company list rather than an enum, because agencies use different
+/// marketplaces and an enum would mean a migration per customer. Same shape as
+/// ExpenseCategory, which solves the same problem.
+///
+/// Referenced by id rather than kept as free text. "Upwork", "upwork" and
+/// "UpWork" typed on three different days become three marketplaces in a
+/// report that quietly splits the numbers and looks fine.
+model LeadSource {
+  id             String   @id @default(uuid())
+  organization_id String
+  name           String
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  leads        Lead[]
+
+  @@unique([organization_id, name])
+  @@index([organization_id])
+  @@map("lead_sources")
 }
 
 model Lead {
@@ -36,7 +62,9 @@ model Lead {
   company        String    @default("")
   email          String    @default("")
   phone          String    @default("")
-  source         String    @default("")
+  /// Null when nobody said where it came from - which is a real answer and
+  /// not the same as "direct".
+  source_id      String?
   stage          LeadStage @default(new)
   /// What the deal is thought to be worth. Estimates are always USD - that is
   /// the currency the agency actually bills in.
@@ -50,6 +78,7 @@ model Lead {
   updated_at     DateTime  @updatedAt
 
   organization     Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  source           LeadSource?  @relation(fields: [source_id], references: [id], onDelete: SetNull)
   converted_client Client?      @relation(fields: [converted_client_id], references: [id], onDelete: SetNull)
   stage_events     LeadStageEvent[]
 
@@ -57,6 +86,40 @@ model Lead {
   @@index([organization_id, stage])
   /// The pipeline board, most recently touched first.
   @@index([organization_id, updated_at(sort: Desc)])
+  /// "Which marketplace is actually paying" - the sales dashboard groups on
+  /// this, and the FK needs an index regardless.
+  @@index([source_id])
   @@index([converted_client_id])
   @@map("leads")
+}
+
+/// Where a client's work actually lives: a Drive folder, a Figma file, a
+/// staging site.
+///
+/// Links, not uploads. An agency's files are already somewhere - copying them
+/// into this product would mean a second copy to keep in step, a storage bill,
+/// and a place for a client's material to leak from. A pointer is what people
+/// paste into chat anyway.
+///
+/// Nothing here is fetched or previewed server-side. The URL is stored as
+/// given and only ever rendered as a link, which keeps this from becoming a
+/// way to make the server issue requests on somebody else's behalf.
+model ClientLink {
+  id             String    @id @default(uuid())
+  organization_id String
+  client_id      String
+  label          String
+  url            String
+  notes          String    @default("")
+  deleted_at     DateTime?
+  created_by     String?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  client Client @relation(fields: [client_id], references: [id], onDelete: Cascade)
+
+  @@index([organization_id])
+  /// The client detail page: one client, newest first.
+  @@index([client_id, created_at(sort: Desc)])
+  @@map("client_links")
 }

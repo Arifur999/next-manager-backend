@@ -29,6 +29,7 @@ model Organization {
   accounts  Account[]
   subscription Subscription?
   invites   TeamInvite[]
+  lead_sources LeadSource[]
 
   @@map("organizations")
 }

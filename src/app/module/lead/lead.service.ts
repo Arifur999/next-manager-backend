@@ -64,8 +64,35 @@ const getPipeline = async (user: IRequestUser, options: ListOptions = {}) => {
     };
 };
 
+/**
+ * A source belongs to one company.
+ *
+ * The foreign key proves the row exists and says nothing about who owns it, so
+ * without this a lead could be tagged with another agency's marketplace - and
+ * that agency's dashboard would then be grouping on a row somebody else is
+ * pointing at.
+ */
+const assertSource = async (
+    tx: Prisma.TransactionClient,
+    sourceId: string | null | undefined,
+    user: IRequestUser
+) => {
+    if (!sourceId) return;
+
+    const source = await tx.leadSource.findFirst({
+        where: { id: sourceId, organization_id: user.organizationId },
+        select: { id: true },
+    });
+
+    if (!source) {
+        throw new AppError(status.NOT_FOUND, "Lead source not found");
+    }
+};
+
 const createLead = async (payload: ICreateLeadPayload, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
+        await assertSource(tx, payload.source_id, user);
+
         const lead = await tx.lead.create({
             data: {
                 organization_id: user.organizationId,
@@ -73,7 +100,7 @@ const createLead = async (payload: ICreateLeadPayload, user: IRequestUser) => {
                 company: payload.company ?? "",
                 email: payload.email ?? "",
                 phone: payload.phone ?? "",
-                source: payload.source ?? "",
+                source_id: payload.source_id ?? null,
                 stage: payload.stage,
                 estimated_value_usd: payload.estimated_value_usd ?? 0,
                 notes: payload.notes ?? "",
@@ -104,6 +131,8 @@ const updateLead = async (id: string, payload: IUpdateLeadPayload, user: IReques
         if (!existing) {
             throw new AppError(status.NOT_FOUND, "Lead not found");
         }
+
+        await assertSource(tx, payload.source_id, user);
 
         const updated = await tx.lead.update({ where: { id }, data: payload });
 

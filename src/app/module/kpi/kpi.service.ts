@@ -395,6 +395,76 @@ const salesScope = async (user: IRequestUser, range: Range) => {
         if (days > 0) cycles.push(days);
     }
 
+    /**
+     * Where the work came from.
+     *
+     * Grouped over every lead the company has, not the window: a marketplace's
+     * win rate over one month is three deals, which is noise. The question
+     * "which platform is actually paying" is answered by the whole history, so
+     * that is what this counts.
+     *
+     * Leads with no source are folded into one "not recorded" row rather than
+     * dropped. Hiding them would make the percentages add to 100 while being
+     * computed from a subset, which is exactly the kind of tidy report that
+     * misleads.
+     */
+    const sourceGroups = await prisma.lead.groupBy({
+        by: ["source_id", "stage"],
+        where: { organization_id: user.organizationId, deleted_at: null },
+        _count: { _all: true },
+        _sum: { estimated_value_usd: true },
+    });
+
+    const sourceNames = new Map(
+        (
+            await prisma.leadSource.findMany({
+                where: { organization_id: user.organizationId },
+                select: { id: true, name: true },
+            })
+        ).map((row) => [row.id, row.name])
+    );
+
+    const bySource = new Map<
+        string,
+        { name: string; won: number; lost: number; open: number; won_value_usd: number }
+    >();
+
+    for (const row of sourceGroups) {
+        const key = row.source_id ?? "__none__";
+        const entry = bySource.get(key) ?? {
+            name: row.source_id ? sourceNames.get(row.source_id) ?? "Removed source" : "Not recorded",
+            won: 0,
+            lost: 0,
+            open: 0,
+            won_value_usd: 0,
+        };
+
+        const count = row._count._all;
+
+        if (row.stage === LeadStage.won) {
+            entry.won += count;
+            entry.won_value_usd += num(row._sum.estimated_value_usd);
+        } else if (row.stage === LeadStage.lost) {
+            entry.lost += count;
+        } else {
+            entry.open += count;
+        }
+
+        bySource.set(key, entry);
+    }
+
+    const sourceRows = [...bySource.values()]
+        .map((entry) => ({
+            ...entry,
+            won_value_usd: Math.round(entry.won_value_usd * 100) / 100,
+            // Null rather than zero when nothing has been decided here yet -
+            // an untried marketplace has no win rate, and showing 0% would
+            // read as "we tried and failed".
+            win_rate_pct: winRate(entry.won, entry.lost).value,
+        }))
+        // Most money first: the reader is deciding where to spend the next hour.
+        .sort((a, b) => b.won_value_usd - a.won_value_usd);
+
     const winRateMetric = winRate(wonCount, lostCount);
     const avgDeal = averageDealSize(wonValueUsd, wonCount);
     const cycle = salesCycleDays(cycles);
@@ -425,6 +495,7 @@ const salesScope = async (user: IRequestUser, range: Range) => {
             average_deal_size_usd: avgDeal,
             sales_cycle_days: cycle,
         },
+        by_source: sourceRows,
         context: {
             open_deals: openLeads._count._all,
             open_pipeline_usd: num(openLeads._sum.estimated_value_usd),

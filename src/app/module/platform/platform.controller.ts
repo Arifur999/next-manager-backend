@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import status from "http-status";
+import { SubscriptionStatus } from "../../../generated/prisma/enums.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
@@ -39,8 +40,17 @@ const updatePlan = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
-const getCompanies = catchAsync(async (_req: Request, res: Response) => {
-    const result = await PlatformService.getCompanies();
+const getCompanies = catchAsync(async (req: Request, res: Response) => {
+    const query = req.query as Record<string, unknown>;
+    const result = await PlatformService.getCompanies({
+        // An unknown status widens the view rather than erroring - a stale
+        // bookmark should still show something.
+        status:
+            typeof query.status === "string" && query.status in SubscriptionStatus
+                ? (query.status as SubscriptionStatus)
+                : undefined,
+        search: typeof query.search === "string" ? query.search.trim() || undefined : undefined,
+    });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

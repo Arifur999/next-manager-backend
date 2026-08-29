@@ -147,8 +147,33 @@ const updatePlan = async (id: string, payload: IUpdatePlanPayload, user: IReques
  * code path that maintains it, and the limit would then be enforced against a
  * figure nobody can reconcile.
  */
-const getCompanies = async () => {
+const getCompanies = async (filters: { status?: SubscriptionStatus; search?: string } = {}) => {
     const organizations = await prisma.organization.findMany({
+        where: {
+            ...(filters.status ? { subscription: { status: filters.status } } : {}),
+            ...(filters.search
+                ? {
+                    OR: [
+                        { name: { contains: filters.search, mode: "insensitive" } },
+                        { email: { contains: filters.search, mode: "insensitive" } },
+                        // Searching by the person you sell to, which is
+                        // usually how an operator remembers a customer.
+                        {
+                            users: {
+                                some: {
+                                    role: Role.admin,
+                                    deleted_at: null,
+                                    OR: [
+                                        { full_name: { contains: filters.search, mode: "insensitive" } },
+                                        { email: { contains: filters.search, mode: "insensitive" } },
+                                    ],
+                                },
+                            },
+                        },
+                    ],
+                }
+                : {}),
+        },
         select: {
             id: true,
             name: true,
@@ -165,6 +190,15 @@ const getCompanies = async () => {
                     plan: { select: PLAN_FIELDS },
                 },
             },
+            // The person this was sold to. Name and email only - not the whole
+            // staff list, which would be every customer's people on one
+            // screen and is not what running a platform needs.
+            users: {
+                where: { role: Role.admin, deleted_at: null },
+                select: { id: true, full_name: true, email: true, status: true },
+                orderBy: { created_at: "asc" },
+                take: 1,
+            },
             // Counts only. Deliberately no clients, no accounts, no payments -
             // see the note at the top of this file.
             _count: { select: { users: true, projects: true } },
@@ -172,12 +206,31 @@ const getCompanies = async () => {
         orderBy: { created_at: "desc" },
     });
 
+    // When each company was last used, from its own activity log. One grouped
+    // query rather than one per company, and it is the closest honest signal
+    // to "are they still here" - a company that has not written a row in six
+    // weeks has probably stopped, whatever their subscription says.
+    const lastSeen = await prisma.activityLog.groupBy({
+        by: ["organization_id"],
+        where: { organization_id: { in: organizations.map((row) => row.id) } },
+        _max: { created_at: true },
+    });
+
+    const lastSeenBy = new Map(
+        lastSeen.map((row) => [row.organization_id, row._max.created_at])
+    );
+
     return organizations.map((organization) => ({
         id: organization.id,
         name: organization.name,
         email: organization.email,
         created_at: organization.created_at,
         subscription: organization.subscription,
+        // Null when nothing has ever been recorded. Different from "a long
+        // time ago", and the screen says so rather than showing a date that
+        // does not exist.
+        last_active_at: lastSeenBy.get(organization.id) ?? null,
+        admin: organization.users[0] ?? null,
         usage: {
             seats_used: organization._count.users,
             projects_used: organization._count.projects,

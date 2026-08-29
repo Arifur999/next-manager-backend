@@ -369,6 +369,18 @@ r = await call("POST", "/projects", {
 const timeProjectId = r.json.data?.id;
 check("create project for timesheet", r.status === 201, `${r.status} ${r.json.message}`);
 
+// A second project, created here while the plan still allows it - the billing
+// section later moves this company onto a one-project tier. Operations is
+// deliberately never added to it, so it stays the thing they cannot reach.
+r = await call("POST", "/projects", {
+  client_id: clientId,
+  name: "Off Limits",
+  code: `OFF-${stamp}`,
+  status: "active",
+});
+const offLimitsProject = r.json.data?.id;
+check("create a second project operations is kept off", r.status === 201, `${r.status} ${r.json.message}`);
+
 const opsCookie = roleCookies.operations;
 const pmCookie = roleCookies.project_manager;
 
@@ -376,6 +388,13 @@ const pmCookie = roleCookies.project_manager;
 // about it.
 cookie = opsCookie;
 const opsUserId = (await call("GET", "/auth/me")).json.data?.id;
+
+// Logging time requires being on the project's team. That is the workflow the
+// visibility scoping creates: a project manager puts somebody on a project,
+// and only then can they book hours to it.
+cookie = adminCookie;
+r = await call("POST", "/project-members", { project_id: timeProjectId, user_id: opsUserId });
+check("operations is added to the timesheet project", r.status === 201, `${r.status} ${r.json.message}`);
 
 cookie = opsCookie;
 r = await call("POST", "/time-entries", {
@@ -1089,49 +1108,37 @@ check("the trail cannot be deleted, even by admin", r.status === 404, `${r.statu
 // login.
 // ---------------------------------------------------------------------------
 
+// Operations was put on the timesheet project earlier and deliberately never
+// on "Off Limits", so it should see exactly the one it is a member of.
 cookie = opsCookie;
-r = await call("GET", "/clients");
+r = await call("GET", "/projects");
 check(
-  "operations sees no client it has no project with",
-  r.status === 200 && Array.isArray(r.json.data) && r.json.data.length === 0,
-  `${r.status} ${r.json.data?.length} clients`
+  "operations sees only the project it is a member of",
+  r.status === 200 && r.json.data?.length === 1 && r.json.data[0].id === timeProjectId,
+  `${r.json.data?.length} projects: ${JSON.stringify(r.json.data?.map((p) => p.name))}`
 );
 
-r = await call("GET", "/projects");
-const opsProjectCount = r.json.data?.length ?? 0;
+r = await call("GET", "/clients");
 check(
-  "and no project it is not a member of",
-  r.status === 200 && opsProjectCount === 0,
-  `${opsProjectCount} projects`
+  "and only the client behind it",
+  r.status === 200 && r.json.data?.length === 1 && r.json.data[0].id === clientId,
+  `${r.json.data?.length} clients`
 );
 
 // Reaching for one directly reads as absent, not forbidden - which of a
-// company's clients exist is not information to hand out.
-r = await call("GET", `/clients/${clientId}`);
-check("a client it cannot see reads as not found", r.status === 404, `${r.status}`);
+// company's projects exist is not information to hand out, and a 403 hands it
+// out as surely as the record would.
+r = await call("GET", `/projects/${offLimitsProject}`);
+check("a project it is not on reads as not found", r.status === 404, `${r.status}`);
 
-r = await call("GET", `/projects/${timeProjectId}`);
-check("and so does a project", r.status === 404, `${r.status}`);
-
-// Put them on the project, and both appear - membership is the key, so being
-// on a team is enough without a task open that week.
+// The wider roles see everything, which is the point of scoping only the one
+// role that does not need it.
 cookie = pmCookie;
-r = await call("POST", "/project-members", { project_id: timeProjectId, user_id: opsUserId });
-check("project manager adds operations to the project", r.status === 201, `${r.status} ${r.json.message}`);
-
-cookie = opsCookie;
 r = await call("GET", "/projects");
 check(
-  "now it sees the project it is on",
-  r.json.data?.length === 1 && r.json.data[0].id === timeProjectId,
+  "the project manager sees them all",
+  r.json.data?.length >= 2,
   `${r.json.data?.length} projects`
-);
-
-r = await call("GET", "/clients");
-check(
-  "and that project's client, and only that one",
-  r.json.data?.length === 1 && r.json.data[0].id === clientId,
-  `${r.json.data?.length} clients`
 );
 
 // The wider roles are untouched: sales needs the whole book to know who the
@@ -1139,6 +1146,27 @@ check(
 cookie = roleCookies.sales;
 r = await call("GET", "/clients");
 check("sales still sees every client", r.json.data?.length > 1, `${r.json.data?.length} clients`);
+
+// Reads and writes must agree. Scoping the list while leaving the write open
+// let operations log hours against a project it could not see, which both
+// contradicts the picker in front of it and pollutes that project's costs.
+cookie = opsCookie;
+r = await call("POST", "/time-entries", {
+  project_id: offLimitsProject,
+  date: "2026-08-24",
+  hours: 2,
+  is_billable: true,
+});
+check(
+  "operations cannot log time against a project it is not on",
+  r.status === 404,
+  `${r.status} ${r.json.message}`
+);
+check(
+  "and the refusal says being added is what unlocks it",
+  /add you to it/i.test(r.json.message ?? ""),
+  r.json.message
+);
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

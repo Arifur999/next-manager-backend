@@ -61,10 +61,33 @@ const assertReferences = async (
 ) => {
     if (payload.project_id) {
         const project = await tx.project.findFirst({
-            where: { id: payload.project_id, organization_id: user.organizationId, deleted_at: null },
+            where: {
+                id: payload.project_id,
+                organization_id: user.organizationId,
+                deleted_at: null,
+                // The same scope the project LIST applies. Without it the read
+                // was scoped and the write was not: operations could not see a
+                // project but could still log hours against it by id, which
+                // both contradicts the picker in front of them and lets anybody
+                // pollute a project's cost figures.
+                ...(user.role === Role.operations
+                    ? { members: { some: { user_id: user.userId } } }
+                    : {}),
+            },
             select: { id: true },
         });
-        if (!project) throw new AppError(status.NOT_FOUND, "Project not found");
+
+        if (!project) {
+            throw new AppError(
+                status.NOT_FOUND,
+                user.role === Role.operations
+                    ? // Says what to do rather than just no. Being on the team
+                      // is the thing that unlocks this, and the person cannot
+                      // add themselves.
+                      "Project not found. Ask a project manager to add you to it."
+                    : "Project not found"
+            );
+        }
     }
 
     if (payload.task_id) {

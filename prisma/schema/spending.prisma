@@ -50,6 +50,7 @@ model Expense {
   @@index([organization_id, date(sort: Desc)])
   @@index([category_id])
   @@index([project_id])
+  @@index([account_id])
   @@map("expenses")
 }
 
@@ -77,6 +78,7 @@ model TeamPayout {
   @@index([organization_id, date(sort: Desc)])
   @@index([user_id])
   @@index([project_id])
+  @@index([account_id])
   @@map("team_payouts")
 }
 
@@ -100,6 +102,7 @@ model OwnerWithdrawal {
 
   @@index([organization_id])
   @@index([organization_id, date(sort: Desc)])
+  @@index([account_id])
   @@map("owner_withdrawals")
 }
 
@@ -145,5 +148,6 @@ model DueTransaction {
   @@index([organization_id])
   @@index([due_person_id])
   @@index([organization_id, date(sort: Desc)])
+  @@index([account_id])
   @@map("due_transactions")
 }

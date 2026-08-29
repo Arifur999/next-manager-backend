@@ -118,6 +118,10 @@ model Payment {
   @@index([client_id])
   @@index([project_id])
   @@index([invoice_id])
+  /// The account FK. Unindexed, every attempt to remove an account
+  /// scans this whole table to check the constraint, and the join on a list
+  /// screen has nothing to walk either.
+  @@index([account_id])
   @@map("payments")
 }
 
@@ -151,6 +155,9 @@ model ExchangeTransaction {
 
   @@index([organization_id])
   @@index([organization_id, date(sort: Desc)])
+  /// Both sides of an exchange point at an account.
+  @@index([from_account_id])
+  @@index([to_account_id])
   @@map("exchange_transactions")
 }
 

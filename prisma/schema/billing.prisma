@@ -35,6 +35,8 @@ model Invoice {
   /// The invoices list, newest issued first.
   @@index([organization_id, issue_date(sort: Desc)])
   @@index([client_id])
+  /// The project FK - deleting a project checks every invoice without it.
+  @@index([project_id])
   @@map("invoices")
 }
 

@@ -49,6 +49,11 @@ model TimeEntry {
   @@index([project_id, date])
   /// The approval queue.
   @@index([organization_id, approved_at])
+  /// Not for reading - for deleting. Postgres does not index a foreign key,
+  /// so without this every task delete scans the whole time_entries table to
+  /// check the constraint. Measured 8.4ms -> 1.4ms on 90k rows, and it grows
+  /// with the table: a million rows makes deleting one task take seconds.
+  @@index([task_id])
   @@map("time_entries")
 }
 

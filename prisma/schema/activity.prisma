@@ -19,5 +19,7 @@ model ActivityLog {
   user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
 
   @@index([organization_id, created_at(sort: Desc)])
+  /// The FK. Without it, removing a person scans every activity row.
+  @@index([user_id])
   @@map("activity_logs")
 }

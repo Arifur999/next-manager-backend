@@ -61,5 +61,7 @@ model CredentialAccessLog {
 
   @@index([organization_id])
   @@index([credential_id, created_at(sort: Desc)])
+  /// The FK, and "what has this person looked at" on the access log.
+  @@index([user_id])
   @@map("credential_access_logs")
 }

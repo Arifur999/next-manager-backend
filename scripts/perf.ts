@@ -8,6 +8,7 @@
  *
  * Run:  npm run perf seed      load the volume
  *       npm run perf measure   time the queries that matter
+ *       npm run perf fks       foreign keys with no index (no seed needed)
  *       npm run perf drop      put the database back
  */
 
@@ -266,12 +267,54 @@ const measure = async () => {
     }
 };
 
+/**
+ * Foreign keys the database has no index for.
+ *
+ * Postgres indexes PRIMARY KEY and UNIQUE on its own and says nothing about
+ * foreign keys, so this gap opens silently every time a relation is added.
+ * Asked of the database rather than read off the schema, because the schema is
+ * where the omission was invisible in the first place.
+ */
+const unindexedForeignKeys = async () => {
+    const rows = (await prisma.$queryRawUnsafe(`
+      SELECT
+        c.conrelid::regclass::text  AS child_table,
+        a.attname                   AS fk_column,
+        c.confrelid::regclass::text AS parent_table
+      FROM pg_constraint c
+      JOIN LATERAL unnest(c.conkey) AS k(attnum) ON true
+      JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+      WHERE c.contype = 'f'
+        AND NOT EXISTS (
+          SELECT 1 FROM pg_index i
+          WHERE i.indrelid = c.conrelid AND i.indkey[0] = k.attnum
+        )
+      ORDER BY 1, 2;
+    `)) as { child_table: string; fk_column: string; parent_table: string }[];
+
+    if (rows.length === 0) {
+        console.log("Every foreign key has an index.");
+        return;
+    }
+
+    console.log(`${rows.length} foreign key(s) with no index. Each one makes a delete on the`);
+    console.log("parent scan this whole table, and joins on it have nothing to walk:\n");
+
+    for (const row of rows) {
+        console.log(
+            `  ${row.child_table.padEnd(26)} ${row.fk_column.padEnd(22)} -> ${row.parent_table}`
+        );
+    }
+};
+
 const command = process.argv[2];
 
 if (command === "drop") {
     await drop();
 } else if (command === "measure") {
     await measure();
+} else if (command === "fks") {
+    await unindexedForeignKeys();
 } else {
     await seed();
 }

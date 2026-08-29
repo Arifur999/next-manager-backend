@@ -19,7 +19,8 @@
     "test": "tsx --test \"src/**/*.test.ts\"",
     "smoke": "node -r dotenv/config scripts/smoke.mjs",
     "perf": "tsx -r dotenv/config scripts/perf.ts",
-    "test:reset": "tsx -r dotenv/config scripts/resetFlow.ts"
+    "test:reset": "tsx -r dotenv/config scripts/resetFlow.ts",
+    "test:mail": "tsx -r dotenv/config scripts/mailTest.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.3.0",

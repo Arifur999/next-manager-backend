@@ -24,6 +24,8 @@ model Client {
 
   @@index([organization_id])
   @@index([organization_id, status])
+  /// The clients list, in the order it is shown.
+  @@index([organization_id, created_at(sort: Desc)])
   @@map("clients")
 }
 
@@ -53,6 +55,8 @@ model Lead {
 
   @@index([organization_id])
   @@index([organization_id, stage])
+  /// The pipeline board, most recently touched first.
+  @@index([organization_id, updated_at(sort: Desc)])
   @@index([converted_client_id])
   @@map("leads")
 }

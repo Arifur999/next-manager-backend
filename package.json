@@ -17,7 +17,8 @@
     "seed": "tsx src/app/utils/seed.ts",
     "lint": "eslint . --ext .ts",
     "test": "tsx --test \"src/**/*.test.ts\"",
-    "smoke": "node -r dotenv/config scripts/smoke.mjs"
+    "smoke": "node -r dotenv/config scripts/smoke.mjs",
+    "perf": "tsx -r dotenv/config scripts/perf.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.3.0",

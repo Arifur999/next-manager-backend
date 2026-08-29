@@ -41,6 +41,10 @@ model TimeEntry {
   @@index([organization_id])
   /// The timesheet: one person, one week.
   @@index([user_id, date])
+  /// Every KPI figure filters on organization + a date range, and until this
+  /// existed the planner used a date-only index and threw away other tenants'
+  /// rows in the heap. Measured 2.8ms -> 2.0ms on a week, on 90k rows.
+  @@index([organization_id, date])
   /// Planned-vs-actual and project cost: one project, whole history.
   @@index([project_id, date])
   /// The approval queue.

@@ -67,6 +67,8 @@ model User {
   activities         ActivityLog[]
 
   @@index([organization_id])
+  /// The team list, newest first.
+  @@index([organization_id, created_at(sort: Desc)])
   @@index([email])
   @@map("users")
 }

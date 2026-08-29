@@ -32,6 +32,8 @@ model Invoice {
   @@index([organization_id])
   @@index([organization_id, status])
   @@index([organization_id, due_date])
+  /// The invoices list, newest issued first.
+  @@index([organization_id, issue_date(sort: Desc)])
   @@index([client_id])
   @@map("invoices")
 }

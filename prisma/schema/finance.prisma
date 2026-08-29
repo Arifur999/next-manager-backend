@@ -67,6 +67,11 @@ model AccountTransaction {
   account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
 
   @@index([organization_id])
+  /// Balances for a whole agency at once - the accounts screen, the dashboard,
+  /// and the check that runs after every write touching money. The index above
+  /// covers one account; this covers all of them without walking other
+  /// tenants' ledger rows.
+  @@index([organization_id, account_id])
   /// The balance query: one account, everything up to a date.
   @@index([account_id, date])
   /// Finding the ledger rows belonging to a record, e.g. to reverse them.

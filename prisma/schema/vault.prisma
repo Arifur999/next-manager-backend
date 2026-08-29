@@ -37,6 +37,8 @@ model Credential {
   access_log CredentialAccessLog[]
 
   @@index([organization_id])
+  /// The vault list, newest first.
+  @@index([organization_id, created_at(sort: Desc)])
   @@index([client_id])
   @@index([project_id])
   @@map("credentials")

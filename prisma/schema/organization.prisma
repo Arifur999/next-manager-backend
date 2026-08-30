@@ -30,6 +30,7 @@ model Organization {
   subscription Subscription?
   invites   TeamInvite[]
   lead_sources LeadSource[]
+  departments  Department[]
 
   @@map("organizations")
 }
@@ -56,12 +57,17 @@ model User {
   /// role allows", so an existing user never loses access the day permissions
   /// ship.
   permissions    String[]  @default([])
+  /// Null is a real answer: somebody can work here without belonging to a
+  /// department, and forcing one would invent a fact.
+  department_id  String?
   deleted_at     DateTime?
   deleted_by     String?
   created_at     DateTime  @default(now())
   updated_at     DateTime  @updatedAt
 
   organization       Organization? @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  /// SetNull, never Cascade: removing a department must not remove people.
+  department         Department?   @relation(fields: [department_id], references: [id], onDelete: SetNull)
   assigned_tasks     Task[]              @relation("TaskAssignee")
   project_memberships ProjectMember[]
   payouts            TeamPayout[]
@@ -75,6 +81,8 @@ model User {
   announcement_reads AnnouncementRead[]
 
   @@index([organization_id])
+  /// The FK, and the department filter on the team list.
+  @@index([department_id])
   /// The team list, newest first.
   @@index([organization_id, created_at(sort: Desc)])
   @@index([email])
@@ -154,4 +162,31 @@ model TeamInvite {
   /// Refusing a second invite to an address that already has one live.
   @@index([organization_id, email])
   @@map("team_invites")
+}
+
+/// A team inside the agency - Design, Development, Marketing.
+///
+/// A second axis to role, not a replacement for it. Role says what somebody may
+/// do; a department says which part of the business they belong to, and that is
+/// the cut every "how is Design doing" question needs and no role can answer.
+///
+/// Curated per agency and never deleted while people point at it, the same rule
+/// LeadSource follows: switch it off instead, so the history of who was in it
+/// stays readable.
+model Department {
+  id             String   @id @default(uuid())
+  organization_id String
+  name           String
+  description    String   @default("")
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  members      User[]
+
+  /// Department names are unique per agency, not globally.
+  @@unique([organization_id, name])
+  @@index([organization_id])
+  @@map("departments")
 }

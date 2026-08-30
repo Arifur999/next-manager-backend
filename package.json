@@ -11,6 +11,7 @@
     "build": "tsc",
     "dev": "tsx watch src/server.ts",
     "migrate": "prisma migrate dev",
+    "migrate:apply": "node -r dotenv/config scripts/migrate.mjs",
     "generate": "prisma generate",
     "studio": "prisma studio",
     "push": "prisma db push",

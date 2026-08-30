@@ -5,6 +5,7 @@ import { AuthRoutes } from "../module/auth/auth.route.js";
 import { ClientLinkRoutes } from "../module/clientLink/clientLink.route.js";
 import { ClientRoutes } from "../module/client/client.route.js";
 import { DashboardRoutes } from "../module/dashboard/dashboard.route.js";
+import { DepartmentRoutes } from "../module/department/department.route.js";
 import { DuePaymentRoutes } from "../module/duePayment/duePayment.route.js";
 import { ExchangeRoutes } from "../module/exchange/exchange.route.js";
 import { ExpenseRoutes } from "../module/expense/expense.route.js";
@@ -39,6 +40,7 @@ const router = Router();
 router.use("/auth", AuthRoutes);
 router.use("/dashboard", DashboardRoutes);
 router.use("/users", UserRoutes);
+router.use("/departments", DepartmentRoutes);
 router.use("/team-invites", InviteRoutes);
 // Public: whoever is opening the link has no account yet.
 router.use("/join", PublicInviteRoutes);

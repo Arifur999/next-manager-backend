@@ -41,15 +41,31 @@ const assertReferences = async (
     }
 };
 
-const getAllPayouts = async (user: IRequestUser, options: ListOptions = {}) => {
+const getAllPayouts = async (
+    user: IRequestUser,
+    options: ListOptions = {},
+    filters: { departmentId?: string } = {}
+) => {
     const where: Prisma.TeamPayoutWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
         ...dateRangeWhere(options),
+        // Through the person, not stored on the payout. A payout belongs to
+        // whoever was paid; which team they are in is a fact about them and
+        // moves when they move, which is what "what does Design cost" means.
+        ...(filters.departmentId ? { user: { department_id: filters.departmentId } } : {}),
     };
 
     const include = {
-        user: { select: { id: true, full_name: true, email: true, avatar_url: true } },
+        user: {
+            select: {
+                id: true,
+                full_name: true,
+                email: true,
+                avatar_url: true,
+                department: { select: { id: true, name: true } },
+            },
+        },
         project: { select: { id: true, name: true, code: true } },
         account: { select: { id: true, name: true, currency: true } },
     };

@@ -320,6 +320,33 @@ refused(
     await call("PATCH", `/lead-sources/${bSource.id}`, { name: "Owned" }, a.cookie)
 );
 
+// Departments. A department is a reporting dimension, so filing one agency's
+// people under another agency's team would quietly put somebody else's crew
+// in every report cut by department.
+const bDepartment = (await call("POST", "/departments", { name: "B Design" }, b.cookie)).json
+    .data as { id: string };
+
+refused(
+    "member filed under B's department",
+    await call("PATCH", `/users/${a.member.id}`, { department_id: bDepartment.id }, a.cookie)
+);
+refused(
+    "edit B's department",
+    await call("PATCH", `/departments/${bDepartment.id}`, { name: "Owned" }, a.cookie)
+);
+refused(
+    "delete B's department",
+    await call("DELETE", `/departments/${bDepartment.id}`, undefined, a.cookie)
+);
+
+const departmentList = await call("GET", "/departments", undefined, a.cookie);
+ok(
+    "A's department list carries none of B's",
+    Array.isArray(departmentList.json.data) &&
+        !(departmentList.json.data as { id: string }[]).some((row) => row.id === bDepartment.id),
+    JSON.stringify((departmentList.json.data as { name: string }[])?.map((row) => row.name))
+);
+
 // A list endpoint cannot 404, so this one is checked by what comes back.
 const linkList = await call("GET", `/client-links?client_id=${b.client.id}`, undefined, a.cookie);
 ok(

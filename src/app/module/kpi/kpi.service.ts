@@ -640,6 +640,89 @@ const deliveryScope = async (user: IRequestUser, range: Range) => {
         baseline_hours: num(project.baseline_hours),
     }));
 
+    // Hours and cost per department, over the window.
+    //
+    // Grouped through the person rather than stored on the row: a department
+    // is a fact about somebody, and it moves when they move. Grouping in two
+    // steps because neither timeEntry nor teamPayout can group by a field on
+    // a relation.
+    //
+    // People with no department get a row of their own rather than being
+    // dropped. Silently omitting them would make the departments add up to
+    // less than the agency and give no clue why.
+    const [departments, hoursByUser, payoutsByUser] = await Promise.all([
+        prisma.department.findMany({
+            where: { organization_id: user.organizationId },
+            select: {
+                id: true,
+                name: true,
+                members: { where: { deleted_at: null }, select: { id: true } },
+            },
+            orderBy: { name: "asc" },
+        }),
+        prisma.timeEntry.groupBy({
+            by: ["user_id"],
+            where: {
+                organization_id: user.organizationId,
+                deleted_at: null,
+                date: { gte: range.from, lte: range.to },
+            },
+            _sum: { hours: true },
+        }),
+        prisma.teamPayout.groupBy({
+            by: ["user_id"],
+            where: {
+                organization_id: user.organizationId,
+                deleted_at: null,
+                date: { gte: range.from, lte: range.to },
+            },
+            _sum: { amount_bdt: true },
+        }),
+    ]);
+
+    const hoursOf = new Map(hoursByUser.map((row) => [row.user_id, num(row._sum.hours)]));
+    const paidOf = new Map(payoutsByUser.map((row) => [row.user_id, num(row._sum.amount_bdt)]));
+    const placed = new Set<string>();
+
+    const departmentRows = departments.map((department) => {
+        let hoursLogged = 0;
+        let paidBdt = 0;
+
+        for (const member of department.members) {
+            placed.add(member.id);
+            hoursLogged += hoursOf.get(member.id) ?? 0;
+            paidBdt += paidOf.get(member.id) ?? 0;
+        }
+
+        return {
+            id: department.id as string | null,
+            name: department.name,
+            people: department.members.length,
+            hours_logged: hoursLogged,
+            paid_bdt: paidBdt,
+        };
+    });
+
+    const looseIds = new Set([...hoursOf.keys(), ...paidOf.keys()].filter((id) => !placed.has(id)));
+
+    if (looseIds.size > 0) {
+        let hoursLogged = 0;
+        let paidBdt = 0;
+
+        for (const id of looseIds) {
+            hoursLogged += hoursOf.get(id) ?? 0;
+            paidBdt += paidOf.get(id) ?? 0;
+        }
+
+        departmentRows.push({
+            id: null,
+            name: "No department",
+            people: looseIds.size,
+            hours_logged: hoursLogged,
+            paid_bdt: paidBdt,
+        });
+    }
+
     const available = availableHours(capacity.weeklyHours, range.days);
 
     return {
@@ -663,6 +746,7 @@ const deliveryScope = async (user: IRequestUser, range: Range) => {
             awaiting_acceptance: delivered.filter((milestone) => !milestone.accepted_at).length,
         },
         projects: projectRows,
+        by_department: departmentRows,
         context: {
             available_hours: available,
             logged_hours: hours.total,

@@ -20,6 +20,9 @@ const PUBLIC_USER_FIELDS = {
     status: true,
     email_verified: true,
     permissions: true,
+    // The name travels with the person. A department id alone would make
+    // every screen that lists people fetch the whole list to render one word.
+    department: { select: { id: true, name: true } },
     created_at: true,
     updated_at: true,
 } as const;
@@ -27,7 +30,7 @@ const PUBLIC_USER_FIELDS = {
 // Everyone in the caller's agency.
 const getAllUsers = async (
     user: IRequestUser,
-    filters: { status?: UserStatus } = {},
+    filters: { status?: UserStatus; departmentId?: string } = {},
     options: ListOptions = {}
 ) => {
     const where: Prisma.UserWhereInput = {
@@ -36,6 +39,7 @@ const getAllUsers = async (
         // Unfiltered still means everybody, pending included - the team screen
         // shows them so nobody is invisible while they wait.
         ...(filters.status ? { status: filters.status } : {}),
+        ...(filters.departmentId ? { department_id: filters.departmentId } : {}),
         ...(options.search
             ? {
                 OR: [
@@ -100,6 +104,7 @@ const createUser = async (payload: ICreateUserPayload, user: IRequestUser) => {
     // belong together, and a limit enforced on the way in is a limit two admins
     // can walk past simultaneously.
     await assertSeatAvailable(user.organizationId);
+    await assertOwnDepartment(payload.department_id, user);
 
     return prisma.user.create({
         data: {
@@ -109,6 +114,7 @@ const createUser = async (payload: ICreateUserPayload, user: IRequestUser) => {
             password: await passwordUtils.hashPassword(payload.password),
             role: payload.role,
             permissions: payload.permissions ?? [],
+            department_id: payload.department_id ?? null,
             // The new colleague joins the caller's company, never whatever
             // organization_id a request body might have carried.
             organization_id: user.organizationId,
@@ -150,6 +156,27 @@ const assertNotLastAdmin = async (targetId: string, user: IRequestUser) => {
     }
 };
 
+
+/**
+ * A department id arriving in a request is checked against the caller's own
+ * agency before it is stored.
+ *
+ * The foreign key only proves the row exists. Without this, one agency could
+ * file its people under another agency's department - and every report cut by
+ * department would then quietly include somebody else's team.
+ */
+const assertOwnDepartment = async (departmentId: string | null | undefined, user: IRequestUser) => {
+    if (!departmentId) return;
+
+    const department = await prisma.department.findFirst({
+        where: { id: departmentId, organization_id: user.organizationId },
+        select: { id: true },
+    });
+
+    if (!department) {
+        throw new AppError(status.NOT_FOUND, "Department not found");
+    }
+};
 const updateUser = async (id: string, payload: IUpdateUserPayload, user: IRequestUser) => {
     const existing = await prisma.user.findFirst({
         where: { id, organization_id: user.organizationId, deleted_at: null },
@@ -169,6 +196,8 @@ const updateUser = async (id: string, payload: IUpdateUserPayload, user: IReques
     if (losingAdmin) {
         await assertNotLastAdmin(id, user);
     }
+
+    await assertOwnDepartment(payload.department_id, user);
 
     return prisma.user.update({
         where: { id },

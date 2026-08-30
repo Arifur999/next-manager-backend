@@ -12,6 +12,7 @@ const parseFilters = (query: Record<string, unknown>) => ({
         typeof query.status === "string" && query.status in UserStatus
             ? (query.status as UserStatus)
             : undefined,
+    departmentId: typeof query.department_id === "string" ? query.department_id : undefined,
 });
 
 const getAllUsers = catchAsync(async (req: Request, res: Response) => {

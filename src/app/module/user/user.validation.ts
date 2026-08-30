@@ -15,6 +15,9 @@ export const createUserZodSchema = z.object({
         .regex(/[0-9]/, "Password must contain a number"),
     phone: z.string("Phone must be string").optional(),
     role: z.enum(assignableRoles, "Choose a valid role"),
+    // Nullable on purpose: null is "no department", which is a real answer for
+    // somebody who works across all of them.
+    department_id: z.uuid("department_id must be a valid id").nullable().optional(),
     permissions: z.array(z.string()).optional(),
 });
 

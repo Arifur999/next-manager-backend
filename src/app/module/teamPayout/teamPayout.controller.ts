@@ -8,7 +8,10 @@ import { TeamPayoutService } from "./teamPayout.service.js";
 
 const getAllPayouts = catchAsync(async (req: Request, res: Response) => {
     const options = parseListOptions(req.query as Record<string, unknown>);
-    const { rows, total } = await TeamPayoutService.getAllPayouts(req.user as IRequestUser, options);
+    const query = req.query as Record<string, unknown>;
+    const { rows, total } = await TeamPayoutService.getAllPayouts(req.user as IRequestUser, options, {
+        departmentId: typeof query.department_id === "string" ? query.department_id : undefined,
+    });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

@@ -2388,5 +2388,119 @@ check("but does not curate them", r.status === 403, `${r.status}`);
 
 cookie = adminCookie;
 
+// ---------------------------------------------------------------------------
+// Departments: a second axis to role.
+// ---------------------------------------------------------------------------
+//
+// Role says what somebody may do; a department says which part of the business
+// they are. No arrangement of roles answers the second - an agency's designers
+// and developers are all `operations`.
+
+cookie = adminCookie;
+
+r = await call("POST", "/departments", { name: "Design", description: "Everything visual" });
+const designId = r.json.data?.id;
+check("admin creates a department", r.status === 201, `${r.status} ${r.json.message}`);
+
+r = await call("POST", "/departments", { name: "design" });
+check(
+  "a differently-cased duplicate is refused, not created beside it",
+  r.status === 409,
+  `${r.status} ${r.json.message}`
+);
+
+r = await call("POST", "/departments", { name: "Development" });
+const devId = r.json.data?.id;
+check("a second one can be added", r.status === 201, `${r.status}`);
+
+r = await call("GET", "/departments");
+check(
+  "the list comes back with how many people are in each",
+  r.status === 200 && (r.json.data ?? []).every((d) => typeof d._count?.members === "number"),
+  JSON.stringify((r.json.data ?? []).map((d) => [d.name, d._count?.members]))
+);
+
+// Putting somebody in one.
+r = await call("PATCH", `/users/${opsUserId}`, { department_id: designId });
+check("a member can be put in a department", r.status === 200, `${r.status} ${r.json.message}`);
+check(
+  "and the name travels with them, not just the id",
+  r.json.data?.department?.name === "Design",
+  JSON.stringify(r.json.data?.department)
+);
+
+r = await call("GET", `/users?department_id=${designId}`);
+check(
+  "the team list can be filtered to one department",
+  (r.json.data ?? []).length >= 1 &&
+    (r.json.data ?? []).every((u) => u.department?.id === designId),
+  JSON.stringify((r.json.data ?? []).map((u) => u.department?.name))
+);
+
+r = await call("GET", `/users?department_id=${devId}`);
+check(
+  "and an empty department returns nobody rather than everybody",
+  (r.json.data ?? []).length === 0,
+  `${(r.json.data ?? []).length} returned`
+);
+
+// A foreign key proves existence, not ownership.
+r = await call("PATCH", `/users/${opsUserId}`, {
+  department_id: "00000000-0000-4000-8000-000000000000",
+});
+check("a department that does not exist is refused", r.status === 404, `${r.status}`);
+
+// The delete guard: people in it means turn it off, not delete it.
+r = await call("DELETE", `/departments/${designId}`);
+check(
+  "a department with people in it cannot be deleted",
+  r.status === 409,
+  `${r.status} ${r.json.message}`
+);
+check(
+  "and the refusal says to move them or turn it off",
+  /turn it off|move them/i.test(r.json.message ?? ""),
+  r.json.message
+);
+
+r = await call("DELETE", `/departments/${devId}`);
+check("an empty one can be", r.status === 200, `${r.status} ${r.json.message}`);
+
+r = await call("PATCH", `/departments/${designId}`, { is_active: false });
+check("and a used one can be turned off instead", r.status === 200, `${r.status}`);
+r = await call("PATCH", `/departments/${designId}`, { is_active: true });
+
+// Only admin shapes the list - it is a reporting dimension, and one somebody
+// renames mid-quarter is one no report can be compared across.
+cookie = pmCookie;
+r = await call("GET", "/departments");
+check("a project manager can read the list", r.status === 200, `${r.status}`);
+r = await call("POST", "/departments", { name: "Sneaky" });
+check("but cannot add to it", r.status === 403, `${r.status}`);
+
+// The report slices this exists for.
+cookie = adminCookie;
+r = await call("GET", "/kpi/delivery");
+const byDepartment = r.json.data?.by_department ?? [];
+check("the delivery scope groups by department", Array.isArray(byDepartment), typeof byDepartment);
+check(
+  "with hours and cost against each",
+  byDepartment.every(
+    (row) => typeof row.hours_logged === "number" && typeof row.paid_bdt === "number"
+  ),
+  JSON.stringify(byDepartment.slice(0, 2))
+);
+check(
+  // Dropping them would make the departments add up to less than the agency
+  // with no clue why.
+  "and people in no department are a row, not a silent gap",
+  byDepartment.some((row) => row.id === null) || byDepartment.length === 1,
+  JSON.stringify(byDepartment.map((row) => row.name))
+);
+
+r = await call("GET", `/team-payouts?department_id=${designId}`);
+check("payouts can be filtered by department", r.status === 200, `${r.status}`);
+
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

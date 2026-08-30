@@ -4,9 +4,11 @@ import { env } from "../../../config/env.js";
 import { NotificationEvent, Role, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
+import { sendMail, teamInviteMail } from "../../lib/mailer.js";
 import { prisma } from "../../lib/prisma.js";
 import { assertSeatAvailable } from "../../middleware/checkSubscription.js";
 import { logActivity } from "../../shared/activity.js";
+import { getBrand } from "../../shared/platformSettings.js";
 import { notify } from "../../shared/notify.js";
 import { passwordUtils } from "../../utils/password.js";
 import {
@@ -84,6 +86,8 @@ const createInvite = async (payload: ICreateInvitePayload, user: IRequestUser) =
 
     const token = randomBytes(32).toString("hex");
     const days = payload.expires_in_days ?? DEFAULT_EXPIRY_DAYS;
+    const joinUrl = `${env.FRONTEND_URL.split(",")[0]}/join/${token}`;
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
     const invite = await prisma.teamInvite.create({
         data: {
@@ -91,16 +95,46 @@ const createInvite = async (payload: ICreateInvitePayload, user: IRequestUser) =
             email,
             role: Role.operations,
             token_hash: hashToken(token),
-            expires_at: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
+            expires_at: expiresAt,
             created_by: user.userId,
         },
         select: INVITE_FIELDS,
     });
 
+    // Sent, rather than left for the admin to copy out and deliver by hand.
+    // The platform and agency invites have both emailed since they were
+    // written; this one asked an admin to do the delivery themselves, which
+    // is the same job done worse.
+    //
+    // Outside no transaction to hold open, but the ordering still matters:
+    // the invite exists first, so a mail failure leaves a working link rather
+    // than a sent mail pointing at nothing.
+    const agency = await prisma.organization.findUnique({
+        where: { id: user.organizationId },
+        select: { name: true },
+    });
+
+    const mail = await sendMail({
+        to: email,
+        ...teamInviteMail(
+            joinUrl,
+            expiresAt,
+            agency?.name ?? "the team",
+            user.name,
+            await getBrand()
+        ),
+    });
+
     return {
         invite,
-        // The only time this exists in a response.
-        join_url: `${env.FRONTEND_URL.split(",")[0]}/join/${token}`,
+        // Still returned when the mail goes out. Mail gets filtered, and an
+        // unverified sending domain reaches nobody but the account owner - an
+        // admin with no way to pass the link on is stuck waiting on somebody
+        // else's spam folder.
+        join_url: joinUrl,
+        email: mail.delivered
+            ? { delivered: true as const, reason: null }
+            : { delivered: false as const, reason: mail.reason },
     };
 };
 

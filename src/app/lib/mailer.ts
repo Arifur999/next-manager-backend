@@ -259,6 +259,51 @@ export const agencyInviteMail = (
 };
 
 /**
+ * The invite to join an agency's team.
+ *
+ * Names the agency, because the person receiving it works with several and
+ * "you have been invited to join the team" answers none of the questions they
+ * will have.
+ *
+ * Says approval follows, for the same reason the operator invite does:
+ * somebody who accepts and then cannot sign in is left guessing whether it
+ * worked.
+ */
+export const teamInviteMail = (
+    joinUrl: string,
+    expiresAt: Date,
+    agencyName: string,
+    invitedBy: string,
+    brand: PlatformBrand
+): Omit<Mail, "to"> => {
+    const expires = expiresAt.toUTCString();
+
+    return {
+        subject: `${invitedBy} has invited you to join ${agencyName}`,
+        text: [
+            `${invitedBy} has invited you to the team at ${agencyName}.`,
+            "",
+            `Open this link to set your password: ${joinUrl}`,
+            "",
+            `It works once and expires on ${expires}.`,
+            "After you accept, an admin has to approve you before you can sign in.",
+            "",
+            "If you were not expecting this, ignore it - the link does nothing until it is used.",
+            "",
+            signOff(brand),
+        ].join("\n"),
+        html: `
+        <p>${escapeHtml(invitedBy)} has invited you to the team at ${escapeHtml(agencyName)}.</p>
+        <p><a href="${joinUrl}">Set your password</a></p>
+        <p>It works once and expires on ${escapeHtml(expires)}.</p>
+        <p>After you accept, an admin has to approve you before you can sign in.</p>
+        <p>If you were not expecting this, ignore it - the link does nothing until it is used.</p>
+        <p style="color:#666;font-size:13px">${escapeHtml(signOff(brand))}</p>
+    `,
+    };
+};
+
+/**
  * A platform announcement, emailed.
  *
  * Blank lines become paragraphs and nothing else does. A notice to customers is

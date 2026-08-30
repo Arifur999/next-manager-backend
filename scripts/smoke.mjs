@@ -2147,6 +2147,18 @@ const inviteId = r.json.data?.invite?.id;
 check("admin creates an invite", r.status === 201, `${r.status} ${r.json.message}`);
 check("and gets a link back", typeof joinUrl === "string" && joinUrl.includes("/join/"), joinUrl);
 check(
+  "and the link is emailed rather than left for the admin to deliver",
+  typeof r.json.data?.email?.delivered === "boolean",
+  JSON.stringify(r.json.data?.email)
+);
+check(
+  // Mail gets filtered, and an unverified domain reaches nobody but the
+  // account owner. An admin with no way to pass the link on is stuck.
+  "while the link still comes back, so a failed send is not a dead end",
+  typeof r.json.data?.join_url === "string",
+  r.json.data?.join_url
+);
+check(
   "the invite is fixed to operations - a link cannot be edited into an admin one",
   r.json.data?.invite?.role === "operations",
   r.json.data?.invite?.role

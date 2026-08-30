@@ -10,7 +10,12 @@ const createInvite = catchAsync(async (req: Request, res: Response) => {
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
-        message: "Invite created. Send them the link.",
+        // Says which actually happened. "Send them the link" over a mail that
+        // already went makes an admin do a job that is done; the reverse makes
+        // them wait for something that is never arriving.
+        message: result.email.delivered
+            ? `Invite emailed to ${result.invite.email}`
+            : "Invite created, but the email could not be sent - copy the link below to them",
         data: result,
     });
 });

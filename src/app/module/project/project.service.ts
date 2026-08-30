@@ -46,6 +46,10 @@ const getAllProjects = async (user: IRequestUser, options: ListOptions = {}) => 
     };
 
     const include = {
+        // Carried on every row: a list that had to fetch the board to render
+        // a column name would be one more query and one more chance for the two
+        // to disagree.
+        status: { select: { id: true, name: true, category: true, sort_order: true } },
         client: { select: { id: true, name: true, company: true } },
         _count: { select: { tasks: true, members: true } },
     };
@@ -83,13 +87,17 @@ const getSingleProject = async (id: string, user: IRequestUser) => {
             ...visibilityScope(user),
         },
         include: {
+            status: { select: { id: true, name: true, category: true, sort_order: true } },
             client: { select: { id: true, name: true, company: true, email: true } },
             members: {
                 include: { user: { select: { id: true, full_name: true, email: true, avatar_url: true, role: true } } },
             },
             tasks: {
                 where: { deleted_at: null },
-                include: { assignee: { select: { id: true, full_name: true, avatar_url: true } } },
+                include: {
+                    assignee: { select: { id: true, full_name: true, avatar_url: true } },
+                    status: { select: { id: true, name: true, category: true, sort_order: true } },
+                },
                 orderBy: [{ status: { sort_order: "asc" } }, { due_date: "asc" }],
             },
         },
@@ -215,7 +223,10 @@ const createProject = async (payload: ICreateProjectPayload, user: IRequestUser)
             contract_value_usd: payload.contract_value_usd ?? 0,
             notes: payload.notes ?? "",
         },
-        include: { client: { select: { id: true, name: true } } },
+        include: {
+            client: { select: { id: true, name: true } },
+            status: { select: { id: true, name: true, category: true, sort_order: true } },
+        },
     });
 };
 
@@ -243,7 +254,10 @@ const updateProject = async (id: string, payload: IUpdateProjectPayload, user: I
             start_date: payload.start_date ? new Date(`${payload.start_date}T00:00:00.000Z`) : undefined,
             end_date: payload.end_date ? new Date(`${payload.end_date}T00:00:00.000Z`) : undefined,
         },
-        include: { client: { select: { id: true, name: true } } },
+        include: {
+            client: { select: { id: true, name: true } },
+            status: { select: { id: true, name: true, category: true, sort_order: true } },
+        },
     });
 };
 
@@ -282,7 +296,10 @@ const setBaseline = async (id: string, payload: ISetBaselinePayload, user: IRequ
             baseline_value_usd: payload.baseline_value_usd ?? existing.contract_value_usd,
             baseline_set_at: new Date(),
         },
-        include: { client: { select: { id: true, name: true } } },
+        include: {
+            client: { select: { id: true, name: true } },
+            status: { select: { id: true, name: true, category: true, sort_order: true } },
+        },
     });
 };
 

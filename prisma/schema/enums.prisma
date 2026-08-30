@@ -207,6 +207,10 @@ enum NotificationEvent {
   member_awaiting_approval
   /// Broadcast, from the nightly sweep.
   invoice_overdue
+  /// Broadcast: whoever decides leave.
+  leave_requested
+  /// Directed: the person who asked.
+  leave_decided
 }
 
 /// Which board a status belongs to.
@@ -233,4 +237,28 @@ enum StatusCategory {
   done
   /// Finished, and NOT counted as delivered. Abandoned rather than delivered.
   cancelled
+}
+
+/// Who recorded an attendance row.
+///
+/// Worth keeping apart: "they clocked in" and "somebody wrote it down for them"
+/// are different claims, and only one of them is the person's own.
+enum AttendanceSource {
+  self
+  admin
+}
+
+enum LeaveStatus {
+  pending
+  approved
+  rejected
+  /// Withdrawn by the person who asked, before anybody decided.
+  cancelled
+}
+
+enum PayrollStatus {
+  /// Being put together. No money has moved.
+  draft
+  /// Paid. The payouts exist and the ledger has moved.
+  completed
 }

@@ -60,6 +60,20 @@ export const EVENT_CATALOGUE: Record<
             "A person accepted an invite and cannot sign in until they are approved.",
         defaultRoles: [Role.admin],
     },
+    leave_requested: {
+        kind: "broadcast",
+        label: "Somebody asks for leave",
+        description:
+            "A request is waiting for a decision. Without this it sits in a queue nobody has a reason to open.",
+        defaultRoles: [Role.admin, Role.project_manager],
+    },
+    leave_decided: {
+        kind: "directed",
+        label: "Your leave is decided",
+        description:
+            "Goes to the person who asked, whatever their role - they are the one waiting on the answer.",
+        defaultRoles: [],
+    },
     invoice_overdue: {
         kind: "broadcast",
         label: "An invoice goes overdue",

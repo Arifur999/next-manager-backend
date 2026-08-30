@@ -73,6 +73,9 @@ model TeamPayout {
   user    User     @relation(fields: [user_id], references: [id], onDelete: Restrict)
   project Project? @relation(fields: [project_id], references: [id], onDelete: SetNull)
   account Account  @relation(fields: [account_id], references: [id], onDelete: Restrict)
+  /// Set when this payout came from a payroll run rather than being entered by
+  /// hand. There is still only one payout - this just says where it came from.
+  payroll_item PayrollItem?
 
   @@index([organization_id])
   @@index([organization_id, date(sort: Desc)])

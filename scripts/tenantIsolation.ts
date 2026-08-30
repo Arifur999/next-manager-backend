@@ -402,6 +402,51 @@ ok(
     JSON.stringify((serviceList.json.data as { name: string }[])?.map((row) => row.name))
 );
 
+// HR. Somebody else's attendance, leave and salary are the most personal rows
+// in the product, and a foreign key would happily accept an id from anywhere.
+const bLeaveType = (await call("POST", "/hr/leave-types", { name: "B Annual" }, b.cookie)).json
+    .data as { id: string };
+
+refused(
+    "attendance written for B's person",
+    await call(
+        "POST",
+        "/hr/attendance",
+        { user_id: b.member.id, date: "2026-09-01", check_in: "09:00" },
+        a.cookie
+    )
+);
+
+refused(
+    "leave asked for under B's leave type",
+    await call(
+        "POST",
+        "/hr/leave",
+        {
+            leave_type_id: bLeaveType.id,
+            from_date: "2026-12-01",
+            to_date: "2026-12-02",
+            days: 2,
+        },
+        a.cookie
+    )
+);
+
+const leaveTypeList = await call("GET", "/hr/leave-types", undefined, a.cookie);
+ok(
+    "A's leave types carry none of B's",
+    Array.isArray(leaveTypeList.json.data) &&
+        !(leaveTypeList.json.data as { id: string }[]).some((row) => row.id === bLeaveType.id),
+    JSON.stringify((leaveTypeList.json.data as { name: string }[])?.map((row) => row.name))
+);
+
+const payrollList = await call("GET", "/hr/payroll", undefined, a.cookie);
+ok(
+    "A's payroll is its own",
+    Array.isArray(payrollList.json.data),
+    JSON.stringify(payrollList.json.data)
+);
+
 // A list endpoint cannot 404, so this one is checked by what comes back.
 const linkList = await call("GET", `/client-links?client_id=${b.client.id}`, undefined, a.cookie);
 ok(

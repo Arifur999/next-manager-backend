@@ -38,6 +38,10 @@ model Organization {
   service_categories ServiceCategory[]
   services          Service[]
   service_templates ServiceTemplate[]
+  attendance        Attendance[]
+  leave_types       LeaveType[]
+  leave_requests    LeaveRequest[]
+  payroll_runs      PayrollRun[]
 
   @@map("organizations")
 }
@@ -88,6 +92,9 @@ model User {
   announcement_reads AnnouncementRead[]
   notifications      Notification[]
   login_events       LoginEvent[]
+  attendance         Attendance[]
+  leave_requests     LeaveRequest[] @relation("LeaveRequester")
+  payroll_items      PayrollItem[]
 
   @@index([organization_id])
   /// The FK, and the department filter on the team list.

@@ -3393,5 +3393,276 @@ check("nor read what it earned", r.status === 403, `${r.status}`);
 cookie = adminCookie;
 
 
+// ---------------------------------------------------------------------------
+// HR: attendance, leave and payroll.
+// ---------------------------------------------------------------------------
+
+// ---- attendance: being here, which is not logging hours ----
+
+cookie = opsCookie;
+r = await call("POST", "/hr/attendance/clock", {});
+check("somebody can clock in", r.status === 200, `${r.status} ${r.json.message}`);
+check("which records a check-in and no check-out", Boolean(r.json.data?.check_in) && !r.json.data?.check_out, JSON.stringify(r.json.data?.check_out));
+check("marked as their own, not written down for them", r.json.data?.source === "self", r.json.data?.source);
+
+r = await call("POST", "/hr/attendance/clock", {});
+check("clocking again checks them out", r.status === 200 && Boolean(r.json.data?.check_out), `${r.status}`);
+
+r = await call("POST", "/hr/attendance/clock", {});
+check(
+  // One row per day: a third click is not a third day.
+  "and a third time is refused rather than opening another day",
+  r.status === 409,
+  `${r.status} ${r.json.message}`
+);
+
+r = await call("GET", "/hr/attendance");
+check("they can see their own attendance", r.status === 200 && (r.json.data ?? []).length > 0, `${r.status}`);
+check(
+  // Reading when every colleague arrived is a management view.
+  "and only their own",
+  (r.json.data ?? []).every((row) => row.user.id === opsUserId),
+  JSON.stringify([...new Set((r.json.data ?? []).map((row) => row.user.full_name))])
+);
+
+cookie = pmCookie;
+r = await call("POST", "/hr/attendance", {
+  user_id: opsUserId,
+  date: "2026-09-02",
+  check_in: "09:30",
+  check_out: "17:45",
+});
+check("an approver can write somebody's day down", r.status === 200, `${r.status} ${r.json.message}`);
+check(
+  // "They clocked in" and "somebody wrote it down" are different claims.
+  "recorded as written down, not as their own",
+  r.json.data?.source === "admin",
+  r.json.data?.source
+);
+
+r = await call("POST", "/hr/attendance", {
+  user_id: opsUserId,
+  date: "2026-09-03",
+  check_in: "17:00",
+  check_out: "09:00",
+});
+check("a check-out before the check-in is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+cookie = opsCookie;
+r = await call("POST", "/hr/attendance", { user_id: opsUserId, date: "2026-09-04" });
+check("operations cannot write attendance for anybody", r.status === 403, `${r.status}`);
+
+// ---- leave ----
+
+cookie = adminCookie;
+r = await call("POST", "/hr/leave-types", { name: "Annual", days_per_year: 20 });
+const annualLeave = r.json.data?.id;
+check("a leave type can be added", r.status === 201, `${r.status} ${r.json.message}`);
+
+r = await call("POST", "/hr/leave-types", { name: "Unpaid", days_per_year: 0, is_paid: false });
+check("including an uncapped one", r.status === 201, `${r.status} ${r.json.message}`);
+
+cookie = opsCookie;
+r = await call("POST", "/hr/leave-types", { name: "Sneaky" });
+check("a colleague cannot invent leave types", r.status === 403, `${r.status}`);
+
+r = await call("POST", "/hr/leave", {
+  leave_type_id: annualLeave,
+  from_date: "2026-10-05",
+  to_date: "2026-10-09",
+  days: 5,
+  reason: "Family",
+});
+const leaveRequest = r.json.data?.id;
+check("somebody can ask for leave", r.status === 201, `${r.status} ${r.json.message}`);
+check("and it starts pending", r.json.data?.status === "pending", r.json.data?.status);
+
+r = await call("POST", "/hr/leave", {
+  leave_type_id: annualLeave,
+  from_date: "2026-10-08",
+  to_date: "2026-10-10",
+  days: 3,
+});
+check(
+  // Two absences covering the same day is not a thing that can be true, and
+  // would double-count against the allowance.
+  "overlapping their own request is refused",
+  r.status === 409,
+  `${r.status} ${r.json.message}`
+);
+
+r = await call("POST", "/hr/leave", {
+  leave_type_id: annualLeave,
+  from_date: "2026-11-10",
+  to_date: "2026-11-05",
+  days: 1,
+});
+check("ending before it starts is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+r = await call("GET", "/hr/leave/balance?year=2026");
+const balance = r.json.data ?? [];
+check("a balance comes back", r.status === 200 && balance.length >= 2, `${r.status}`);
+check(
+  // Counting pending days would show a number that jumps back when a request
+  // is turned down.
+  "with nothing counted while the request is still pending",
+  balance.find((row) => row.leave_type.id === annualLeave)?.days_taken === 0,
+  JSON.stringify(balance.find((row) => row.leave_type.id === annualLeave))
+);
+check(
+  // "Tracked but not capped" and "you have none left" are opposite answers.
+  "and an uncapped type reports no limit rather than zero left",
+  balance.some((row) => row.days_per_year === 0 && row.remaining === null),
+  JSON.stringify(balance.map((row) => [row.leave_type.name, row.remaining]))
+);
+
+r = await call("POST", `/hr/leave/${leaveRequest}/decide`, { approve: true });
+check("a colleague cannot decide their own leave", r.status === 403, `${r.status} ${r.json.message}`);
+
+cookie = pmCookie;
+r = await call("POST", `/hr/leave/${leaveRequest}/decide`, { approve: true, note: "Enjoy it" });
+check("an approver can approve it", r.status === 200, `${r.status} ${r.json.message}`);
+check("and it is recorded as approved", r.json.data?.status === "approved", r.json.data?.status);
+
+r = await call("POST", `/hr/leave/${leaveRequest}/decide`, { approve: false });
+check(
+  // A second decision would write over the first and lose who made it.
+  "deciding it twice is refused",
+  r.status === 409,
+  `${r.status} ${r.json.message}`
+);
+
+cookie = opsCookie;
+r = await call("GET", "/hr/leave/balance?year=2026");
+check(
+  "and the approved days now count against the allowance",
+  (r.json.data ?? []).find((row) => row.leave_type.id === annualLeave)?.days_taken === 5,
+  JSON.stringify((r.json.data ?? []).find((row) => row.leave_type.id === annualLeave))
+);
+
+r = await call("POST", `/hr/leave/${leaveRequest}/cancel`, {});
+check("an approved request cannot be withdrawn", r.status === 409, `${r.status} ${r.json.message}`);
+
+// ---- payroll: the rule the whole module is built around ----
+
+cookie = adminCookie;
+r = await call("POST", "/hr/payroll", {
+  period_start: "2026-09-01",
+  period_end: "2026-09-30",
+});
+const payrollRun = r.json.data?.id;
+check("a month of payroll can be opened", r.status === 201, `${r.status} ${r.json.message}`);
+check(
+  // Payroll is a list somebody adjusts, not one they assemble from nothing.
+  "with a line per active person already on it",
+  (r.json.data?.items ?? []).length >= 4,
+  `${(r.json.data?.items ?? []).length} lines`
+);
+
+r = await call("POST", "/hr/payroll", { period_start: "2026-09-01", period_end: "2026-09-30" });
+check(
+  // The cheapest possible guard against paying a month twice.
+  "a second run for the same month is refused",
+  r.status === 409,
+  `${r.status} ${r.json.message}`
+);
+
+const payrollItems = (await call("GET", "/hr/payroll")).json.data?.[0]?.items ?? [];
+r = await call("PATCH", `/hr/payroll/${payrollRun}/items`, {
+  items: payrollItems.slice(0, 2).map((item) => ({
+    id: item.id,
+    gross_bdt: 50000,
+    deductions_bdt: 5000,
+  })),
+});
+check("the numbers can be set", r.status === 200, `${r.status} ${r.json.message}`);
+check(
+  // Two places computing net is two places for it to be wrong.
+  "and net is worked out on the server, not trusted from the client",
+  (r.json.data?.items ?? []).some((item) => Number(item.net_bdt) === 45000),
+  JSON.stringify((r.json.data?.items ?? []).map((i) => i.net_bdt))
+);
+
+r = await call("PATCH", `/hr/payroll/${payrollRun}/items`, {
+  items: [{ id: payrollItems[0].id, gross_bdt: 1000, deductions_bdt: 5000 }],
+});
+check("deductions above the gross are refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+// The assertion the plan named: payroll must not double-count.
+const payoutsBefore = (await call("GET", "/team-payouts")).json.data ?? [];
+const beforeTotal = payoutsBefore.reduce((sum, row) => sum + Number(row.amount_bdt), 0);
+
+r = await call("POST", `/hr/payroll/${payrollRun}/complete`, { account_id: bdtAccount });
+check("the run can be paid", r.status === 200, `${r.status} ${r.json.message}`);
+check("and is marked completed", r.json.data?.status === "completed", r.json.data?.status);
+
+const paidItems = (r.json.data?.items ?? []).filter((item) => item.payout_id);
+check(
+  // Null payout_id IS "not paid yet" - there is no second flag to drift.
+  "every paid line points at the payout it produced",
+  paidItems.length === 2,
+  `${paidItems.length} of ${(r.json.data?.items ?? []).length} lines`
+);
+check(
+  // A zero payout against somebody who joined mid-month is not a real payment.
+  "and lines left at zero produced no payout at all",
+  (r.json.data?.items ?? []).every((item) => Number(item.net_bdt) > 0 || !item.payout_id),
+  "a zero line produced a payout"
+);
+
+const payoutsAfter = (await call("GET", "/team-payouts")).json.data ?? [];
+const afterTotal = payoutsAfter.reduce((sum, row) => sum + Number(row.amount_bdt), 0);
+
+check(
+  // The whole point: salary exists in ONE place, the same one every
+  // profitability figure already reads.
+  "the money appears once, as team payouts",
+  afterTotal - beforeTotal === 90000,
+  `${beforeTotal} -> ${afterTotal}`
+);
+check(
+  "recorded as salary, in the month it was for",
+  payoutsAfter.some((row) => row.type === "salary" && String(row.date).startsWith("2026-09-30")),
+  JSON.stringify(payoutsAfter.slice(0, 2).map((row) => [row.type, row.date]))
+);
+
+r = await call("POST", `/hr/payroll/${payrollRun}/complete`, { account_id: bdtAccount });
+check("paying the same run twice is refused", r.status === 409, `${r.status} ${r.json.message}`);
+
+const payoutsAfterSecond = (await call("GET", "/team-payouts")).json.data ?? [];
+check(
+  "and nothing moved when it was refused",
+  payoutsAfterSecond.length === payoutsAfter.length,
+  `${payoutsAfter.length} -> ${payoutsAfterSecond.length}`
+);
+
+r = await call("PATCH", `/hr/payroll/${payrollRun}/items`, {
+  items: [{ id: payrollItems[0].id, gross_bdt: 99999 }],
+});
+check(
+  // Editing a paid run would leave the payouts saying something else.
+  "a paid run cannot be edited",
+  r.status === 409,
+  `${r.status} ${r.json.message}`
+);
+
+r = await call("DELETE", `/hr/payroll/${payrollRun}`);
+check("nor deleted", r.status === 409, `${r.status} ${r.json.message}`);
+check(
+  "and the refusal says to reverse the payouts instead",
+  /reverse the payouts/i.test(r.json.message ?? ""),
+  r.json.message
+);
+
+// Every colleague's salary on one screen is the most sensitive list here.
+cookie = pmCookie;
+r = await call("GET", "/hr/payroll");
+check("a project manager cannot read payroll", r.status === 403, `${r.status}`);
+cookie = opsCookie;
+r = await call("GET", "/hr/payroll");
+check("nor can operations", r.status === 403, `${r.status}`);
+cookie = adminCookie;
+
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

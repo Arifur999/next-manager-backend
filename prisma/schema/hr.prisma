@@ -1,0 +1,156 @@
+/// Being at work, which is not the same as logging hours.
+///
+/// Deliberately separate from TimeEntry. A person can be present all day and
+/// log nothing against a task, and somebody can log four hours on a day they
+/// never came in. Folding the two together would make both numbers unusable:
+/// "were they here" and "what did they work on" are different questions.
+///
+/// One row per person per day. A second check-in on the same day is a
+/// correction to the first, not another day.
+model Attendance {
+  id             String           @id @default(uuid())
+  organization_id String
+  user_id        String
+  date           DateTime         @db.Date
+  check_in       DateTime?
+  /// Null while somebody is still in. That is a normal state during the day,
+  /// not missing data - the screen says "still in" rather than showing a gap.
+  check_out      DateTime?
+  source         AttendanceSource @default(self)
+  notes          String           @default("")
+  created_at     DateTime         @default(now())
+  updated_at     DateTime         @updatedAt
+
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  /// One day, one row.
+  @@unique([user_id, date])
+  /// The month view for a whole agency.
+  @@index([organization_id, date(sort: Desc)])
+  @@index([user_id])
+  @@map("attendance")
+}
+
+/// A kind of leave, and how much of it a person gets in a year.
+///
+/// `days_per_year` is the allowance. Zero means unlimited-but-tracked - unpaid
+/// leave usually works that way, and a zero allowance that refused every
+/// request would be worse than no feature.
+model LeaveType {
+  id             String   @id @default(uuid())
+  organization_id String
+  name           String
+  days_per_year  Int      @default(0)
+  /// Unpaid leave still needs recording: it is why somebody was absent.
+  is_paid        Boolean  @default(true)
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  organization Organization   @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  requests     LeaveRequest[]
+
+  @@unique([organization_id, name])
+  @@index([organization_id])
+  @@map("leave_types")
+}
+
+/// Somebody asking to be away.
+///
+/// `days` is stored rather than derived from the dates, because what counts as
+/// a working day is an agency's own business - half days, weekends, holidays -
+/// and recomputing it later would silently restate leave already approved.
+model LeaveRequest {
+  id             String      @id @default(uuid())
+  organization_id String
+  user_id        String
+  leave_type_id  String
+  from_date      DateTime    @db.Date
+  to_date        DateTime    @db.Date
+  days           Decimal     @default(1) @db.Decimal(5, 2)
+  reason         String      @default("")
+  status         LeaveStatus @default(pending)
+  /// Who decided, and when. Null while it is still waiting.
+  decided_by     String?
+  decided_at     DateTime?
+  decision_note  String      @default("")
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @updatedAt
+
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  user         User         @relation("LeaveRequester", fields: [user_id], references: [id], onDelete: Cascade)
+  /// Restrict: a leave type with history cannot be deleted, only switched off.
+  leave_type   LeaveType    @relation(fields: [leave_type_id], references: [id], onDelete: Restrict)
+
+  /// The approval queue, and one person's own history.
+  @@index([organization_id, status])
+  @@index([user_id, from_date(sort: Desc)])
+  @@index([leave_type_id])
+  @@map("leave_requests")
+}
+
+/// One month's payroll.
+///
+/// A run is a draft until it is completed. Completing it is what creates the
+/// money: one TeamPayout per line, through the same path a manual payout takes,
+/// so there is exactly one place salary is recorded and the books cannot
+/// disagree with themselves.
+model PayrollRun {
+  id             String        @id @default(uuid())
+  organization_id String
+  /// The month this covers. Dates rather than a "2026-09" string, so ranges
+  /// can be queried the same way every other date in the product is.
+  period_start   DateTime      @db.Date
+  period_end     DateTime      @db.Date
+  status         PayrollStatus @default(draft)
+  /// Which account the salaries were paid from. Chosen at completion, because
+  /// that is when the money actually moves.
+  account_id     String?
+  notes          String        @default("")
+  completed_at   DateTime?
+  completed_by   String?
+  created_by     String?
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+
+  organization Organization  @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  account      Account?      @relation(fields: [account_id], references: [id], onDelete: Restrict)
+  items        PayrollItem[]
+
+  /// One run per month per agency. Two runs for September is a mistake, not a
+  /// workflow.
+  @@unique([organization_id, period_start])
+  @@index([organization_id, period_start(sort: Desc)])
+  @@index([account_id])
+  @@map("payroll_runs")
+}
+
+/// What one person is paid for one month.
+///
+/// `net_bdt` is stored rather than computed on read for the same reason an
+/// invoice line stores its amount: what somebody was actually paid is a fact
+/// about that month, and a formula change must not restate it.
+model PayrollItem {
+  id             String  @id @default(uuid())
+  run_id         String
+  user_id        String
+  gross_bdt      Decimal @default(0) @db.Decimal(15, 2)
+  deductions_bdt Decimal @default(0) @db.Decimal(15, 2)
+  net_bdt        Decimal @default(0) @db.Decimal(15, 2)
+  notes          String  @default("")
+  /// The payout this line produced, once the run was completed. Null while the
+  /// run is still a draft - which is exactly how "has this been paid" is
+  /// answered without a second flag that could disagree.
+  payout_id      String? @unique
+
+  run    PayrollRun  @relation(fields: [run_id], references: [id], onDelete: Cascade)
+  user   User        @relation(fields: [user_id], references: [id], onDelete: Restrict)
+  payout TeamPayout? @relation(fields: [payout_id], references: [id], onDelete: SetNull)
+
+  /// One line per person per run.
+  @@unique([run_id, user_id])
+  @@index([run_id])
+  @@index([user_id])
+  @@map("payroll_items")
+}

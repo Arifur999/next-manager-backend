@@ -34,6 +34,7 @@ model Account {
   due_transactions DueTransaction[]
   exchanges_from ExchangeTransaction[] @relation("ExchangeFrom")
   exchanges_to   ExchangeTransaction[] @relation("ExchangeTo")
+  payroll_runs      PayrollRun[]
 
   @@unique([organization_id, name])
   @@index([organization_id])

@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { ClientStatus } from "../../../generated/prisma/enums.js";
 import status from "http-status";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
@@ -7,8 +8,14 @@ import { sendResponse } from "../../shared/sendResponse.js";
 import { ClientService } from "./client.service.js";
 
 const getAllClients = catchAsync(async (req: Request, res: Response) => {
-    const options = parseListOptions(req.query as Record<string, unknown>);
-    const { rows, total } = await ClientService.getAllClients(req.user as IRequestUser, options);
+    const query = req.query as Record<string, unknown>;
+    const options = parseListOptions(query);
+    const { rows, total } = await ClientService.getAllClients(req.user as IRequestUser, options, {
+        status:
+            typeof query.status === "string" && query.status in ClientStatus
+                ? (query.status as ClientStatus)
+                : undefined,
+    });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

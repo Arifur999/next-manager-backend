@@ -17,6 +17,7 @@ const parseFilters = (query: Record<string, unknown>) => ({
             ? (query.status as TaskStatus)
             : undefined,
     mine: query.mine === "true",
+    overdue: query.overdue === "true",
 });
 
 const getAllTasks = catchAsync(async (req: Request, res: Response) => {

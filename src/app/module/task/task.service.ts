@@ -48,9 +48,23 @@ const assertReferences = async (
 const visibilityScope = (user: IRequestUser): Prisma.TaskWhereInput =>
     user.role === Role.operations ? { assignee_id: user.userId } : {};
 
+/** Midnight today, UTC. due_date is a date column, so the comparison has to
+ *  be a day boundary - comparing it to `now` would call a task due today
+ *  overdue from one second past midnight. */
+const startOfToday = () => {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+};
+
 const getAllTasks = async (
     user: IRequestUser,
-    filters: { projectId?: string; assigneeId?: string; status?: TaskStatus; mine?: boolean },
+    filters: {
+        projectId?: string;
+        assigneeId?: string;
+        status?: TaskStatus;
+        mine?: boolean;
+        overdue?: boolean;
+    },
     options: ListOptions = {}
 ) => {
     const where: Prisma.TaskWhereInput = {
@@ -61,6 +75,15 @@ const getAllTasks = async (
         ...(filters.projectId ? { project_id: filters.projectId } : {}),
         ...(filters.assigneeId ? { assignee_id: filters.assigneeId } : {}),
         ...(filters.status ? { status: filters.status } : {}),
+        // Overdue means past its date AND not finished. A task delivered
+        // late is not still overdue - it is done, and putting it on this
+        // list would make a screen of things to chase that cannot shrink.
+        ...(filters.overdue
+            ? {
+                due_date: { lt: startOfToday() },
+                status: { not: TaskStatus.done },
+            }
+            : {}),
         ...(options.search
             ? { title: { contains: escapeLikeTerm(options.search), mode: "insensitive" } }
             : {}),

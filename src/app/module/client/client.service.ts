@@ -1,6 +1,6 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { InvoiceStatus, Role } from "../../../generated/prisma/enums.js";
+import { ClientStatus, InvoiceStatus, Role } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
@@ -24,11 +24,18 @@ const visibilityScope = (user: IRequestUser): Prisma.ClientWhereInput =>
         ? { projects: { some: { members: { some: { user_id: user.userId } } } } }
         : {};
 
-const getAllClients = async (user: IRequestUser, options: ListOptions = {}) => {
+const getAllClients = async (
+    user: IRequestUser,
+    options: ListOptions = {},
+    filters: { status?: ClientStatus } = {}
+) => {
     const where: Prisma.ClientWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
         ...visibilityScope(user),
+        // Archived is a state, not a deletion: the client stays, its history
+        // stays, and it drops out of the list somebody works from.
+        ...(filters.status ? { status: filters.status } : {}),
         ...(options.search
             ? {
                 OR: [

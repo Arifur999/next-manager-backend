@@ -2502,5 +2502,85 @@ r = await call("GET", `/team-payouts?department_id=${designId}`);
 check("payouts can be filtered by department", r.status === 200, `${r.status}`);
 
 
+// ---------------------------------------------------------------------------
+// The sidebar's sub-views: filters, not pages.
+// ---------------------------------------------------------------------------
+
+cookie = adminCookie;
+
+const filterClient = `Filter Co ${stamp}`;
+r = await call("POST", "/clients", { name: filterClient, status: "archived" });
+const archivedClientId = r.json.data?.id;
+check("a client can be archived", r.status === 201, `${r.status} ${r.json.message}`);
+
+r = await call("GET", "/clients?status=archived");
+check(
+  "the archived filter returns it",
+  (r.json.data ?? []).some((c) => c.id === archivedClientId),
+  `${(r.json.data ?? []).length} returned`
+);
+check(
+  "and returns only archived ones",
+  (r.json.data ?? []).every((c) => c.status === "archived"),
+  JSON.stringify((r.json.data ?? []).map((c) => c.status))
+);
+
+r = await call("GET", "/clients?status=active");
+check(
+  "the active filter leaves it out",
+  !(r.json.data ?? []).some((c) => c.id === archivedClientId),
+  "an archived client appeared under active"
+);
+
+r = await call("GET", "/clients");
+check(
+  // Archiving is not deleting. The client and its history stay.
+  "and unfiltered still shows everybody, archived included",
+  (r.json.data ?? []).some((c) => c.id === archivedClientId),
+  "an archived client vanished from the full list"
+);
+
+r = await call("GET", "/clients?status=nonsense");
+check(
+  "an unknown status is ignored rather than returning nothing",
+  r.status === 200 && (r.json.data ?? []).length > 0,
+  `${r.status} with ${(r.json.data ?? []).length} rows`
+);
+
+// Overdue: past its date AND not finished.
+const overdueProject = timeProjectId;
+r = await call("POST", "/tasks", {
+  project_id: overdueProject,
+  title: `Late task ${stamp}`,
+  due_date: "2020-01-01",
+});
+const lateTaskId = r.json.data?.id;
+check("a task with a past due date exists", r.status === 201, `${r.status} ${r.json.message}`);
+
+r = await call("GET", "/tasks?overdue=true");
+check(
+  "the overdue filter finds it",
+  (r.json.data ?? []).some((t) => t.id === lateTaskId),
+  `${(r.json.data ?? []).length} returned`
+);
+check(
+  "and every row it returns is genuinely unfinished",
+  (r.json.data ?? []).every((t) => t.status !== "done"),
+  JSON.stringify((r.json.data ?? []).map((t) => t.status))
+);
+
+r = await call("PATCH", `/tasks/${lateTaskId}`, { status: "done" });
+check("the task is finished late", r.status === 200, `${r.status} ${r.json.message}`);
+
+r = await call("GET", "/tasks?overdue=true");
+check(
+  // A task delivered late is done, not still overdue. A list of things to
+  // chase that cannot shrink is one nobody opens twice.
+  "and a late task that got done leaves the overdue list",
+  !(r.json.data ?? []).some((t) => t.id === lateTaskId),
+  "a finished task was still called overdue"
+);
+
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

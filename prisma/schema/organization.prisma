@@ -31,6 +31,8 @@ model Organization {
   invites   TeamInvite[]
   lead_sources LeadSource[]
   departments  Department[]
+  notifications Notification[]
+  notification_rules NotificationRule[]
 
   @@map("organizations")
 }
@@ -79,6 +81,7 @@ model User {
   reset_tokens       PasswordResetToken[]
   platform_actions   PlatformActivityLog[] @relation("PlatformActor")
   announcement_reads AnnouncementRead[]
+  notifications      Notification[]
 
   @@index([organization_id])
   /// The FK, and the department filter on the team list.

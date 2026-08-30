@@ -1,9 +1,10 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { Role, UserStatus } from "../../../generated/prisma/enums.js";
+import { NotificationEvent, Role, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { notify } from "../../shared/notify.js";
 import { DEFAULT_WEEKLY_HOURS, loadCapacityRows } from "../../shared/capacity.js";
 import { dateRangeWhere, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import {
@@ -198,7 +199,7 @@ const createEntry = async (payload: ICreateTimeEntryPayload, user: IRequestUser)
     return prisma.$transaction(async (tx) => {
         await assertReferences(tx, payload, user);
 
-        return tx.timeEntry.create({
+        const entry = await tx.timeEntry.create({
             data: {
                 organization_id: user.organizationId,
                 // Always the caller. Logging time on somebody else's behalf is
@@ -214,7 +215,22 @@ const createEntry = async (payload: ICreateTimeEntryPayload, user: IRequestUser)
             },
             include: INCLUDE,
         });
-    });
+
+        // Only when it actually needs somebody. An entry that arrives already
+        // approved - or one an approver logged for themselves - is not a
+        // queue item, and telling people about it is the noise that teaches
+        // them to stop looking at the bell.
+        if (!entry.approved_at) {
+            await notify(tx, user, {
+                event: NotificationEvent.time_awaiting_approval,
+                title: `${user.name} logged ${entry.hours} hours on ${entry.project.name}`,
+                body: entry.notes || "No note left.",
+                entityType: "time_entry",
+                entityId: entry.id,
+            });
+        }
+
+        return entry;    });
 };
 
 const updateEntry = async (id: string, payload: IUpdateTimeEntryPayload, user: IRequestUser) => {

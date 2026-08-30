@@ -1,10 +1,11 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { Role, TaskStatus } from "../../../generated/prisma/enums.js";
+import { NotificationEvent, Role, TaskStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
+import { notify } from "../../shared/notify.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateTaskPayload, IUpdateTaskPayload } from "./task.validation.js";
 
@@ -116,7 +117,7 @@ const createTask = async (payload: ICreateTaskPayload, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
         await assertReferences(tx, payload, user);
 
-        return tx.task.create({
+        const task = await tx.task.create({
             data: {
                 organization_id: user.organizationId,
                 project_id: payload.project_id,
@@ -130,6 +131,21 @@ const createTask = async (payload: ICreateTaskPayload, user: IRequestUser) => {
             },
             include: INCLUDE,
         });
+
+        if (task.assignee_id) {
+            await notify(tx, user, {
+                event: NotificationEvent.task_assigned,
+                userId: task.assignee_id,
+                title: `You were given "${task.title}"`,
+                body: task.due_date
+                    ? `Due ${task.due_date.toISOString().slice(0, 10)}`
+                    : "No due date set",
+                entityType: "task",
+                entityId: task.id,
+            });
+        }
+
+        return task;
     });
 };
 

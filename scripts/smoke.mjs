@@ -2828,5 +2828,157 @@ check("a project manager cannot change anyone's access", r.status === 403, `${r.
 cookie = adminCookie;
 
 
+// ---------------------------------------------------------------------------
+// Notifications: a company talking to itself.
+// ---------------------------------------------------------------------------
+
+cookie = adminCookie;
+
+r = await call("GET", "/notification-rules");
+const rules = r.json.data ?? [];
+check("the rules list opens", r.status === 200, `${r.status} ${r.json.message}`);
+check(
+  // A screen showing five switches on one agency and none on another, for the
+  // same product, is a screen nobody can be told how to use.
+  "with the whole catalogue, not just rows that happen to exist",
+  rules.length >= 5 && rules.every((rule) => typeof rule.in_app === "boolean"),
+  `${rules.length} rules`
+);
+check(
+  "and defaults filled in, so an untouched agency is not shown 'nobody is told'",
+  rules.every((rule) => rule.kind === "directed" || rule.roles.length > 0),
+  JSON.stringify(rules.map((rule) => [rule.event, rule.roles]))
+);
+check(
+  "nothing is marked customised before anybody touched it",
+  rules.every((rule) => rule.customised === false),
+  JSON.stringify(rules.filter((rule) => rule.customised).map((rule) => rule.event))
+);
+
+// Directed: the person the work was handed to.
+cookie = pmCookie;
+r = await call("POST", "/tasks", {
+  project_id: timeProjectId,
+  title: `Notify task ${stamp}`,
+  assignee_id: opsUserId,
+});
+const notifyTaskId = r.json.data?.id;
+check("a task is assigned", r.status === 201, `${r.status} ${r.json.message}`);
+
+cookie = opsCookie;
+r = await call("GET", "/notifications");
+const assigned = (r.json.data ?? []).find(
+  (row) => row.entity_type === "task" && row.entity_id === notifyTaskId
+);
+check("the assignee is told", Boolean(assigned), `${(r.json.data ?? []).length} in the bell`);
+check("and it is marked as coming from their own company", assigned?.source === "company", assigned?.source);
+
+// The actor never hears about their own action.
+cookie = pmCookie;
+r = await call("GET", "/notifications");
+check(
+  // Telling somebody what they just did is noise, and noise is what teaches
+  // people to ignore the bell.
+  "the person who assigned it is not told about their own click",
+  !(r.json.data ?? []).some((row) => row.entity_id === notifyTaskId),
+  "the actor was notified of their own action"
+);
+
+// Broadcast: whoever signs timesheets off. Chosen over a payment because the
+// actor has to be somebody who is NOT in the audience - recording a payment is
+// admin-only, so admin would be excluded from its own broadcast and the check
+// would prove nothing.
+cookie = adminCookie;
+const beforeCount = (await call("GET", "/notifications/unread-count")).json.data?.unread ?? 0;
+
+cookie = opsCookie;
+r = await call("POST", "/time-entries", {
+  project_id: timeProjectId,
+  date: "2026-08-25",
+  hours: 3,
+  is_billable: true,
+  notes: "Notification check",
+});
+check("operations logs hours", r.status === 201, `${r.status} ${r.json.message}`);
+
+cookie = adminCookie;
+r = await call("GET", "/notifications/unread-count");
+check(
+  "and whoever approves hours hears about it",
+  (r.json.data?.unread ?? 0) > beforeCount,
+  `${beforeCount} -> ${r.json.data?.unread}`
+);
+
+// One badge over both sources.
+r = await call("GET", "/notifications");
+const sources = new Set((r.json.data ?? []).map((row) => row.source));
+check(
+  "the bell carries platform notices and company ones together",
+  sources.has("company"),
+  JSON.stringify([...sources])
+);
+
+// Marking read works for a company notification without being told which kind.
+const mine = (r.json.data ?? []).find((row) => row.source === "company" && !row.read_at);
+if (mine) {
+  const was = (await call("GET", "/notifications/unread-count")).json.data?.unread ?? 0;
+  r = await call("POST", `/notifications/${mine.id}/read`, {});
+  check("a company notification can be marked read", r.status === 200, `${r.status}`);
+
+  r = await call("GET", "/notifications/unread-count");
+  check(
+    "and the one badge goes down",
+    (r.json.data?.unread ?? 0) === was - 1,
+    `${was} -> ${r.json.data?.unread}`
+  );
+}
+
+r = await call("POST", "/notifications/read-all", {});
+check("clearing everything works", r.status === 200, `${r.status}`);
+r = await call("GET", "/notifications/unread-count");
+check("and clears both sources", r.json.data?.unread === 0, JSON.stringify(r.json.data));
+
+// Turning one off means nobody hears it.
+r = await call("PATCH", "/notification-rules/time_awaiting_approval", { in_app: false });
+check("an event can be switched off", r.status === 200, `${r.status} ${r.json.message}`);
+
+cookie = opsCookie;
+await call("POST", "/time-entries", {
+  project_id: timeProjectId,
+  date: "2026-08-26",
+  hours: 2,
+  is_billable: true,
+  notes: "Should notify nobody",
+});
+
+cookie = adminCookie;
+r = await call("GET", "/notifications/unread-count");
+check("and then it fires for nobody", r.json.data?.unread === 0, JSON.stringify(r.json.data));
+
+r = await call("PATCH", "/notification-rules/time_awaiting_approval", { in_app: true });
+check("and can be switched back on", r.status === 200, `${r.status}`);
+
+// A directed event has no role picker, so storing one is refused rather than
+// accepted and ignored.
+r = await call("PATCH", "/notification-rules/task_assigned", {
+  in_app: true,
+  roles: ["admin"],
+});
+check(
+  "a role list on a directed event is dropped, not stored as a lie",
+  r.status === 200 && r.json.data?.roles?.length === 0,
+  JSON.stringify(r.json.data?.roles)
+);
+
+r = await call("PATCH", "/notification-rules/not_a_real_event", { in_app: false });
+check("an event nothing fires is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+// Deciding what everybody else never hears about is not a personal preference.
+cookie = pmCookie;
+r = await call("GET", "/notification-rules");
+check("a project manager cannot read the rules", r.status === 403, `${r.status}`);
+cookie = adminCookie;
+
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

@@ -205,3 +205,21 @@ enum AnnouncementAudience {
   trialing
   active
 }
+
+/// Things worth telling somebody about.
+///
+/// A closed list, and deliberately a short one. Every entry here has a place in
+/// the code that already runs; an event nothing fires is a switch on a settings
+/// screen that does nothing, which teaches people the whole screen is decorative.
+enum NotificationEvent {
+  /// Directed: the person the work was handed to.
+  task_assigned
+  /// Broadcast: whoever signs timesheets off.
+  time_awaiting_approval
+  /// Broadcast: whoever watches the money.
+  payment_recorded
+  /// Broadcast: whoever can approve somebody joining.
+  member_awaiting_approval
+  /// Broadcast, from the nightly sweep.
+  invoice_overdue
+}

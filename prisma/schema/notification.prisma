@@ -1,0 +1,56 @@
+/// Something one person needs to know.
+///
+/// Distinct from Announcement, which is the platform talking to its customers.
+/// This is a company talking to itself, so it is organization-scoped and always
+/// addressed to one person - never to "everybody", which is what makes the
+/// unread count mean anything.
+model Notification {
+  id             String            @id @default(uuid())
+  organization_id String
+  user_id        String
+  event          NotificationEvent
+  title          String
+  body           String            @default("")
+  /// What it is about, so the bell can link somewhere useful. Kept as loose
+  /// strings for the same reason ActivityLog does: adding a module should not
+  /// need a migration.
+  entity_type    String            @default("")
+  entity_id      String?
+  /// Null until they open it. The bell clears on this and nothing else.
+  read_at        DateTime?
+  created_at     DateTime          @default(now())
+
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  /// The bell: one person's newest, and their unread count.
+  @@index([user_id, read_at, created_at(sort: Desc)])
+  @@index([organization_id])
+  @@map("notifications")
+}
+
+/// Whether an event is worth telling anyone about, and who.
+///
+/// One row per event per agency, created on demand rather than seeded: an
+/// absent row means the built-in default, so an agency that never opens this
+/// screen still gets the notifications that matter.
+model NotificationRule {
+  id             String            @id @default(uuid())
+  organization_id String
+  event          NotificationEvent
+  in_app         Boolean           @default(true)
+  /// Off by default. Email leaves the product and cannot be unsent, and an
+  /// agency that turns it on for a busy event has asked for that.
+  email          Boolean           @default(false)
+  /// Which roles receive a BROADCAST event. Ignored for directed ones - a task
+  /// assignment goes to the person it was handed to, and a role list there
+  /// would be a control that silently does nothing.
+  roles          Role[]            @default([])
+  updated_at     DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  /// One rule per event per agency.
+  @@unique([organization_id, event])
+  @@map("notification_rules")
+}

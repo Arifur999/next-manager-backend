@@ -1,12 +1,13 @@
 import { createHash, randomBytes } from "node:crypto";
 import status from "http-status";
 import { env } from "../../../config/env.js";
-import { Role, UserStatus } from "../../../generated/prisma/enums.js";
+import { NotificationEvent, Role, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { assertSeatAvailable } from "../../middleware/checkSubscription.js";
 import { logActivity } from "../../shared/activity.js";
+import { notify } from "../../shared/notify.js";
 import { passwordUtils } from "../../utils/password.js";
 import {
     IAcceptInvitePayload,
@@ -251,6 +252,30 @@ const acceptInvite = async (token: string, payload: IAcceptInvitePayload) => {
                 tokenVersion: 0,
                 permissions: [],
             },
+        );
+
+        // The person who just joined is the actor, so notify() excludes them
+        // and this reaches whoever can actually approve it. Without it a
+        // pending member is invisible until an admin happens to open the team
+        // screen, and somebody who cannot sign in will not chase it.
+        await notify(
+            tx,
+            {
+                userId: member.id,
+                organizationId: invite.organization_id,
+                role: member.role,
+                email: member.email,
+                name: member.full_name,
+                tokenVersion: 0,
+                permissions: [],
+            },
+            {
+                event: NotificationEvent.member_awaiting_approval,
+                title: `${member.full_name} is waiting to join`,
+                body: `${member.email} accepted an invite and cannot sign in until somebody approves them.`,
+                entityType: "user",
+                entityId: member.id,
+            }
         );
 
         return member;

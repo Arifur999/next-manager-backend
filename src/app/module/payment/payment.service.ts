@@ -1,12 +1,13 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { Currency, LedgerSource } from "../../../generated/prisma/enums.js";
+import { Currency, LedgerSource, NotificationEvent } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity, money } from "../../shared/activity.js";
 import { recalcInvoiceStatus } from "../../shared/invoiceStatus.js";
 import { assertAccount, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
+import { notify } from "../../shared/notify.js";
 import { dateRangeWhere, escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { getReportingRate } from "../../utils/currencyRate.js";
 import { ICreatePaymentPayload, IUpdatePaymentPayload } from "./payment.validation.js";
@@ -164,6 +165,14 @@ const createPayment = async (payload: ICreatePaymentPayload, user: IRequestUser)
             action: "created",
             summary: `Recorded ${money(payload.amount_usd, "USD")} from ${client?.name ?? "a client"}`,
         }, user);
+
+        await notify(tx, user, {
+            event: NotificationEvent.payment_recorded,
+            title: `${money(payload.amount_usd, "USD")} from ${client?.name ?? "a client"}`,
+            body: "Recorded against the account it landed in.",
+            entityType: "payment",
+            entityId: payment.id,
+        });
 
         return payment;
     });

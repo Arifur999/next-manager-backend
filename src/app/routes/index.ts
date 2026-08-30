@@ -14,6 +14,7 @@ import { InvoiceRoutes } from "../module/invoice/invoice.route.js";
 import { InviteRoutes, PublicInviteRoutes } from "../module/invite/invite.route.js";
 import { KpiRoutes } from "../module/kpi/kpi.route.js";
 import { KpiTargetRoutes } from "../module/kpiTarget/kpiTarget.route.js";
+import { NotificationRuleRoutes } from "../module/notificationRule/notificationRule.route.js";
 import { LeadSourceRoutes } from "../module/leadSource/leadSource.route.js";
 import { LeadRoutes } from "../module/lead/lead.route.js";
 import { MilestoneRoutes } from "../module/milestone/milestone.route.js";
@@ -72,6 +73,7 @@ router.use("/settings", SettingsRoutes);
 router.use("/activity", ActivityRoutes);
 router.use("/platform", PlatformRoutes);
 router.use("/notifications", NotificationRoutes);
+router.use("/notification-rules", NotificationRuleRoutes);
 // Public: joining the platform team, before any account exists.
 router.use("/platform-join", PublicPlatformInviteRoutes);
 router.use("/agency-join", PublicAgencyInviteRoutes);

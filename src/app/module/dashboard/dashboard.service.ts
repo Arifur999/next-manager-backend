@@ -1,4 +1,4 @@
-import { InvoiceStatus, ProjectStatus, TaskStatus } from "../../../generated/prisma/enums.js";
+import { InvoiceStatus, StatusCategory } from "../../../generated/prisma/enums.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { getAccountBalances, getBalanceByCurrency } from "../../shared/ledger.js";
@@ -91,7 +91,7 @@ const getOverview = async (user: IRequestUser) => {
         }),
 
         prisma.project.count({
-            where: { organization_id: organizationId, deleted_at: null, status: ProjectStatus.active },
+            where: { organization_id: organizationId, deleted_at: null, status: { category: StatusCategory.active } },
         }),
 
         prisma.invoice.count({
@@ -107,7 +107,7 @@ const getOverview = async (user: IRequestUser) => {
             where: {
                 organization_id: organizationId,
                 deleted_at: null,
-                status: { not: TaskStatus.done },
+                status: { category: { notIn: [StatusCategory.done, StatusCategory.cancelled] } },
                 due_date: { gte: todayStart, lt: todayEnd },
             },
             include: {

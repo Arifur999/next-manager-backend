@@ -34,6 +34,7 @@ model Organization {
   notifications Notification[]
   notification_rules NotificationRule[]
   login_events  LoginEvent[]
+  workflow_statuses WorkflowStatus[]
 
   @@map("organizations")
 }

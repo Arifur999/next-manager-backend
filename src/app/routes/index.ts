@@ -35,6 +35,7 @@ import { TaskRoutes } from "../module/task/task.route.js";
 import { TimeEntryRoutes } from "../module/timeEntry/timeEntry.route.js";
 import { TeamPayoutRoutes } from "../module/teamPayout/teamPayout.route.js";
 import { TransactionRoutes } from "../module/transaction/transaction.route.js";
+import { WorkflowStatusRoutes } from "../module/workflowStatus/workflowStatus.route.js";
 import { UserRoutes } from "../module/user/user.route.js";
 import { VaultRoutes } from "../module/vault/vault.route.js";
 
@@ -54,6 +55,7 @@ router.use("/lead-sources", LeadSourceRoutes);
 router.use("/projects", ProjectRoutes);
 router.use("/project-members", ProjectMemberRoutes);
 router.use("/tasks", TaskRoutes);
+router.use("/workflow-statuses", WorkflowStatusRoutes);
 router.use("/time-entries", TimeEntryRoutes);
 router.use("/milestones", MilestoneRoutes);
 router.use("/kpi-targets", KpiTargetRoutes);

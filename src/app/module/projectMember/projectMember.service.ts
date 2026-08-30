@@ -1,5 +1,6 @@
 import status from "http-status";
 import { UserStatus } from "../../../generated/prisma/enums.js";
+import { StatusCategory } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
@@ -81,7 +82,13 @@ const getAssignmentOverview = async (user: IRequestUser) => {
             // Only live work counts towards "how loaded is this person" -
             // finished and cancelled projects would make everyone look busy
             // forever.
-            active_count: own.filter((entry) => entry.project.status === "active").length,
+            //
+            // By category, not by name: an agency that renamed "Active" to
+            // "In flight" still has its people counted, and one that added a
+            // second in-progress status gets both.
+            active_count: own.filter(
+                (entry) => entry.project.status.category === StatusCategory.active
+            ).length,
         };
     });
 };

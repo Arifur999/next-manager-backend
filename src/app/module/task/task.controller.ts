@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { TaskStatus } from "../../../generated/prisma/enums.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
@@ -12,10 +11,7 @@ import { TaskService } from "./task.service.js";
 const parseFilters = (query: Record<string, unknown>) => ({
     projectId: typeof query.project_id === "string" ? query.project_id : undefined,
     assigneeId: typeof query.assignee_id === "string" ? query.assignee_id : undefined,
-    status:
-        typeof query.status === "string" && (Object.values(TaskStatus) as string[]).includes(query.status)
-            ? (query.status as TaskStatus)
-            : undefined,
+    statusId: typeof query.status_id === "string" ? query.status_id : undefined,
     mine: query.mine === "true",
     overdue: query.overdue === "true",
 });

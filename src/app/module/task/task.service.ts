@@ -1,10 +1,16 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { NotificationEvent, Role, TaskStatus } from "../../../generated/prisma/enums.js";
+import {
+    NotificationEvent,
+    Role,
+    StatusCategory,
+    WorkflowKind,
+} from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
+import { defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
 import { notify } from "../../shared/notify.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateTaskPayload, IUpdateTaskPayload } from "./task.validation.js";
@@ -14,6 +20,10 @@ const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 const INCLUDE = {
     project: { select: { id: true, name: true, code: true } },
     assignee: { select: { id: true, full_name: true, email: true, avatar_url: true } },
+    // Carried on every row rather than looked up by the client: a board that
+    // fetched the status list to render a column name would be one more query
+    // and one more chance for the two to disagree.
+    status: { select: { id: true, name: true, category: true, sort_order: true } },
 } as const;
 
 const assertReferences = async (
@@ -62,7 +72,7 @@ const getAllTasks = async (
     filters: {
         projectId?: string;
         assigneeId?: string;
-        status?: TaskStatus;
+        statusId?: string;
         mine?: boolean;
         overdue?: boolean;
     },
@@ -75,14 +85,14 @@ const getAllTasks = async (
         ...(filters.mine ? { assignee_id: user.userId } : {}),
         ...(filters.projectId ? { project_id: filters.projectId } : {}),
         ...(filters.assigneeId ? { assignee_id: filters.assigneeId } : {}),
-        ...(filters.status ? { status: filters.status } : {}),
+        ...(filters.statusId ? { status_id: filters.statusId } : {}),
         // Overdue means past its date AND not finished. A task delivered
         // late is not still overdue - it is done, and putting it on this
         // list would make a screen of things to chase that cannot shrink.
         ...(filters.overdue
             ? {
                 due_date: { lt: startOfToday() },
-                status: { not: TaskStatus.done },
+                status: { category: { notIn: [StatusCategory.done, StatusCategory.cancelled] } },
             }
             : {}),
         ...(options.search
@@ -93,7 +103,8 @@ const getAllTasks = async (
     // Unfinished first, then by due date. A board sorted by creation date is a
     // board nobody looks at twice.
     const orderBy: Prisma.TaskOrderByWithRelationInput[] = [
-        { status: "asc" },
+        // Board order, which is a sequence the agency chose - not alphabetical.
+        { status: { sort_order: "asc" } },
         { due_date: { sort: "asc", nulls: "last" } },
         { priority: "desc" },
     ];
@@ -117,6 +128,20 @@ const createTask = async (payload: ICreateTaskPayload, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
         await assertReferences(tx, payload, user);
 
+        // Chosen, or whatever the board starts on. An agency always has
+        // statuses - they are seeded with the organization - so a missing one
+        // means somebody switched every single status off, and saying that is
+        // more use than a foreign key error.
+        const statusId =
+            payload.status_id ?? (await defaultStatusId(tx, user.organizationId, WorkflowKind.task));
+
+        if (!statusId) {
+            throw new AppError(
+                status.BAD_REQUEST,
+                "This board has no statuses turned on. Add one before creating work."
+            );
+        }
+
         const task = await tx.task.create({
             data: {
                 organization_id: user.organizationId,
@@ -124,7 +149,7 @@ const createTask = async (payload: ICreateTaskPayload, user: IRequestUser) => {
                 title: payload.title,
                 description: payload.description ?? "",
                 assignee_id: payload.assignee_id ?? null,
-                status: payload.status,
+                status_id: statusId,
                 priority: payload.priority,
                 due_date: payload.due_date ? toDate(payload.due_date) : null,
                 created_by: user.userId,
@@ -158,6 +183,9 @@ const updateTask = async (id: string, payload: IUpdateTaskPayload, user: IReques
                 deleted_at: null,
                 ...visibilityScope(user),
             },
+            // The category comes with it, because that is what decides
+            // whether completed_at moves.
+            include: { status: { select: { category: true } } },
         });
 
         if (!existing) {
@@ -166,11 +194,33 @@ const updateTask = async (id: string, payload: IUpdateTaskPayload, user: IReques
 
         await assertReferences(tx, payload, user);
 
-        // completed_at is derived from status rather than accepted from the
-        // client: it is the one field that has to agree with the status, and
-        // letting both be set independently guarantees they eventually will not.
-        const movingToDone = payload.status === TaskStatus.done && existing.status !== TaskStatus.done;
-        const movingOffDone = payload.status && payload.status !== TaskStatus.done && existing.status === TaskStatus.done;
+        // completed_at is derived from the status rather than accepted from
+        // the client: it is the one field that has to agree with the status,
+        // and letting both be set independently guarantees they eventually
+        // will not.
+        //
+        // Compared by CATEGORY, never by name. An agency that renames "Done"
+        // to "Shipped" or adds "Client approved" alongside it keeps a working
+        // completion date; comparing names would silently stop the clock.
+        const nextStatus = payload.status_id
+            ? await tx.workflowStatus.findFirst({
+                  where: {
+                      id: payload.status_id,
+                      organization_id: user.organizationId,
+                      kind: WorkflowKind.task,
+                  },
+                  select: { id: true, category: true },
+              })
+            : null;
+
+        if (payload.status_id && !nextStatus) {
+            throw new AppError(status.NOT_FOUND, "That status does not exist on this board");
+        }
+
+        const wasDone = existing.status.category === StatusCategory.done;
+        const isDone = nextStatus ? nextStatus.category === StatusCategory.done : wasDone;
+        const movingToDone = !wasDone && isDone;
+        const movingOffDone = wasDone && !isDone;
 
         return tx.task.update({
             where: { id },
@@ -179,7 +229,7 @@ const updateTask = async (id: string, payload: IUpdateTaskPayload, user: IReques
                 title: payload.title ?? undefined,
                 description: payload.description ?? undefined,
                 assignee_id: payload.assignee_id === undefined ? undefined : payload.assignee_id,
-                status: payload.status ?? undefined,
+                status_id: payload.status_id ?? undefined,
                 priority: payload.priority ?? undefined,
                 due_date: payload.due_date === undefined ? undefined : payload.due_date ? toDate(payload.due_date) : null,
                 completed_at: movingToDone ? new Date() : movingOffDone ? null : undefined,

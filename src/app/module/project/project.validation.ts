@@ -1,5 +1,4 @@
 import z from "zod";
-import { ProjectStatus } from "../../../generated/prisma/enums.js";
 
 export const createProjectZodSchema = z.object({
     client_id: z.uuid("client_id must be a valid id"),
@@ -8,7 +7,9 @@ export const createProjectZodSchema = z.object({
     // correct.
     code: z.string("Code must be string").min(1, "Code is required"),
     description: z.string("Description must be string").optional(),
-    status: z.enum(ProjectStatus, "Choose a valid status").optional(),
+    // An id, not a word: the vocabulary belongs to the agency now. Absent means
+    // the board's default.
+    status_id: z.uuid("status_id must be a valid id").optional(),
     start_date: z.iso.date("Start date must be YYYY-MM-DD").optional().nullable(),
     end_date: z.iso.date("End date must be YYYY-MM-DD").optional().nullable(),
     // What the client agreed to pay. Always USD - that is what the agency bills.

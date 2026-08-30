@@ -381,6 +381,15 @@ r = await call("POST", "/projects", {
 const offLimitsProject = r.json.data?.id;
 check("create a second project operations is kept off", r.status === 201, `${r.status} ${r.json.message}`);
 
+// The boards are rows now, not a fixed vocabulary, so the suite asks for the
+// ids the same way any client would.
+r = await call("GET", "/workflow-statuses?kind=task");
+const taskStatuses = r.json.data ?? [];
+const statusNamed = (name) => taskStatuses.find((row) => row.name === name)?.id;
+const TODO = statusNamed("To do");
+const IN_PROGRESS = statusNamed("In progress");
+const DONE = statusNamed("Done");
+
 const opsCookie = roleCookies.operations;
 const pmCookie = roleCookies.project_manager;
 
@@ -1862,7 +1871,7 @@ r = await call("PATCH", `/tasks/${guardedTaskId}`, { assignee_id: opsUserId });
 check("and assigns it", r.status === 200, `${r.status} ${r.json.message}`);
 
 cookie = opsCookie;
-r = await call("PATCH", `/tasks/${guardedTaskId}`, { status: "in_progress" });
+r = await call("PATCH", `/tasks/${guardedTaskId}`, { status_id: IN_PROGRESS });
 check("operations can move its status", r.status === 200, `${r.status} ${r.json.message}`);
 
 r = await call("PATCH", `/tasks/${guardedTaskId}`, { description: "picked this up" });
@@ -2569,11 +2578,11 @@ check(
 );
 check(
   "and every row it returns is genuinely unfinished",
-  (r.json.data ?? []).every((t) => t.status !== "done"),
+  (r.json.data ?? []).every((t) => t.status?.category !== "done"),
   JSON.stringify((r.json.data ?? []).map((t) => t.status))
 );
 
-r = await call("PATCH", `/tasks/${lateTaskId}`, { status: "done" });
+r = await call("PATCH", `/tasks/${lateTaskId}`, { status_id: DONE });
 check("the task is finished late", r.status === 200, `${r.status} ${r.json.message}`);
 
 r = await call("GET", "/tasks?overdue=true");
@@ -3069,6 +3078,137 @@ check("a project manager cannot read the login history", r.status === 403, `${r.
 cookie = roleCookies.sales;
 r = await call("GET", "/security/login-events");
 check("nor can sales", r.status === 403, `${r.status}`);
+cookie = adminCookie;
+
+
+// ---------------------------------------------------------------------------
+// Custom statuses: the names are the agency's, the meanings are the product's.
+// ---------------------------------------------------------------------------
+
+cookie = adminCookie;
+
+r = await call("GET", "/workflow-statuses");
+const allStatuses = r.json.data ?? [];
+check("a new agency has boards to work on", allStatuses.length >= 9, `${allStatuses.length}`);
+check(
+  "one default per board, so new work lands somewhere",
+  ["task", "project"].every(
+    (kind) => allStatuses.filter((row) => row.kind === kind && row.is_default).length === 1
+  ),
+  JSON.stringify(allStatuses.filter((row) => row.is_default).map((row) => [row.kind, row.name]))
+);
+
+// The whole point: rename the column, keep the behaviour.
+r = await call("PATCH", `/workflow-statuses/${DONE}`, { name: "Shipped" });
+check("a status can be renamed", r.status === 200, `${r.status} ${r.json.message}`);
+
+r = await call("POST", "/tasks", {
+  project_id: timeProjectId,
+  title: `Rename check ${stamp}`,
+});
+const renameTaskId = r.json.data?.id;
+check("a task is created on the board default", r.status === 201, `${r.status} ${r.json.message}`);
+check(
+  "and lands on the status marked default",
+  r.json.data?.status?.name === "To do",
+  JSON.stringify(r.json.data?.status)
+);
+check("with no completion date", r.json.data?.completed_at === null, r.json.data?.completed_at);
+
+r = await call("PATCH", `/tasks/${renameTaskId}`, { status_id: DONE });
+check(
+  // The name changed, the category did not - so the clock still stops. This is
+  // the one behaviour the whole design exists to protect.
+  "moving to a RENAMED done status still sets the completion date",
+  r.status === 200 && r.json.data?.completed_at !== null,
+  JSON.stringify({ status: r.json.data?.status?.name, completed_at: r.json.data?.completed_at })
+);
+
+r = await call("PATCH", `/tasks/${renameTaskId}`, { status_id: IN_PROGRESS });
+check(
+  "and moving back off it clears the date again",
+  r.status === 200 && r.json.data?.completed_at === null,
+  JSON.stringify(r.json.data?.completed_at)
+);
+
+// A status the agency invented, in an existing category.
+r = await call("POST", "/workflow-statuses", {
+  kind: "task",
+  name: "In QA",
+  category: "active",
+});
+const qaStatus = r.json.data?.id;
+check("a new column can be added", r.status === 201, `${r.status} ${r.json.message}`);
+check(
+  "appended to the end of the board rather than dropped in the middle",
+  r.json.data?.sort_order >= 3,
+  `sort_order ${r.json.data?.sort_order}`
+);
+
+r = await call("POST", "/workflow-statuses", { kind: "task", name: "in qa", category: "open" });
+check(
+  "a differently-cased duplicate is refused",
+  r.status === 409,
+  `${r.status} ${r.json.message}`
+);
+
+r = await call("PATCH", `/tasks/${renameTaskId}`, { status_id: qaStatus });
+check("work can be moved onto it", r.status === 200, `${r.status} ${r.json.message}`);
+
+r = await call("GET", "/tasks?overdue=true");
+check(
+  // "In QA" is category active, so work sitting in it is still unfinished.
+  "and an invented in-progress status still counts as unfinished",
+  r.status === 200,
+  `${r.status}`
+);
+
+// A category is required and never guessed from the name.
+r = await call("POST", "/workflow-statuses", { kind: "task", name: "Nearly done" });
+check(
+  "a status with no stated meaning is refused",
+  r.status === 400,
+  `${r.status} ${r.json.message}`
+);
+
+// Deleting a column would have to move the work somewhere.
+r = await call("DELETE", `/workflow-statuses/${qaStatus}`);
+check(
+  "a status with work on it cannot be deleted",
+  r.status === 409,
+  `${r.status} ${r.json.message}`
+);
+check(
+  "and the refusal says to move them or turn it off",
+  /move them|turn it off/i.test(r.json.message ?? ""),
+  r.json.message
+);
+
+r = await call("PATCH", `/tasks/${renameTaskId}`, { status_id: TODO });
+r = await call("DELETE", `/workflow-statuses/${qaStatus}`);
+check("an empty one can be", r.status === 200, `${r.status} ${r.json.message}`);
+
+// Put the name back so later checks read normally.
+await call("PATCH", `/workflow-statuses/${DONE}`, { name: "Done" });
+
+// The default moves rather than leaving a board with nowhere to start.
+r = await call("PATCH", `/workflow-statuses/${IN_PROGRESS}`, { is_default: true });
+check("the default can be moved", r.status === 200, `${r.status}`);
+
+r = await call("GET", "/workflow-statuses?kind=task");
+check(
+  "and there is still exactly one",
+  (r.json.data ?? []).filter((row) => row.is_default).length === 1,
+  JSON.stringify((r.json.data ?? []).filter((row) => row.is_default).map((row) => row.name))
+);
+await call("PATCH", `/workflow-statuses/${TODO}`, { is_default: true });
+
+// Shaping the board is a reporting decision, not a personal preference.
+cookie = pmCookie;
+r = await call("GET", "/workflow-statuses");
+check("a project manager can read the board", r.status === 200, `${r.status}`);
+r = await call("POST", "/workflow-statuses", { kind: "task", name: "Mine", category: "open" });
+check("but cannot add a column", r.status === 403, `${r.status}`);
 cookie = adminCookie;
 
 

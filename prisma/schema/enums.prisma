@@ -62,21 +62,6 @@ enum LeadStage {
   lost
 }
 
-enum ProjectStatus {
-  planning
-  active
-  on_hold
-  completed
-  cancelled
-}
-
-enum TaskStatus {
-  todo
-  in_progress
-  in_review
-  done
-}
-
 enum TaskPriority {
   low
   medium
@@ -222,4 +207,30 @@ enum NotificationEvent {
   member_awaiting_approval
   /// Broadcast, from the nightly sweep.
   invoice_overdue
+}
+
+/// Which board a status belongs to.
+enum WorkflowKind {
+  task
+  project
+}
+
+/// What a status MEANS to the system, as opposed to what it is called.
+///
+/// This is the part that makes renaming safe. Four places reason about status
+/// rather than displaying it - completed_at is derived from a task reaching
+/// done, the dashboard counts open tasks and active projects - and they all
+/// compare the category. Rename "Done" to "Shipped" and add "In QA" and every
+/// one of them stays correct.
+enum StatusCategory {
+  /// Not started.
+  open
+  /// Being worked on. "In QA" and "In review" are both this.
+  active
+  /// Stopped, but not finished. Waiting on somebody.
+  blocked
+  /// Finished, and counted as delivered. Stops the clock.
+  done
+  /// Finished, and NOT counted as delivered. Abandoned rather than delivered.
+  cancelled
 }

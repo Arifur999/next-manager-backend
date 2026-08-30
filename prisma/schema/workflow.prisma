@@ -1,0 +1,35 @@
+/// A status on the task or project board, named by the agency.
+///
+/// Deliberately has no colour column. A status already carries a meaning -
+/// its category - and that is what the board colours by. A free colour field
+/// is a way to make a board unreadable, and it would encode nothing the
+/// category does not already say.
+///
+/// Retired rather than deleted once anything points at it, the same rule
+/// LeadSource and Department follow. Deleting one would have to move every task
+/// on it somewhere, and "somewhere" is a decision nobody asked to make.
+model WorkflowStatus {
+  id             String         @id @default(uuid())
+  organization_id String
+  kind           WorkflowKind
+  name           String
+  category       StatusCategory
+  /// Board order, left to right. Not alphabetical, because a board is a
+  /// sequence: "Done" does not come after "In progress" by accident.
+  sort_order     Int            @default(0)
+  /// What a new task or project starts on. One per kind per agency.
+  is_default     Boolean        @default(false)
+  is_active      Boolean        @default(true)
+  created_at     DateTime       @default(now())
+  updated_at     DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  tasks        Task[]
+  projects     Project[]
+
+  /// Names are unique per board per agency, not globally.
+  @@unique([organization_id, kind, name])
+  /// The board, in board order.
+  @@index([organization_id, kind, sort_order])
+  @@map("workflow_statuses")
+}

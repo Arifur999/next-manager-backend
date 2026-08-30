@@ -1,10 +1,11 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { InvoiceStatus, Role } from "../../../generated/prisma/enums.js";
+import { InvoiceStatus, Role, WorkflowKind } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { assertProjectAvailable } from "../../middleware/checkSubscription.js";
 import { prisma } from "../../lib/prisma.js";
+import { defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
 import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import {
@@ -89,7 +90,7 @@ const getSingleProject = async (id: string, user: IRequestUser) => {
             tasks: {
                 where: { deleted_at: null },
                 include: { assignee: { select: { id: true, full_name: true, avatar_url: true } } },
-                orderBy: [{ status: "asc" }, { due_date: "asc" }],
+                orderBy: [{ status: { sort_order: "asc" } }, { due_date: "asc" }],
             },
         },
     });
@@ -187,6 +188,20 @@ const createProject = async (payload: ICreateProjectPayload, user: IRequestUser)
         throw new AppError(status.CONFLICT, "A project with this code already exists");
     }
 
+    // Chosen, or whatever the board starts on. An agency always has statuses
+    // - they are seeded with the organization - so a missing one means every
+    // status was switched off, and saying that is more use than a foreign key
+    // error.
+    const statusId =
+        payload.status_id ?? (await defaultStatusId(prisma, user.organizationId, WorkflowKind.project));
+
+    if (!statusId) {
+        throw new AppError(
+            status.BAD_REQUEST,
+            "This board has no statuses turned on. Add one before creating a project."
+        );
+    }
+
     return prisma.project.create({
         data: {
             organization_id: user.organizationId,
@@ -194,7 +209,7 @@ const createProject = async (payload: ICreateProjectPayload, user: IRequestUser)
             name: payload.name,
             code: payload.code,
             description: payload.description ?? "",
-            status: payload.status,
+            status_id: statusId,
             start_date: payload.start_date ? new Date(`${payload.start_date}T00:00:00.000Z`) : null,
             end_date: payload.end_date ? new Date(`${payload.end_date}T00:00:00.000Z`) : null,
             contract_value_usd: payload.contract_value_usd ?? 0,

@@ -1,13 +1,15 @@
 import z from "zod";
 import { Role } from "../../../generated/prisma/enums.js";
-import { TaskPriority, TaskStatus } from "../../../generated/prisma/enums.js";
+import { TaskPriority } from "../../../generated/prisma/enums.js";
 
 export const createTaskZodSchema = z.object({
     project_id: z.uuid("project_id must be a valid id"),
     title: z.string("Title must be string").min(1, "Title is required"),
     description: z.string("Description must be string").optional(),
     assignee_id: z.uuid("assignee_id must be a valid id").optional().nullable(),
-    status: z.enum(TaskStatus, "Choose a valid status").optional(),
+    // An id, not a word: the vocabulary belongs to the agency now. Absent means
+    // the board's default, which is what a new task lands on.
+    status_id: z.uuid("status_id must be a valid id").optional(),
     priority: z.enum(TaskPriority, "Choose a valid priority").optional(),
     due_date: z.iso.date("Due date must be YYYY-MM-DD").optional().nullable(),
 });
@@ -35,7 +37,9 @@ export const updateTaskZodSchema = createTaskZodSchema.partial();
  */
 export const updateOwnTaskZodSchema = z
     .object({
-        status: z.enum(TaskStatus, "Choose a valid status").optional(),
+        // An id, not a word: the vocabulary belongs to the agency now. Absent means
+    // the board's default, which is what a new task lands on.
+    status_id: z.uuid("status_id must be a valid id").optional(),
         description: z.string("Description must be string").optional(),
     })
     .strict();

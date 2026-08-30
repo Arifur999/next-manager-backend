@@ -17,7 +17,12 @@ const register = catchAsync(async (req: Request, res: Response) => {
 });
 
 const login = catchAsync(async (req: Request, res: Response) => {
-    const { accessToken, refreshToken, user } = await AuthService.login(req.body);
+    // req.ip is the real client address because app.ts sets trust proxy -
+    // without that every attempt would look like it came from the proxy.
+    const { accessToken, refreshToken, user } = await AuthService.login(req.body, {
+        ip: req.ip,
+        userAgent: req.get("user-agent"),
+    });
 
     // The tokens go into httpOnly cookies AND the body: the browser client
     // relies on the cookies, while a non-browser caller (mobile, scripts) reads

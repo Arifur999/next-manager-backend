@@ -19,6 +19,14 @@ interface IResponseData<T> {
          * the client silently never receives.
          */
         totals?: Array<{ currency: string; amount: number }>;
+        /**
+         * The number the security screen exists for, counted across the
+         * whole window rather than the page - narrowing the list must not
+         * hide the thing somebody opened the page to notice.
+         */
+        failed_last_24h?: number;
+        /** How long login history is kept, so the screen can say it. */
+        retention_days?: number;
     };
     message: string;
 }

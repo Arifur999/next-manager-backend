@@ -7,6 +7,7 @@ import { globalErrorHandler } from "./app/middleware/globalErrorHandler.js";
 import notFound from "./app/middleware/notFound.js";
 import { PlatformService } from "./app/module/platform/platform.service.js";
 import { PlatformFinanceService } from "./app/module/platform/platformFinance.service.js";
+import { SecurityService } from "./app/module/security/security.service.js";
 import { indexRoute } from "./app/routes/index.js";
 import { syncTodaysRate } from "./app/utils/currencyRate.js";
 import { env } from "./config/env.js";
@@ -64,6 +65,23 @@ cron.schedule("45 1 * * *", async () => {
         );
     } catch (error) {
         console.error("[platform] snapshot failed:", (error as Error).message);
+    }
+});
+
+// Login history ages out.
+//
+// Ninety days is long enough to investigate something and short enough not to
+// hoard other people's addresses forever. Idempotent by construction - it
+// deletes rows whose date has already passed, so a missed night is caught by
+// the next one rather than needing a backfill.
+cron.schedule("15 2 * * *", async () => {
+    try {
+        const result = await SecurityService.pruneLoginEvents();
+        if (result.deleted > 0) {
+            console.log(`[security] pruned ${result.deleted} login events`);
+        }
+    } catch (error) {
+        console.error("[security] prune failed:", (error as Error).message);
     }
 });
 

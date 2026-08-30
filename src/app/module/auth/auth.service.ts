@@ -120,13 +120,69 @@ const register = async (payload: IRegisterPayload) => {
     });
 };
 
-const login = async (payload: ILoginPayload) => {
+/**
+ * Where the attempt came from.
+ *
+ * Passed in rather than read here, because the service has no request. Empty
+ * strings when the proxy did not send them - an unknown address is a fact
+ * about the request, not a reason to refuse it.
+ */
+export interface LoginContext {
+    ip?: string;
+    userAgent?: string;
+}
+
+/**
+ * Writing down an attempt.
+ *
+ * Best-effort on purpose. If this write fails the sign-in still has to
+ * behave: a logging problem must never turn a clean 401 into a 500, nor stop
+ * somebody legitimate getting in.
+ */
+const recordLogin = async (entry: {
+    email: string;
+    success: boolean;
+    userId?: string | null;
+    organizationId?: string | null;
+    context?: LoginContext;
+}) => {
+    try {
+        await prisma.loginEvent.create({
+            data: {
+                email: entry.email.toLowerCase().trim(),
+                success: entry.success,
+                user_id: entry.userId ?? null,
+                organization_id: entry.organizationId ?? null,
+                ip: entry.context?.ip ?? "",
+                // Long enough to tell a browser from a script, short enough
+                // that a hostile header cannot fill the table.
+                user_agent: (entry.context?.userAgent ?? "").slice(0, 300),
+            },
+        });
+    } catch (error) {
+        console.error("[security] could not record a login attempt:", (error as Error).message);
+    }
+};
+
+const login = async (payload: ILoginPayload, context?: LoginContext) => {
     const user = await prisma.user.findUnique({ where: { email: payload.email } });
 
     // Deliberately the same message for "no such account" and "wrong password":
     // telling them apart turns this endpoint into a way to enumerate who has an
     // account here.
     if (!user || !(await passwordUtils.comparePassword(payload.password, user.password))) {
+        // An address with no account belongs to no company, so this row has a
+        // null organization_id and appears on nobody's screen. An address that
+        // DOES exist is the valuable case - it is what tells an admin somebody
+        // is trying their team's accounts.
+        await recordLogin({
+            email: payload.email,
+            success: false,
+            userId: user?.id,
+            organizationId: user?.organization_id,
+            context,
+        });
+
         throw new AppError(status.UNAUTHORIZED, "Invalid email or password");
     }
 
@@ -134,6 +190,17 @@ const login = async (payload: ILoginPayload) => {
     // send somebody to two different people, and one message for both means
     // they ask the wrong one.
     if (user.status !== UserStatus.active) {
+        // Recorded as a failure, because it is one: the password was right and
+        // they still could not get in. An admin looking at a run of these is
+        // looking at somebody waiting on them.
+        await recordLogin({
+            email: payload.email,
+            success: false,
+            userId: user.id,
+            organizationId: user.organization_id,
+            context,
+        });
+
         throw new AppError(
             status.UNAUTHORIZED,
             user.status === UserStatus.pending
@@ -143,6 +210,14 @@ const login = async (payload: ILoginPayload) => {
     }
 
     const tokens = issueTokens(user);
+
+    await recordLogin({
+        email: payload.email,
+        success: true,
+        userId: user.id,
+        organizationId: user.organization_id,
+        context,
+    });
 
     // Reduced to the same allow-list /auth/me uses, rather than "the whole row
     // minus password".
@@ -159,7 +234,6 @@ const login = async (payload: ILoginPayload) => {
 
     return { ...tokens, user: safeUser };
 };
-
 const refreshToken = async (token: string | undefined) => {
     if (!token) {
         throw new AppError(status.UNAUTHORIZED, "No refresh token provided");

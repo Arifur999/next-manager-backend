@@ -33,6 +33,7 @@ model Organization {
   departments  Department[]
   notifications Notification[]
   notification_rules NotificationRule[]
+  login_events  LoginEvent[]
 
   @@map("organizations")
 }
@@ -82,6 +83,7 @@ model User {
   platform_actions   PlatformActivityLog[] @relation("PlatformActor")
   announcement_reads AnnouncementRead[]
   notifications      Notification[]
+  login_events       LoginEvent[]
 
   @@index([organization_id])
   /// The FK, and the department filter on the team list.
@@ -192,4 +194,45 @@ model Department {
   @@unique([organization_id, name])
   @@index([organization_id])
   @@map("departments")
+}
+
+/// Who tried to sign in, and whether it worked.
+///
+/// Both ids are nullable on purpose, and the reason is the tenant boundary.
+/// A failed attempt at an address with no account belongs to no company, so it
+/// must never appear on any company's screen - and a null organization_id is
+/// what guarantees that rather than a filter somebody might forget.
+///
+/// A failed attempt at an address that DOES exist is the valuable case: it is
+/// the one that tells an admin somebody is trying their team's accounts.
+///
+/// The password is never here, successful or not. Nor is the token.
+model LoginEvent {
+  id             String   @id @default(uuid())
+  /// Null when the address matched no account.
+  organization_id String?
+  /// Null for the same reason.
+  user_id        String?
+  /// The address as typed, so an attempt on a non-existent account is still
+  /// legible. Lower-cased, because "Admin@" and "admin@" are one attempt.
+  email          String
+  success        Boolean
+  /// Empty when it could not be read. Written down because "somebody signed in
+  /// from a machine you do not recognise" is not answerable without it.
+  ip             String   @default("")
+  user_agent     String   @default("")
+  created_at     DateTime @default(now())
+
+  organization Organization? @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  /// SetNull, not Cascade: removing somebody must not erase the record of
+  /// attempts made against their account.
+  user         User?         @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  /// The security screen: one agency's attempts, newest first.
+  @@index([organization_id, created_at(sort: Desc)])
+  /// The FK, and "show me everything against this person".
+  @@index([user_id])
+  /// The nightly prune.
+  @@index([created_at])
+  @@map("login_events")
 }

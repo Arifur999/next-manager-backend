@@ -2980,5 +2980,97 @@ check("a project manager cannot read the rules", r.status === 403, `${r.status}`
 cookie = adminCookie;
 
 
+// ---------------------------------------------------------------------------
+// Security: who tried to sign in, and whether it worked.
+// ---------------------------------------------------------------------------
+
+cookie = adminCookie;
+
+r = await call("GET", "/security/login-events");
+check("the login history opens", r.status === 200, `${r.status} ${r.json.message}`);
+check(
+  "with this agency's own sign-ins in it",
+  (r.json.data ?? []).length > 0 && (r.json.data ?? []).every((row) => typeof row.success === "boolean"),
+  `${(r.json.data ?? []).length} events`
+);
+check(
+  "and says how long it keeps them, so the screen can say it too",
+  r.json.meta?.retention_days === 90,
+  JSON.stringify(r.json.meta?.retention_days)
+);
+
+const ownEmails = new Set((r.json.data ?? []).map((row) => row.email));
+check(
+  "a successful sign-in is recorded against the person",
+  (r.json.data ?? []).some((row) => row.success && row.user?.full_name),
+  JSON.stringify((r.json.data ?? []).slice(0, 1))
+);
+
+// A wrong password on a real account is the case this screen exists for.
+const beforeFailed = r.json.meta?.failed_last_24h ?? 0;
+
+cookie = "";
+r = await call("POST", "/auth/login", { email, password: "WrongPassword1" });
+check("a wrong password is refused", r.status === 401, `${r.status}`);
+
+cookie = adminCookie;
+r = await call("GET", "/security/login-events?success=false");
+check(
+  "and the failure is recorded against their account",
+  (r.json.data ?? []).some((row) => row.email === email.toLowerCase() && !row.success),
+  JSON.stringify((r.json.data ?? []).slice(0, 2).map((row) => [row.email, row.success]))
+);
+check(
+  "with the count of recent failures, which is what the page is for",
+  (r.json.meta?.failed_last_24h ?? 0) > beforeFailed,
+  `${beforeFailed} -> ${r.json.meta?.failed_last_24h}`
+);
+check(
+  "and never the password that was tried",
+  !JSON.stringify(r.json.data ?? []).includes("WrongPassword1"),
+  "a password appeared in the login history"
+);
+
+// The tenant boundary. An address with no account belongs to no company.
+const strangerEmail = `nobody${stamp}@nowhere.test`;
+cookie = "";
+r = await call("POST", "/auth/login", { email: strangerEmail, password: "Passw0rd123" });
+check("an unknown address is refused", r.status === 401, `${r.status}`);
+
+cookie = adminCookie;
+r = await call("GET", "/security/login-events");
+check(
+  // A null organization_id is what guarantees this, rather than a filter
+  // somebody has to remember to write.
+  "an attempt on an address with no account appears on nobody's screen",
+  !(r.json.data ?? []).some((row) => row.email === strangerEmail),
+  "an unowned attempt leaked into a company's history"
+);
+
+r = await call("GET", "/security/login-events?success=true");
+check(
+  "the successful-only filter returns only successes",
+  (r.json.data ?? []).every((row) => row.success === true),
+  JSON.stringify([...new Set((r.json.data ?? []).map((row) => row.success))])
+);
+
+r = await call("GET", "/security/login-events?success=maybe");
+check(
+  "an unknown filter shows everything rather than an error",
+  r.status === 200,
+  `${r.status}`
+);
+
+// Every colleague's sign-in times and addresses is not something a colleague
+// should be able to read about the rest of the team.
+cookie = pmCookie;
+r = await call("GET", "/security/login-events");
+check("a project manager cannot read the login history", r.status === 403, `${r.status}`);
+cookie = roleCookies.sales;
+r = await call("GET", "/security/login-events");
+check("nor can sales", r.status === 403, `${r.status}`);
+cookie = adminCookie;
+
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

@@ -9,6 +9,16 @@ interface IResponseData<T> {
         limit: number;
         total: number;
         totalPage: number;
+        /**
+         * Sums that belong to the whole filtered list rather than the page of
+         * it that came back - the transactions ledger uses this.
+         *
+         * Per currency, never across it: adding dollars to taka produces a
+         * number that is true of nothing. Named explicitly rather than letting
+         * meta take any key, so a typo here is a compile error and not a field
+         * the client silently never receives.
+         */
+        totals?: Array<{ currency: string; amount: number }>;
     };
     message: string;
 }

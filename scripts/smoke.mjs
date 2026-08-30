@@ -2582,5 +2582,141 @@ check(
 );
 
 
+// ---------------------------------------------------------------------------
+// The ledger, read as a ledger.
+// ---------------------------------------------------------------------------
+//
+// Every money route already writes AccountTransaction. This is the first screen
+// that reads it as one list, so the checks are about what each kind MEANS - not
+// about recording anything new.
+
+const KIND_SOURCES = {
+  income: ["payment", "due_received"],
+  expense: ["expense", "team_payout", "owner_withdrawal", "due_payment"],
+  transfer: ["exchange_in", "exchange_out"],
+};
+
+cookie = adminCookie;
+
+// The case the whole classification exists for: an exchange writes a positive
+// row in one account and a negative row in another. It looks exactly like
+// income and an expense, and counting it as either would inflate both sides
+// of the books with money that never entered or left the business.
+r = await call("POST", "/exchanges", {
+  from_account_id: usdAccount,
+  to_account_id: bdtAccount,
+  date: "2026-08-22",
+  amount_usd: 25,
+  rate: 121,
+});
+check("an exchange is recorded", r.status === 201, `${r.status} ${r.json.message}`);
+
+r = await call("GET", "/transactions?kind=transfer");
+const exchangeRows = r.json.data ?? [];
+check(
+  "and writes both halves - one account down, another up",
+  exchangeRows.some((row) => row.source_type === "exchange_out" && row.amount < 0) &&
+    exchangeRows.some((row) => row.source_type === "exchange_in" && row.amount > 0),
+  JSON.stringify(exchangeRows.map((row) => [row.source_type, row.amount]))
+);
+
+r = await call("GET", "/transactions");
+const ledger = r.json.data ?? [];
+check("the ledger opens", r.status === 200, `${r.status} ${r.json.message}`);
+check(
+  "with rows carrying their account and what produced them",
+  ledger.length > 0 && ledger.every((row) => row.account?.name && row.source_type),
+  JSON.stringify(ledger.slice(0, 1))
+);
+check(
+  "and totals summed per currency, never across it",
+  Array.isArray(r.json.meta?.totals) &&
+    r.json.meta.totals.every((t) => typeof t.currency === "string" && typeof t.amount === "number"),
+  JSON.stringify(r.json.meta?.totals)
+);
+
+r = await call("GET", "/transactions?kind=income");
+const income = r.json.data ?? [];
+check(
+  "income is payments and money coming back, nothing else",
+  income.every((row) => ["payment", "due_received"].includes(row.source_type)),
+  JSON.stringify([...new Set(income.map((row) => row.source_type))])
+);
+
+r = await call("GET", "/transactions?kind=expense");
+const spent = r.json.data ?? [];
+check(
+  "expenses are costs, payouts, withdrawals and money lent",
+  spent.every((row) =>
+    ["expense", "team_payout", "owner_withdrawal", "due_payment"].includes(row.source_type)
+  ),
+  JSON.stringify([...new Set(spent.map((row) => row.source_type))])
+);
+
+r = await call("GET", "/transactions?kind=transfer");
+const moved = r.json.data ?? [];
+check(
+  // The two halves of an exchange look exactly like income and an expense.
+  // Counting them as either inflates both sides with money that never entered
+  // or left the business.
+  "transfers are the two halves of an exchange, and are neither",
+  moved.every((row) => ["exchange_in", "exchange_out"].includes(row.source_type)),
+  JSON.stringify([...new Set(moved.map((row) => row.source_type))])
+);
+check(
+  "so an exchange never turns up under income",
+  !income.some((row) => row.source_type === "exchange_in"),
+  "an exchange was counted as income"
+);
+check(
+  "nor under expenses",
+  !spent.some((row) => row.source_type === "exchange_out"),
+  "an exchange was counted as an expense"
+);
+
+// Nothing is dropped by the three filters. An adjustment is a correction and
+// an opening balance is where counting started - neither is income, an
+// expense or a transfer, and both still have to appear in the full list.
+//
+// Asserted as an identity rather than by hunting for a particular row, so it
+// stays meaningful whatever this run happened to record.
+const classified = new Set([...KIND_SOURCES.income, ...KIND_SOURCES.expense, ...KIND_SOURCES.transfer]);
+const unclassified = ledger.filter((row) => !classified.has(row.source_type));
+
+check(
+  "the three filters partition the ledger and lose nothing",
+  income.length + spent.length + moved.length + unclassified.length === ledger.length,
+  `${income.length}+${spent.length}+${moved.length}+${unclassified.length} vs ${ledger.length}`
+);
+check(
+  "and anything that is none of the three is still in the full list",
+  unclassified.every((row) => ledger.some((entry) => entry.id === row.id)),
+  JSON.stringify([...new Set(unclassified.map((row) => row.source_type))])
+);
+
+r = await call("GET", "/transactions?kind=nonsense");
+check(
+  "an unknown kind shows everything rather than an error",
+  r.status === 200 && (r.json.data ?? []).length === ledger.length,
+  `${r.status} with ${(r.json.data ?? []).length} of ${ledger.length}`
+);
+
+r = await call("GET", `/transactions?account_id=${usdAccount}`);
+check(
+  "the ledger can be narrowed to one account",
+  (r.json.data ?? []).every((row) => row.account?.id === usdAccount),
+  JSON.stringify([...new Set((r.json.data ?? []).map((row) => row.account?.name))])
+);
+
+// The ledger is the whole agency's money.
+cookie = pmCookie;
+r = await call("GET", "/transactions");
+check("a project manager cannot read the ledger", r.status === 403, `${r.status}`);
+cookie = roleCookies.sales;
+r = await call("GET", "/transactions");
+check("nor can sales", r.status === 403, `${r.status}`);
+cookie = adminCookie;
+
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

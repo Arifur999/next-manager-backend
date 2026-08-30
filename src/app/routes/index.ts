@@ -32,6 +32,7 @@ import { SettingsRoutes } from "../module/settings/settings.route.js";
 import { TaskRoutes } from "../module/task/task.route.js";
 import { TimeEntryRoutes } from "../module/timeEntry/timeEntry.route.js";
 import { TeamPayoutRoutes } from "../module/teamPayout/teamPayout.route.js";
+import { TransactionRoutes } from "../module/transaction/transaction.route.js";
 import { UserRoutes } from "../module/user/user.route.js";
 import { VaultRoutes } from "../module/vault/vault.route.js";
 
@@ -56,6 +57,7 @@ router.use("/milestones", MilestoneRoutes);
 router.use("/kpi-targets", KpiTargetRoutes);
 router.use("/kpi", KpiRoutes);
 router.use("/accounts", AccountRoutes);
+router.use("/transactions", TransactionRoutes);
 router.use("/invoices", InvoiceRoutes);
 router.use("/payments", PaymentRoutes);
 router.use("/exchanges", ExchangeRoutes);

@@ -20,11 +20,32 @@ import { ICreateInvoicePayload, IUpdateInvoicePayload } from "./invoice.validati
 const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 interface LineItemInput {
+    service_id?: string | null;
     description: string;
     quantity?: number;
     unit_price?: number;
     sort_order?: number;
 }
+
+/**
+ * Every service named on the lines belongs to the caller's agency.
+ *
+ * Checked as a set rather than one at a time: a foreign key proves each row
+ * exists, not that all of them are ours, and one borrowed id in a list of five
+ * is exactly the case a per-row check invites somebody to skip.
+ */
+const assertOwnServices = async (items: LineItemInput[], user: IRequestUser) => {
+    const ids = [...new Set(items.map((item) => item.service_id).filter(Boolean))] as string[];
+    if (ids.length === 0) return;
+
+    const found = await prisma.service.count({
+        where: { id: { in: ids }, organization_id: user.organizationId },
+    });
+
+    if (found !== ids.length) {
+        throw new AppError(status.NOT_FOUND, "One of those services does not exist");
+    }
+};
 
 /** Line amounts and the invoice total, worked out server-side. */
 const priceItems = (items: LineItemInput[], discount: number, tax: number) => {
@@ -32,6 +53,10 @@ const priceItems = (items: LineItemInput[], discount: number, tax: number) => {
         const quantity = new Prisma.Decimal(item.quantity ?? 1);
         const unitPrice = new Prisma.Decimal(item.unit_price ?? 0);
         return {
+            // Kept on the line, not resolved at read time: what a line was
+            // for is a fact about the invoice, and a service renamed later
+            // must not restate what was billed.
+            service_id: item.service_id ?? null,
             description: item.description,
             quantity,
             unit_price: unitPrice,
@@ -184,6 +209,7 @@ const createInvoice = async (payload: ICreateInvoicePayload, user: IRequestUser)
 
         const discount = payload.discount ?? 0;
         const tax = payload.tax ?? 0;
+        await assertOwnServices(payload.items, user);
         const { priced, subtotal, total } = priceItems(payload.items, discount, tax);
 
         const invoiceNumber = payload.invoice_number ?? (await nextInvoiceNumber(tx, user.organizationId));
@@ -242,6 +268,7 @@ const updateInvoice = async (id: string, payload: IUpdateInvoicePayload, user: I
         // document, and matching up edited lines by position would silently
         // reattach a payment-relevant amount to the wrong description.
         if (payload.items) {
+            await assertOwnServices(payload.items ?? [], user);
             const priced = priceItems(payload.items, discount, tax);
             subtotal = priced.subtotal;
             total = priced.total;

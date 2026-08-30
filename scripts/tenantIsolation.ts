@@ -347,6 +347,61 @@ ok(
     JSON.stringify((departmentList.json.data as { name: string }[])?.map((row) => row.name))
 );
 
+// The service catalogue. Billing against another agency's entry would put
+// somebody else's work into the report of what each service has earned - and
+// a foreign key would happily allow it, which is why there is a check.
+const bService = (await call("POST", "/services", { name: "B Service" }, b.cookie)).json
+    .data as { id: string };
+
+refused(
+    "invoice line billed against B's service",
+    await call(
+        "POST",
+        "/invoices",
+        {
+            client_id: a.client.id,
+            issue_date: "2026-09-01",
+            due_date: "2026-09-15",
+            items: [
+                { service_id: bService.id, description: "Stolen", quantity: 1, unit_price: 100 },
+            ],
+        },
+        a.cookie
+    )
+);
+
+refused(
+    "project filed under B's service",
+    await call("PATCH", `/projects/${a.project.id}`, { service_id: bService.id }, a.cookie)
+);
+
+refused(
+    "package built from B's service",
+    await call(
+        "POST",
+        "/services/templates",
+        { name: "Stolen package", items: [{ service_id: bService.id, quantity: 1 }] },
+        a.cookie
+    )
+);
+
+refused(
+    "edit B's service",
+    await call("PATCH", `/services/${bService.id}`, { name: "Owned" }, a.cookie)
+);
+refused(
+    "delete B's service",
+    await call("DELETE", `/services/${bService.id}`, undefined, a.cookie)
+);
+
+const serviceList = await call("GET", "/services", undefined, a.cookie);
+ok(
+    "A's catalogue carries none of B's",
+    Array.isArray(serviceList.json.data) &&
+        !(serviceList.json.data as { id: string }[]).some((row) => row.id === bService.id),
+    JSON.stringify((serviceList.json.data as { name: string }[])?.map((row) => row.name))
+);
+
 // A list endpoint cannot 404, so this one is checked by what comes back.
 const linkList = await call("GET", `/client-links?client_id=${b.client.id}`, undefined, a.cookie);
 ok(

@@ -2,6 +2,9 @@ import z from "zod";
 import { InvoiceStatus } from "../../../generated/prisma/enums.js";
 
 const invoiceItemZodSchema = z.object({
+    // What was sold, when it came from the catalogue. A line typed by hand
+    // has no service and always will be a real invoice line.
+    service_id: z.uuid("service_id must be a valid id").nullable().optional(),
     description: z.string("Description must be string").min(1, "Description is required"),
     quantity: z.number("Quantity must be a number").positive("Quantity must be greater than zero").optional(),
     unit_price: z.number("Unit price must be a number").nonnegative("Unit price cannot be negative").optional(),

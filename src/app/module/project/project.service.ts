@@ -5,6 +5,7 @@ import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { assertProjectAvailable } from "../../middleware/checkSubscription.js";
 import { prisma } from "../../lib/prisma.js";
+import { assertOwnService } from "../../shared/assertOwnService.js";
 import { defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
 import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
@@ -196,6 +197,8 @@ const createProject = async (payload: ICreateProjectPayload, user: IRequestUser)
         throw new AppError(status.CONFLICT, "A project with this code already exists");
     }
 
+    await assertOwnService(prisma, payload.service_id, user);
+
     // Chosen, or whatever the board starts on. An agency always has statuses
     // - they are seeded with the organization - so a missing one means every
     // status was switched off, and saying that is more use than a foreign key
@@ -214,6 +217,7 @@ const createProject = async (payload: ICreateProjectPayload, user: IRequestUser)
         data: {
             organization_id: user.organizationId,
             client_id: payload.client_id,
+            service_id: payload.service_id ?? null,
             name: payload.name,
             code: payload.code,
             description: payload.description ?? "",
@@ -246,6 +250,8 @@ const updateProject = async (id: string, payload: IUpdateProjectPayload, user: I
         });
         if (!client) throw new AppError(status.NOT_FOUND, "Client not found");
     }
+
+    await assertOwnService(prisma, payload.service_id, user);
 
     return prisma.project.update({
         where: { id },

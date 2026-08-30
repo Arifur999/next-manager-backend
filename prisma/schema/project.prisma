@@ -4,6 +4,9 @@ model Project {
   id             String        @id @default(uuid())
   organization_id String
   client_id      String
+  /// What this project is, from the catalogue. Optional: plenty of work does
+  /// not map onto one thing being sold.
+  service_id     String?
   name           String
   code           String
   description    String        @default("")
@@ -34,6 +37,7 @@ model Project {
   organization Organization    @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   status       WorkflowStatus  @relation(fields: [status_id], references: [id], onDelete: Restrict)
   client       Client          @relation(fields: [client_id], references: [id], onDelete: Restrict)
+  service      Service?        @relation(fields: [service_id], references: [id], onDelete: Restrict)
   members      ProjectMember[]
   tasks        Task[]
   payments     Payment[]
@@ -54,6 +58,8 @@ model Project {
   /// The projects list, in the order it is shown.
   @@index([organization_id, created_at(sort: Desc)])
   @@index([client_id])
+  /// The FK.
+  @@index([service_id])
   @@map("projects")
 }
 

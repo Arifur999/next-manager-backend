@@ -3224,5 +3224,174 @@ check("but cannot add a column", r.status === 403, `${r.status}`);
 cookie = adminCookie;
 
 
+// ---------------------------------------------------------------------------
+// Services: what the agency sells.
+// ---------------------------------------------------------------------------
+
+cookie = adminCookie;
+
+r = await call("POST", "/services/categories", { name: "Design" });
+const designCategory = r.json.data?.id;
+check("a service category can be added", r.status === 201, `${r.status} ${r.json.message}`);
+
+r = await call("POST", "/services", {
+  name: `Logo design ${stamp}`,
+  description: "Mark, wordmark and a one-page guide",
+  category_id: designCategory,
+  default_price_usd: 400,
+});
+const logoService = r.json.data?.id;
+check("a service can be added", r.status === 201, `${r.status} ${r.json.message}`);
+check(
+  "with the category it was filed under",
+  r.json.data?.category?.name === "Design",
+  JSON.stringify(r.json.data?.category)
+);
+
+r = await call("POST", "/services", { name: `logo design ${stamp}` });
+check("a differently-cased duplicate is refused", r.status === 409, `${r.status} ${r.json.message}`);
+
+r = await call("POST", "/services", { name: `SEO retainer ${stamp}`, default_price_usd: 250 });
+const seoService = r.json.data?.id;
+check("a service with no category is fine", r.status === 201, `${r.status} ${r.json.message}`);
+
+// A package is a pick, not a price.
+r = await call("POST", "/services/templates", {
+  name: `Launch package ${stamp}`,
+  items: [
+    { service_id: logoService, quantity: 1 },
+    { service_id: seoService, quantity: 3 },
+  ],
+});
+check("a package can be built from services", r.status === 201, `${r.status} ${r.json.message}`);
+check(
+  "carrying its lines and quantities",
+  r.json.data?.items?.length === 2,
+  JSON.stringify(r.json.data?.items?.length)
+);
+
+r = await call("POST", "/services/templates", { name: `Empty ${stamp}`, items: [] });
+check(
+  // A bundle with no lines is a name, not an offer.
+  "a package with no lines is refused",
+  r.status === 400,
+  `${r.status} ${r.json.message}`
+);
+
+// The link that makes the catalogue worth having.
+r = await call("POST", "/invoices", {
+  client_id: clientId,
+  issue_date: "2026-09-01",
+  due_date: "2026-09-15",
+  items: [
+    { service_id: logoService, description: "Logo design", quantity: 1, unit_price: 400 },
+    { description: "Rush fee typed by hand", quantity: 1, unit_price: 50 },
+  ],
+});
+const serviceInvoice = r.json.data?.id;
+check("an invoice line can name a service", r.status === 201, `${r.status} ${r.json.message}`);
+check(
+  "and a hand-typed line beside it is still fine",
+  (r.json.data?.items ?? []).length === 2,
+  JSON.stringify((r.json.data?.items ?? []).map((i) => i.service_id))
+);
+
+r = await call("PATCH", `/invoices/${serviceInvoice}`, { status: "sent" });
+check("the invoice is sent", r.status === 200, `${r.status}`);
+
+r = await call("GET", "/services/revenue");
+const billed = r.json.data ?? [];
+check("billed-by-service reports", r.status === 200, `${r.status} ${r.json.message}`);
+check(
+  "with the service that was billed",
+  billed.some((row) => row.service.id === logoService && row.billed_usd === 400),
+  JSON.stringify(billed)
+);
+check(
+  // Dropping them would make the totals add up to less than the invoices with
+  // no clue why.
+  "and hand-typed lines shown as a row rather than dropped",
+  billed.some((row) => row.service.id === "" && row.billed_usd >= 50),
+  JSON.stringify(billed.map((row) => [row.service.name, row.billed_usd]))
+);
+
+// Changing the catalogue must never restate an invoice already sent.
+r = await call("PATCH", `/services/${logoService}`, { default_price_usd: 900 });
+check("a service price can be changed", r.status === 200, `${r.status}`);
+
+r = await call("GET", `/invoices/${serviceInvoice}`);
+check(
+  "and the invoice already sent keeps its own price",
+  Number(r.json.data?.items?.[0]?.unit_price) === 400,
+  JSON.stringify(r.json.data?.items?.[0]?.unit_price)
+);
+
+// A project can say what it is. Set on the one that already exists rather than
+// creating another - the billing section above moves this company onto a
+// one-project tier, and the limit is doing its job.
+r = await call("PATCH", `/projects/${timeProjectId}`, { service_id: logoService });
+check("a project can name its service", r.status === 200, `${r.status} ${r.json.message}`);
+check(
+  "and it comes back on the project",
+  r.json.data?.service_id === logoService,
+  JSON.stringify(r.json.data?.service_id)
+);
+
+// Deleting is refused once anything is riding on it.
+r = await call("DELETE", `/services/${logoService}`);
+check(
+  "a service that has been billed cannot be deleted",
+  r.status === 409,
+  `${r.status} ${r.json.message}`
+);
+check(
+  "and the refusal says what is on it and to turn it off",
+  /invoice lines|projects|templates/.test(r.json.message ?? "") &&
+    /turn it off/i.test(r.json.message ?? ""),
+  r.json.message
+);
+
+r = await call("PATCH", `/services/${logoService}`, { is_active: false });
+check("turning it off is allowed", r.status === 200, `${r.status}`);
+
+// A category is a grouping, so removing one frees its services rather than
+// refusing until they have been moved by hand.
+r = await call("DELETE", `/services/categories/${designCategory}`);
+check(
+  "a category with services in it CAN be removed",
+  r.status === 200,
+  `${r.status} ${r.json.message}`
+);
+check(
+  "and says how many were left ungrouped",
+  /ungrouped/i.test(r.json.message ?? ""),
+  r.json.message
+);
+
+r = await call("GET", "/services");
+check(
+  "the services survive it",
+  (r.json.data ?? []).some((row) => row.id === logoService),
+  "a service vanished with its category"
+);
+
+// Anybody who raises an invoice needs to read the catalogue.
+cookie = roleCookies.sales;
+r = await call("GET", "/services");
+check("sales can read the catalogue", r.status === 200, `${r.status}`);
+r = await call("POST", "/services", { name: `Sales added ${stamp}` });
+check("and add to it", r.status === 201, `${r.status} ${r.json.message}`);
+
+cookie = opsCookie;
+r = await call("GET", "/services");
+check("operations can read it too", r.status === 200, `${r.status}`);
+r = await call("POST", "/services", { name: `Ops added ${stamp}` });
+check("but not add to it", r.status === 403, `${r.status}`);
+r = await call("GET", "/services/revenue");
+check("nor read what it earned", r.status === 403, `${r.status}`);
+
+cookie = adminCookie;
+
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

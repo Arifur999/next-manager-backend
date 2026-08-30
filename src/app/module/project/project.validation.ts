@@ -2,6 +2,8 @@ import z from "zod";
 
 export const createProjectZodSchema = z.object({
     client_id: z.uuid("client_id must be a valid id"),
+    // Optional: plenty of work does not map onto one thing being sold.
+    service_id: z.uuid("service_id must be a valid id").nullable().optional(),
     name: z.string("Name must be string").min(1, "Name is required"),
     // Unique per agency, not globally - two agencies both using "WEB-001" is
     // correct.

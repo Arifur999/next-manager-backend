@@ -44,6 +44,9 @@ model InvoiceItem {
   id             String   @id @default(uuid())
   organization_id String
   invoice_id     String
+  /// What was sold, when it came from the catalogue. Optional: a one-off line
+  /// typed by hand is a real invoice line and always will be.
+  service_id     String?
   description    String
   quantity       Decimal  @default(1) @db.Decimal(12, 2)
   unit_price     Decimal  @default(0) @db.Decimal(15, 2)
@@ -53,9 +56,14 @@ model InvoiceItem {
   sort_order     Int      @default(0)
   created_at     DateTime @default(now())
 
-  invoice Invoice @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
+  invoice Invoice  @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
+  /// Restrict: a service that has been billed cannot be deleted, or the line
+  /// loses what it was for. Turn it off instead.
+  service Service? @relation(fields: [service_id], references: [id], onDelete: Restrict)
 
   @@index([organization_id])
   @@index([invoice_id])
+  /// The FK, and "what has this service earned".
+  @@index([service_id])
   @@map("invoice_items")
 }

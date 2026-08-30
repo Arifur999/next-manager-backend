@@ -1,0 +1,98 @@
+/// A grouping for the things an agency sells.
+///
+/// Curated per agency, like every other reference list here. Retired rather
+/// than deleted once services point at it, so a category that stops being sold
+/// does not erase what it used to contain.
+model ServiceCategory {
+  id             String   @id @default(uuid())
+  organization_id String
+  name           String
+  is_active      Boolean  @default(true)
+  sort_order     Int      @default(0)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  services     Service[]
+
+  @@unique([organization_id, name])
+  @@index([organization_id])
+  @@map("service_categories")
+}
+
+/// Something the agency sells.
+///
+/// The price here is a STARTING point, not the price. Every invoice line keeps
+/// its own unit price, so changing this never restates an invoice already sent
+/// - the same rule InvoiceItem already follows for its stored `amount`.
+model Service {
+  id             String   @id @default(uuid())
+  organization_id String
+  /// Optional: a service can exist before anybody decides how to group it.
+  category_id    String?
+  name           String
+  description    String   @default("")
+  /// USD, like everything billable in this product. Zero means "no default" -
+  /// somebody types the number each time, which is a real way to sell.
+  default_price_usd Decimal @default(0) @db.Decimal(15, 2)
+  is_active      Boolean  @default(true)
+  sort_order     Int      @default(0)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  organization  Organization     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  /// SetNull, not Restrict: removing a category is a tidying decision and must
+  /// not require moving every service out of it first.
+  category      ServiceCategory? @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  invoice_items InvoiceItem[]
+  projects      Project[]
+  template_items ServiceTemplateItem[]
+
+  @@unique([organization_id, name])
+  @@index([organization_id])
+  @@index([category_id])
+  @@map("services")
+}
+
+/// A named bundle of services, so a repeat offer is one pick rather than five.
+///
+/// Deliberately not a "package with a price". The price of a bundle is the sum
+/// of what its lines are actually sold at, and storing a second total here
+/// would create two answers to what the client owes.
+model ServiceTemplate {
+  id             String   @id @default(uuid())
+  organization_id String
+  name           String
+  description    String   @default("")
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  organization Organization          @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  items        ServiceTemplateItem[]
+
+  @@unique([organization_id, name])
+  @@index([organization_id])
+  @@map("service_templates")
+}
+
+/// One line of a template.
+model ServiceTemplateItem {
+  id          String  @id @default(uuid())
+  template_id String
+  service_id  String
+  quantity    Decimal @default(1) @db.Decimal(12, 2)
+  sort_order  Int     @default(0)
+
+  template ServiceTemplate @relation(fields: [template_id], references: [id], onDelete: Cascade)
+  /// Restrict: a service inside a template cannot be deleted out from under it.
+  /// The template would otherwise silently lose a line.
+  service  Service         @relation(fields: [service_id], references: [id], onDelete: Restrict)
+
+  /// One line per service per template - two rows for the same service is a
+  /// quantity, not two lines.
+  @@unique([template_id, service_id])
+  @@index([template_id])
+  @@index([service_id])
+  @@map("service_template_items")
+}

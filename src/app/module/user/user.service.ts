@@ -8,7 +8,11 @@ import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { passwordUtils } from "../../utils/password.js";
-import { ICreateUserPayload, IUpdateUserPayload } from "./user.validation.js";
+import {
+    ICreateUserPayload,
+    ISetUserPermissionsPayload,
+    IUpdateUserPayload,
+} from "./user.validation.js";
 
 const PUBLIC_USER_FIELDS = {
     id: true,
@@ -206,6 +210,64 @@ const updateUser = async (id: string, payload: IUpdateUserPayload, user: IReques
     });
 };
 
+/**
+ * What this colleague may do inside their role.
+ *
+ * Empty means everything the role allows - the state everybody starts in, and
+ * the reason turning this layer on changed nothing for anybody. Ticking a box
+ * flips them from "everything" to "only these", which reads backwards unless
+ * the screen says it, so the screen says it.
+ *
+ * Not offered for admins. requirePermission lets an admin past every check by
+ * design, so storing a list against one would look like a restriction and
+ * enforce nothing.
+ */
+const setPermissions = async (
+    id: string,
+    payload: ISetUserPermissionsPayload,
+    user: IRequestUser
+) => {
+    const target = await prisma.user.findFirst({
+        where: { id, organization_id: user.organizationId, deleted_at: null },
+        select: { id: true, full_name: true, role: true },
+    });
+
+    if (!target) {
+        throw new AppError(status.NOT_FOUND, "User not found");
+    }
+
+    if (target.role === Role.admin) {
+        throw new AppError(
+            status.BAD_REQUEST,
+            "An admin already passes every check. Change their role first if you want to limit them."
+        );
+    }
+
+    return prisma.$transaction(async (tx) => {
+        const updated = await tx.user.update({
+            where: { id },
+            data: { permissions: payload.permissions },
+            select: PUBLIC_USER_FIELDS,
+        });
+
+        await logActivity(
+            tx,
+            {
+                entityType: "user",
+                entityId: id,
+                action: "updated",
+                summary:
+                    payload.permissions.length === 0
+                        ? `Gave ${target.full_name} everything their role allows`
+                        : `Limited ${target.full_name} to: ${payload.permissions.join(", ")}`,
+            },
+            user
+        );
+
+        return updated;
+    });
+};
+
 const deleteUser = async (id: string, user: IRequestUser) => {
     if (id === user.userId) {
         throw new AppError(status.CONFLICT, "You cannot delete your own account");
@@ -253,4 +315,5 @@ export const UserService = {
     createUser,
     updateUser,
     deleteUser,
+    setPermissions,
 };

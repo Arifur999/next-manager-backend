@@ -74,10 +74,25 @@ const deleteUser = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const setPermissions = catchAsync(async (req: Request, res: Response) => {
+    const result = await UserService.setPermissions(
+        req.params.id as string,
+        req.body,
+        req.user as IRequestUser
+    );
+    sendResponse(res, {
+        success: true,
+        httpStatus: status.OK,
+        message: "Access updated successfully",
+        data: result,
+    });
+});
+
 export const UserController = {
     getAllUsers,
     getSingleUser,
     createUser,
     updateUser,
     deleteUser,
+    setPermissions,
 };

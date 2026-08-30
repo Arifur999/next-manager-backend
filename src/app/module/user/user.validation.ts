@@ -1,4 +1,5 @@
 import z from "zod";
+import { COMPANY_PERMISSIONS } from "../../shared/companyPermissions.js";
 import { Role, UserStatus } from "../../../generated/prisma/enums.js";
 
 // Roles an admin may hand out. super_admin is deliberately absent - it is a
@@ -18,7 +19,11 @@ export const createUserZodSchema = z.object({
     // Nullable on purpose: null is "no department", which is a real answer for
     // somebody who works across all of them.
     department_id: z.uuid("department_id must be a valid id").nullable().optional(),
-    permissions: z.array(z.string()).optional(),
+    // A closed list. `User.permissions` accepted any string since the first
+    // week and was read by nobody; a typo stored there would be a permission
+    // that silently grants nothing - the worst kind of access control, one
+    // that looks configured and is not.
+    permissions: z.array(z.enum(COMPANY_PERMISSIONS, "Unknown permission")).optional(),
 });
 
 export const updateUserZodSchema = createUserZodSchema
@@ -36,3 +41,16 @@ export const updateUserZodSchema = createUserZodSchema
 
 export type ICreateUserPayload = z.infer<typeof createUserZodSchema>;
 export type IUpdateUserPayload = z.infer<typeof updateUserZodSchema>;
+
+/**
+ * Setting what a colleague may do.
+ *
+ * An EMPTY array is not a mistake and is not refused: it means "everything
+ * your role allows", which is where everybody starts. Refusing it would
+ * leave no way to undo a narrowing.
+ */
+export const setUserPermissionsZodSchema = z.object({
+    permissions: z.array(z.enum(COMPANY_PERMISSIONS, "Unknown permission")),
+});
+
+export type ISetUserPermissionsPayload = z.infer<typeof setUserPermissionsZodSchema>;

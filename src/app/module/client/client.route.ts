@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
+import { requirePermission } from "../../middleware/requirePermission.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { ClientController } from "./client.controller.js";
@@ -19,8 +20,8 @@ router.get("/:id", checkAuth(), requireCompany, ClientController.getSingleClient
 router.get("/:id/financials", checkAuth(Role.admin), ClientController.getClientFinancials);
 
 // Sales owns the client list; admin can act on it too.
-router.post("/", checkAuth(Role.admin, Role.sales), validateRequest(createClientZodSchema), ClientController.createClient);
-router.patch("/:id", checkAuth(Role.admin, Role.sales), validateRequest(updateClientZodSchema), ClientController.updateClient);
+router.post("/", checkAuth(Role.admin, Role.sales), requirePermission("clients.manage"), validateRequest(createClientZodSchema), ClientController.createClient);
+router.patch("/:id", checkAuth(Role.admin, Role.sales), requirePermission("clients.manage"), validateRequest(updateClientZodSchema), ClientController.updateClient);
 
 // Deleting takes a client out of every report they appear in, so it stays with
 // admin even though sales created them.

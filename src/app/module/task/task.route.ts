@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
+import { requirePermission } from "../../middleware/requirePermission.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest, validateRequestBy } from "../../middleware/validateRequest.js";
 import { TaskController } from "./task.controller.js";
@@ -20,7 +21,7 @@ router.get("/", checkAuth(), requireCompany, TaskController.getAllTasks);
 // that define the commitment stay with whoever owns the schedule.
 router.patch("/:id", checkAuth(), requireCompany, validateRequestBy(taskUpdateSchemaFor), TaskController.updateTask);
 
-router.post("/", checkAuth(Role.admin, Role.project_manager), validateRequest(createTaskZodSchema), TaskController.createTask);
-router.delete("/:id", checkAuth(Role.admin, Role.project_manager), TaskController.deleteTask);
+router.post("/", checkAuth(Role.admin, Role.project_manager), requirePermission("tasks.manage"), validateRequest(createTaskZodSchema), TaskController.createTask);
+router.delete("/:id", checkAuth(Role.admin, Role.project_manager), requirePermission("tasks.manage"), TaskController.deleteTask);
 
 export const TaskRoutes = router;

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
+import { requirePermission } from "../../middleware/requirePermission.js";
 import { authRateLimit } from "../../middleware/rateLimit.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { VaultController } from "./vault.controller.js";
@@ -13,7 +14,7 @@ router.get("/", checkAuth(Role.admin, Role.sales, Role.project_manager), VaultCo
 // Reveal is the only route that returns a real password, so it gets the tight
 // rate limit as well as the role gate: someone walking the id space one request
 // at a time is the realistic way this gets abused from inside.
-router.get("/:id/reveal", checkAuth(Role.admin, Role.sales, Role.project_manager), authRateLimit, VaultController.revealCredential);
+router.get("/:id/reveal", checkAuth(Role.admin, Role.sales, Role.project_manager), requirePermission("vault.reveal"), authRateLimit, VaultController.revealCredential);
 
 // Who looked at what is an admin question, not something every colleague
 // needs - and it names colleagues.

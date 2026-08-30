@@ -389,6 +389,10 @@ const pmCookie = roleCookies.project_manager;
 cookie = opsCookie;
 const opsUserId = (await call("GET", "/auth/me")).json.data?.id;
 
+// Needed by the permissions section: narrowing somebody means knowing who.
+cookie = roleCookies.sales;
+const salesUserId = (await call("GET", "/auth/me")).json.data?.id;
+
 // Logging time requires being on the project's team. That is the workflow the
 // visibility scoping creates: a project manager puts somebody on a project,
 // and only then can they book hours to it.
@@ -2715,6 +2719,112 @@ check("a project manager cannot read the ledger", r.status === 403, `${r.status}
 cookie = roleCookies.sales;
 r = await call("GET", "/transactions");
 check("nor can sales", r.status === 403, `${r.status}`);
+cookie = adminCookie;
+
+
+// ---------------------------------------------------------------------------
+// Roles & Permissions: narrowing what a colleague may do inside their role.
+// ---------------------------------------------------------------------------
+//
+// The first check is the one that matters. This layer was mounted onto routes
+// that already worked, so the question is not "does it gate" - it is "did
+// turning it on take anything away from anybody". It must not have.
+
+cookie = roleCookies.sales;
+r = await call("GET", "/auth/me");
+check(
+  "a colleague starts with an empty permission list",
+  (r.json.data?.permissions ?? []).length === 0,
+  JSON.stringify(r.json.data?.permissions)
+);
+
+const permClient = `Perm Co ${stamp}`;
+r = await call("POST", "/clients", { name: permClient });
+const permClientId = r.json.data?.id;
+check(
+  "and an empty list still reaches everything the role allows",
+  r.status === 201,
+  `${r.status} ${r.json.message}`
+);
+
+r = await call("POST", "/leads", { name: `Perm Lead ${stamp}`, stage: "new" });
+check("all of it, not just the first thing tried", r.status === 201, `${r.status} ${r.json.message}`);
+
+// Now narrow them, and confirm it bites.
+cookie = adminCookie;
+r = await call("PATCH", `/users/${salesUserId}/permissions`, {
+  permissions: ["clients.manage"],
+});
+check("admin can narrow a colleague", r.status === 200, `${r.status} ${r.json.message}`);
+
+r = await call("PATCH", `/users/${salesUserId}/permissions`, {
+  permissions: ["clients.manage", "not.a.real.permission"],
+});
+check("an unknown permission is refused, not stored", r.status === 400, `${r.status}`);
+
+cookie = roleCookies.sales;
+r = await call("POST", "/clients", { name: `Still Allowed ${stamp}` });
+check("the ticked box still works", r.status === 201, `${r.status} ${r.json.message}`);
+
+r = await call("POST", "/leads", { name: `Now Refused ${stamp}`, stage: "new" });
+check(
+  // Ticking one box flips somebody from "everything the role allows" to "only
+  // these". That reads backwards unless it is said out loud, which is why the
+  // screen says it.
+  "and everything else is now refused",
+  r.status === 403,
+  `${r.status} ${r.json.message}`
+);
+check(
+  "with the refusal naming the permission to ask for",
+  /leads\.manage/.test(r.json.message ?? ""),
+  r.json.message
+);
+
+// Undo it. Refusing an empty list would leave no way back.
+cookie = adminCookie;
+r = await call("PATCH", `/users/${salesUserId}/permissions`, { permissions: [] });
+check("clearing the list is allowed", r.status === 200, `${r.status} ${r.json.message}`);
+
+cookie = roleCookies.sales;
+r = await call("POST", "/leads", { name: `Allowed Again ${stamp}`, stage: "new" });
+check("and gives everything back", r.status === 201, `${r.status} ${r.json.message}`);
+
+// The layer narrows; it can never widen.
+cookie = adminCookie;
+r = await call("PATCH", `/users/${salesUserId}/permissions`, {
+  permissions: ["projects.manage", "time.approve"],
+});
+check("a colleague can be given a delivery permission", r.status === 200, `${r.status}`);
+
+cookie = roleCookies.sales;
+r = await call("POST", "/tasks", { project_id: timeProjectId, title: "Should be refused" });
+check(
+  "but the role gate still refuses what the role never allowed",
+  r.status === 403,
+  `${r.status} ${r.json.message}`
+);
+
+cookie = adminCookie;
+r = await call("PATCH", `/users/${salesUserId}/permissions`, { permissions: [] });
+
+// An admin passes every check, so storing a list against one would look like a
+// restriction and enforce nothing.
+r = await call("GET", "/users");
+const anAdmin = (r.json.data ?? []).find((u) => u.role === "admin");
+r = await call("PATCH", `/users/${anAdmin?.id}/permissions`, {
+  permissions: ["clients.manage"],
+});
+check(
+  "an admin cannot be given a permission list that would do nothing",
+  r.status === 400,
+  `${r.status} ${r.json.message}`
+);
+
+// Only admin hands access out.
+cookie = pmCookie;
+r = await call("PATCH", `/users/${salesUserId}/permissions`, { permissions: ["clients.manage"] });
+check("a project manager cannot change anyone's access", r.status === 403, `${r.status}`);
 cookie = adminCookie;
 
 

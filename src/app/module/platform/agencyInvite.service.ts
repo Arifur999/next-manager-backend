@@ -7,6 +7,7 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { agencyInviteMail, sendMail } from "../../lib/mailer.js";
 import { prisma } from "../../lib/prisma.js";
 import { seedLeadSources } from "../../shared/defaultLeadSources.js";
+import { seedLeaveTypes } from "../../shared/defaultLeaveTypes.js";
 import { seedWorkflowStatuses } from "../../shared/defaultWorkflowStatuses.js";
 import { logPlatformActivity } from "../../shared/platformActivity.js";
 import { getBrand, getPlatformSettings } from "../../shared/platformSettings.js";
@@ -290,6 +291,7 @@ const acceptInvite = async (token: string, payload: IAcceptAgencyInvitePayload) 
 
         await seedLeadSources(tx, organization.id);
         await seedWorkflowStatuses(tx, organization.id);
+        await seedLeaveTypes(tx, organization.id);
 
         const owner = await tx.user.create({
             data: {

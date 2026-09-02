@@ -584,6 +584,71 @@ ok(
     JSON.stringify(loanSummary.json.data)
 );
 
+
+// Chat. The one place in this product where a leak would leave no request to
+// audit, because a socket push is not an HTTP call anybody logs.
+const bConversation = (
+    await call(
+        "POST",
+        "/chat",
+        { type: "group", name: "B Private", member_ids: [b.member.id] },
+        b.cookie
+    )
+).json.data as { id: string };
+
+await call("POST", `/chat/${bConversation.id}/messages`, { body: "B's secret" }, b.cookie);
+
+refused("read B's conversation", await call("GET", `/chat/${bConversation.id}/messages`, undefined, a.cookie));
+refused("post into B's conversation", await call("POST", `/chat/${bConversation.id}/messages`, { body: "Owned" }, a.cookie));
+refused("mark B's conversation read", await call("POST", `/chat/${bConversation.id}/read`, undefined, a.cookie));
+refused("add themselves to B's conversation", await call("POST", `/chat/${bConversation.id}/members`, { member_ids: [a.member.id] }, a.cookie));
+refused("archive B's conversation", await call("POST", `/chat/${bConversation.id}/archive`, { archived: true }, a.cookie));
+refused("leave B's conversation", await call("POST", `/chat/${bConversation.id}/leave`, undefined, a.cookie));
+
+// Putting one of B's people into a conversation of A's own. A foreign key would
+// take the id happily; only the service can refuse it.
+refused(
+    "open a conversation containing one of B's people",
+    await call("POST", "/chat", { type: "group", name: "Mixed", member_ids: [b.member.id] }, a.cookie)
+);
+
+const chatList = await call("GET", "/chat", undefined, a.cookie);
+ok(
+    "A's conversation list carries none of B's",
+    Array.isArray(chatList.json.data) &&
+        !(chatList.json.data as { id: string }[]).some((row) => row.id === bConversation.id),
+    JSON.stringify((chatList.json.data as { name: string }[])?.map((row) => row.name))
+);
+
+// The socket. A holds an open, properly authenticated connection of their own
+// while B sends a message inside B's agency - and nothing may arrive.
+const { WebSocket } = await import("ws");
+
+const aSocket = await new Promise<{ ws: InstanceType<typeof WebSocket> | null; received: unknown[] }>(
+    (resolve) => {
+        const received: unknown[] = [];
+        const ws = new WebSocket("ws://localhost:5000/ws", { headers: { Cookie: a.cookie } });
+        ws.on("message", (raw: Buffer) => received.push(JSON.parse(raw.toString())));
+        ws.on("open", () => resolve({ ws, received }));
+        ws.on("error", () => resolve({ ws: null, received }));
+    }
+);
+
+ok("A's own socket connects", aSocket.ws !== null);
+
+await new Promise((resolve) => setTimeout(resolve, 200));
+await call("POST", `/chat/${bConversation.id}/messages`, { body: "B's second secret" }, b.cookie);
+await new Promise((resolve) => setTimeout(resolve, 500));
+
+// This is the check the whole socket design exists to pass.
+ok(
+    "and receives nothing at all from B's agency",
+    (aSocket.received as { type?: string }[]).every((event) => event.type !== "message"),
+    JSON.stringify(aSocket.received)
+);
+
+aSocket.ws?.close();
+
 console.log("\n--- A tries to MODIFY B's records ---");
 refused("edit B's client", await call("PATCH", `/clients/${b.client.id}`, { name: "Owned" }, a.cookie));
 refused("edit B's project", await call("PATCH", `/projects/${b.project.id}`, { name: "Owned" }, a.cookie));

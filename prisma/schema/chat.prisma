@@ -1,0 +1,98 @@
+// Talking to each other.
+//
+// The rule that shapes this file, and the socket beside it:
+//
+//   Membership is a row in the database, never something a client asserts. A
+//   socket that believed a conversation id it was handed would be a
+//   cross-tenant read with no HTTP route to audit - so nothing here is reached
+//   by asking for it. The server looks up who is in a conversation and pushes
+//   to those people; a client cannot subscribe to anything at all.
+//
+// Messages are persisted over HTTP and broadcast over the socket, never
+// socket-only. A dropped connection must not lose a message.
+
+/// A direct message, a named group, or a project's own thread.
+model Conversation {
+  id             String           @id @default(uuid())
+  organization_id String
+  type           ConversationType
+  /// Groups and project threads have one. A direct conversation is named after
+  /// whoever you are talking to, which is a different name for each of the two
+  /// people in it - so it is not stored.
+  name           String           @default("")
+  project_id     String?
+  /// For a direct conversation only: both member ids, sorted and joined.
+  ///
+  /// Without it, two people opening a DM at the same moment get two separate
+  /// conversations and each sees half the history. Sorted so that A-then-B and
+  /// B-then-A produce the same key.
+  direct_key     String?
+  created_by     String?
+  /// Bumped on every message, so the list can be ordered by recent activity
+  /// without joining the whole message table to find a maximum.
+  last_message_at DateTime        @default(now())
+  archived_at    DateTime?
+  created_at     DateTime         @default(now())
+  updated_at     DateTime         @updatedAt
+
+  organization Organization         @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  project      Project?             @relation(fields: [project_id], references: [id], onDelete: SetNull)
+  members      ConversationMember[]
+  messages     Message[]
+
+  @@unique([organization_id, direct_key])
+  @@index([organization_id])
+  @@index([organization_id, last_message_at(sort: Desc)])
+  @@index([project_id])
+  @@map("conversations")
+}
+
+/// Who is in a conversation.
+///
+/// This table IS the permission. Every read, every write and every socket push
+/// is decided by whether a row exists here, which is why it is checked against
+/// the database each time rather than cached on a connection.
+model ConversationMember {
+  id              String    @id @default(uuid())
+  organization_id String
+  conversation_id String
+  user_id         String
+  /// How far this person has read. One column rather than a row per message
+  /// per member: the question the product actually asks is "how many are
+  /// unread", and a read-receipt table would be one row per message per member
+  /// to answer the same thing.
+  last_read_at    DateTime?
+  joined_at       DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([conversation_id, user_id])
+  @@index([organization_id])
+  /// Every conversation one person is in - the list screen's own query.
+  @@index([user_id])
+  @@index([conversation_id])
+  @@map("conversation_members")
+}
+
+model Message {
+  id              String    @id @default(uuid())
+  organization_id String
+  conversation_id String
+  sender_id       String?
+  body            String
+  /// Soft, so a thread keeps its shape. A deleted message reads as removed
+  /// rather than leaving a gap nobody can explain.
+  deleted_at      DateTime?
+  created_at      DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  sender       User?        @relation("MessageSender", fields: [sender_id], references: [id], onDelete: SetNull)
+
+  @@index([organization_id])
+  /// The thread itself, newest first, and the unread count against
+  /// last_read_at. Both are this one index.
+  @@index([conversation_id, created_at(sort: Desc)])
+  @@index([sender_id])
+  @@map("messages")
+}

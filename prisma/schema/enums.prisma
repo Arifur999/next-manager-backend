@@ -281,3 +281,14 @@ enum LoanStatus {
   settled
   closed
 }
+
+/// What a conversation is.
+///
+/// A direct conversation is between exactly two people and is named after
+/// whoever you are talking to; a group has a name of its own; a project thread
+/// belongs to a project and is named after it.
+enum ConversationType {
+  direct
+  group
+  project
+}

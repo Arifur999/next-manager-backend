@@ -1,0 +1,10 @@
+# Migration files are hashed byte for byte, so their line endings are load-bearing.
+#
+# scripts/migrate.mjs stores the SHA-256 of each migration.sql and compares it on
+# every run — the same thing Prisma does. With core.autocrlf=true, git rewrites
+# these files to CRLF on checkout, which changes that hash and makes every
+# already-applied migration report DRIFT. A tool that warns about all of them
+# warns about none of them, so a real edit would go unnoticed.
+#
+# Pinned to LF so the bytes are the same on every machine and in every clone.
+*.sql text eol=lf

@@ -45,6 +45,7 @@ model Organization {
   loans             Loan[]
   shareholders      Shareholder[]
   distributions     ShareholderDistribution[]
+  conversations     Conversation[]
 
   @@map("organizations")
 }
@@ -101,6 +102,8 @@ model User {
   /// Optional both ways: somebody can own part of the business without ever
   /// signing in, and most colleagues own none of it.
   shareholdings      Shareholder[]
+  conversations      ConversationMember[]
+  sent_messages      Message[]     @relation("MessageSender")
 
   @@index([organization_id])
   /// The FK, and the department filter on the team list.

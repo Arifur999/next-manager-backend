@@ -322,6 +322,9 @@ const adminCookie = cookie;
 
 const ROLES = ["admin", "sales", "project_manager", "operations"];
 const roleCookies = {};
+// Their ids as well as their cookies: chat is addressed by person, so the
+// checks below need to name who they are talking to.
+const roleUserIds = {};
 
 for (const role of ROLES) {
   cookie = adminCookie;
@@ -334,6 +337,7 @@ for (const role of ROLES) {
     role,
   });
   check(`admin can invite a ${role}`, r.status === 201, `${r.status} ${r.json.message}`);
+  roleUserIds[role] = r.json.data?.id;
 
   cookie = "";
   r = await call("POST", "/auth/login", { email: roleEmail, password: "Passw0rd123" });
@@ -343,6 +347,11 @@ for (const role of ROLES) {
   check(`${role} signs in`, r.status === 200 && cookie.includes("accessToken"), `${r.status}`);
   roleCookies[role] = cookie;
 }
+
+cookie = adminCookie;
+r = await call("GET", "/auth/me");
+const adminUserId = r.json.data?.id;
+check("the owner can read their own account", Boolean(adminUserId), `${r.status}`);
 
 // path -> which roles may reach it. Everyone else must get 403.
 const MATRIX = [
@@ -3910,6 +3919,190 @@ check("nor can sales", r.status === 403, `${r.status}`);
 cookie = opsCookie;
 r = await call("GET", "/shareholders");
 check("nor operations", r.status === 403, `${r.status}`);
+cookie = adminCookie;
+
+
+console.log("\n--- chat ---");
+//
+// Membership is the permission, and the socket is the part with no HTTP route
+// to audit - so both are attacked here rather than described.
+
+// A direct conversation, opened twice on purpose.
+cookie = adminCookie;
+r = await call("POST", "/chat", { type: "direct", member_ids: [roleUserIds.operations] });
+check("admin can open a direct conversation", r.status === 201, `${r.status} ${r.json.message}`);
+const dmId = r.json.data?.id;
+
+r = await call("POST", "/chat", { type: "direct", member_ids: [roleUserIds.operations] });
+check(
+  "opening the same one again returns the same thread",
+  r.json.data?.id === dmId,
+  `${dmId} vs ${r.json.data?.id}`
+);
+
+r = await call("POST", "/chat", { type: "direct", member_ids: [roleUserIds.operations, roleUserIds.sales] });
+check("a direct conversation cannot hold three people", r.status === 400, `${r.status} ${r.json.message}`);
+
+r = await call("POST", "/chat", { type: "group", member_ids: [roleUserIds.sales] });
+check("a group without a name is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+r = await call("POST", "/chat", { type: "group", name: "Studio", member_ids: [roleUserIds.sales, roleUserIds.project_manager] });
+check("admin can open a group", r.status === 201, `${r.status} ${r.json.message}`);
+const groupId = r.json.data?.id;
+
+r = await call("POST", `/chat/${dmId}/messages`, { body: "Morning" });
+check("a message can be sent", r.status === 201, `${r.status} ${r.json.message}`);
+r = await call("POST", `/chat/${dmId}/messages`, { body: "   " });
+check("an empty message is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+r = await call("GET", `/chat/${dmId}/messages`);
+check("the thread reads back", r.json.data?.length === 1, `${r.json.data?.length}`);
+check("with the sender named", r.json.data?.[0]?.sender?.id === adminUserId, `${r.json.data?.[0]?.sender?.id}`);
+
+// Unread is counted from the reader's own position, and never counts their own.
+r = await call("GET", "/chat");
+const adminDm = (r.json.data ?? []).find((c) => c.id === dmId);
+check("your own message is not unread to you", adminDm?.unread_count === 0, `${adminDm?.unread_count}`);
+
+cookie = opsCookie;
+r = await call("GET", "/chat");
+const opsDm = (r.json.data ?? []).find((c) => c.id === dmId);
+check("but it is unread to the other person", opsDm?.unread_count === 1, `${opsDm?.unread_count}`);
+check(
+  "and a direct thread is named after whoever they are talking to",
+  opsDm?.name === "Test Owner",
+  `${opsDm?.name}`
+);
+
+r = await call("GET", "/chat/unread");
+check("the badge counts it", r.json.data?.unread_count === 1, `${r.json.data?.unread_count}`);
+
+r = await call("POST", `/chat/${dmId}/read`);
+check("reading it clears the count", r.status === 200, `${r.status}`);
+r = await call("GET", "/chat/unread");
+check("and the badge goes back to zero", r.json.data?.unread_count === 0, `${r.json.data?.unread_count}`);
+
+// The rule: membership decides everything, not a role.
+//
+// Operations is in the DM and NOT in the group. Being a colleague, or even an
+// admin, is not what grants access - so this must be refused.
+r = await call("GET", `/chat/${groupId}/messages`);
+check("somebody not in a conversation cannot read it", r.status === 404, `${r.status} ${r.json.message}`);
+r = await call("POST", `/chat/${groupId}/messages`, { body: "Let me in" });
+check("nor post to it", r.status === 404, `${r.status} ${r.json.message}`);
+r = await call("POST", `/chat/${groupId}/read`);
+check("nor mark it read", r.status === 404, `${r.status}`);
+r = await call("POST", `/chat/${groupId}/members`, { member_ids: [roleUserIds.operations] });
+check("nor add themselves to it", r.status === 404, `${r.status}`);
+
+r = await call("GET", "/chat");
+check(
+  "and it does not appear in their list at all",
+  !(r.json.data ?? []).some((c) => c.id === groupId),
+  JSON.stringify((r.json.data ?? []).map((c) => c.name))
+);
+
+// Sub-views are filters over the one list, per the rule the whole product uses.
+cookie = adminCookie;
+r = await call("GET", "/chat?type=direct");
+check("the Direct view carries only direct threads", (r.json.data ?? []).every((c) => c.type === "direct"), JSON.stringify((r.json.data ?? []).map((c) => c.type)));
+r = await call("GET", "/chat?type=group");
+check("and the Groups view only groups", (r.json.data ?? []).every((c) => c.type === "group"), JSON.stringify((r.json.data ?? []).map((c) => c.type)));
+
+r = await call("POST", `/chat/${groupId}/archive`, { archived: true });
+check("a conversation can be archived", r.status === 200, `${r.status} ${r.json.message}`);
+r = await call("GET", "/chat");
+check("which takes it out of the main list", !(r.json.data ?? []).some((c) => c.id === groupId), "still listed");
+r = await call("GET", "/chat?archived=true");
+check("and puts it in the archived one", (r.json.data ?? []).some((c) => c.id === groupId), "not in archive");
+r = await call("POST", `/chat/${groupId}/archive`, { archived: false });
+check("and it can come back", r.status === 200, `${r.status}`);
+
+r = await call("POST", `/chat/${dmId}/members`, { member_ids: [roleUserIds.sales] });
+check("a third person cannot be added to a direct thread", r.status === 400, `${r.status} ${r.json.message}`);
+
+// A member id from nowhere. A foreign key would take it happily.
+r = await call("POST", "/chat", {
+  type: "group",
+  name: "Ghosts",
+  member_ids: ["00000000-0000-0000-0000-000000000000"],
+});
+check("a conversation cannot be opened with somebody who is not on the team", r.status === 404, `${r.status} ${r.json.message}`);
+
+// ---- the socket ----
+//
+// This is the part with no request log. An unauthenticated handshake must be
+// refused outright, and a connection must only ever receive what its own user
+// is a member of.
+const { WebSocket } = await import("ws");
+
+const openSocket = (cookieHeader) =>
+  new Promise((resolve) => {
+    const ws = new WebSocket("ws://localhost:5000/ws", {
+      headers: cookieHeader ? { Cookie: cookieHeader } : {},
+    });
+    const received = [];
+    ws.on("message", (raw) => received.push(JSON.parse(raw.toString())));
+    ws.on("open", () => resolve({ ws, received, refused: false }));
+    ws.on("error", () => resolve({ ws: null, received, refused: true }));
+  });
+
+const anonymous = await openSocket("");
+check("a socket with no cookie is refused", anonymous.refused, "it connected");
+
+const forged = await openSocket("accessToken=not-a-real-token");
+check("a socket with a forged token is refused", forged.refused, "it connected");
+
+const adminSocket = await openSocket(adminCookie);
+check("a signed-in socket connects", !adminSocket.refused && adminSocket.ws !== null);
+
+const opsSocket = await openSocket(opsCookie);
+check("and so does the other person's", !opsSocket.refused && opsSocket.ws !== null);
+
+const salesSocket = await openSocket(roleCookies.sales);
+check("as does a colleague who is in neither conversation", !salesSocket.refused);
+
+// Give the sockets a moment to receive their ready frame, then send.
+await new Promise((resolve) => setTimeout(resolve, 200));
+
+cookie = adminCookie;
+r = await call("POST", `/chat/${dmId}/messages`, { body: "Over the wire" });
+check("a message posts over HTTP", r.status === 201, `${r.status} ${r.json.message}`);
+
+await new Promise((resolve) => setTimeout(resolve, 400));
+
+const delivered = (socket) =>
+  socket.received.filter((event) => event.type === "message" && event.conversation_id === dmId);
+
+check("it reaches the other member's socket", delivered(opsSocket).length === 1, `${delivered(opsSocket).length}`);
+check("and the sender's own, for their other tabs", delivered(adminSocket).length === 1, `${delivered(adminSocket).length}`);
+// The claim that matters most in this whole module.
+check(
+  "but NOT a colleague who is not in the conversation",
+  delivered(salesSocket).length === 0,
+  JSON.stringify(salesSocket.received)
+);
+check(
+  "and the body arrives intact",
+  delivered(opsSocket)[0]?.message?.body === "Over the wire",
+  JSON.stringify(delivered(opsSocket)[0]?.message?.body)
+);
+
+// A client cannot ask to be subscribed to anything - there is no protocol in
+// that direction at all. Sending a plausible join must change nothing.
+salesSocket.ws?.send(JSON.stringify({ type: "subscribe", conversation_id: dmId }));
+await new Promise((resolve) => setTimeout(resolve, 200));
+cookie = adminCookie;
+await call("POST", `/chat/${dmId}/messages`, { body: "Still private" });
+await new Promise((resolve) => setTimeout(resolve, 400));
+check(
+  "and a client cannot talk its way into a conversation",
+  delivered(salesSocket).length === 0,
+  JSON.stringify(salesSocket.received)
+);
+
+for (const socket of [adminSocket, opsSocket, salesSocket]) socket.ws?.close();
+
 cookie = adminCookie;
 
 

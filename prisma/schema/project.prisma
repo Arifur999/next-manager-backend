@@ -47,6 +47,7 @@ model Project {
   credentials  Credential[]
   time_entries TimeEntry[]
   milestones   ProjectMilestone[]
+  conversations Conversation[]
 
   /// Project codes are unique per agency, not globally.
   @@unique([organization_id, code])

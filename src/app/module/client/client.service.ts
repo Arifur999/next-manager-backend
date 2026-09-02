@@ -107,6 +107,14 @@ const getSingleClient = async (id: string, user: IRequestUser) => {
             projects: {
                 where: { deleted_at: null },
                 orderBy: { created_at: "desc" },
+                // Status is a ROW now, not an enum column, so a bare include
+                // returns status_id and nothing a screen can print. The client
+                // page renders status.name, and without this it renders it on
+                // undefined - which is how the projects tab has been throwing
+                // since custom statuses landed.
+                include: {
+                    status: { select: { id: true, name: true, category: true, sort_order: true } },
+                },
             },
         },
     });

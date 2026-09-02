@@ -27,6 +27,15 @@ interface IResponseData<T> {
         failed_last_24h?: number;
         /** How long login history is kept, so the screen can say it. */
         retention_days?: number;
+        /**
+         * How much of the business is spoken for, and how much is not.
+         *
+         * A property of the whole shareholder list rather than of any row,
+         * and the question the page is opened with - "who owns the rest" is
+         * not something a reader should have to work out by subtracting.
+         */
+        allocated_pct?: number;
+        unallocated_pct?: number;
     };
     message: string;
 }

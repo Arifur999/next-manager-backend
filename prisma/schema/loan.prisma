@@ -1,0 +1,150 @@
+// Borrowing, and the people who own the agency.
+//
+// Two things that look like the money modules beside them but are not:
+//
+//   A loan is NOT income. Cash arrives, so the ledger records it and the
+//   accounts screen shows it - but it is borrowed, and counting it as revenue
+//   would make a bad month look like a good one. Profit and loss reads
+//   payments, never this.
+//
+//   A distribution is NOT an expense. It is profit being handed to the people
+//   who own the business, the same way OwnerWithdrawal is. Treating it as a
+//   cost would let an agency reduce its own reported profit by paying itself.
+//
+// Both still move real accounts, because money that leaves the business
+// invisibly is the one thing a set of books cannot survive.
+
+/// A bank loan or EMI. Distinct from DuePerson, which is informal lending
+/// between people and carries no schedule, no interest and no term.
+model Loan {
+  id             String     @id @default(uuid())
+  organization_id String
+  lender         String
+  principal_bdt  Decimal    @db.Decimal(15, 2)
+  /// Annual rate, as a percentage, recorded for reference. The instalments
+  /// carry the actual split - a rate is a description of an agreement, and the
+  /// numbers that were really agreed are what get repaid.
+  interest_rate  Decimal    @default(0) @db.Decimal(6, 3)
+  started_on     DateTime   @db.Date
+  term_months    Int
+  /// Where the borrowed money landed. Optional, because a loan already part
+  /// repaid when it is first entered never touched an account here.
+  account_id     String?
+  /// A statement about the arrangement, not about the money.
+  ///
+  /// What is still owed is ALWAYS computed from the instalments - principal
+  /// minus the principal of every paid one - and never stored, because a
+  /// stored balance and a schedule are two places to say one thing and they
+  /// will eventually disagree. This flips to `settled` on its own when the
+  /// last instalment is paid; `closed` is the manual case, a loan ended by
+  /// agreement or written off with something still outstanding.
+  status         LoanStatus @default(active)
+  notes          String     @default("")
+  deleted_at     DateTime?
+  created_by     String?
+  created_at     DateTime   @default(now())
+  updated_at     DateTime   @updatedAt
+
+  organization Organization     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  account      Account?         @relation(fields: [account_id], references: [id], onDelete: Restrict)
+  instalments  LoanInstalment[]
+
+  @@index([organization_id])
+  @@index([organization_id, status])
+  @@index([account_id])
+  @@map("loans")
+}
+
+/// One scheduled repayment.
+///
+/// The split is the whole point. Repaying principal settles a liability and is
+/// not a cost; the interest is. An instalment recorded as one lump would
+/// understate profit by the principal every month, so the two are separate
+/// columns and profit and loss reads only the interest.
+model LoanInstalment {
+  id             String    @id @default(uuid())
+  organization_id String
+  loan_id        String
+  /// 1-based, so "instalment 3 of 12" is a thing the screen can say.
+  seq            Int
+  due_date       DateTime  @db.Date
+  principal_bdt  Decimal   @db.Decimal(15, 2)
+  interest_bdt   Decimal   @default(0) @db.Decimal(15, 2)
+  /// Null means unpaid. This IS the paid flag - there is no second boolean to
+  /// disagree with it.
+  paid_at        DateTime?
+  /// Which account it was paid from. Set together with paid_at, in the same
+  /// transaction as the ledger row.
+  paid_from_account_id String?
+  notes          String    @default("")
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  loan            Loan     @relation(fields: [loan_id], references: [id], onDelete: Cascade)
+  paid_from_account Account? @relation(fields: [paid_from_account_id], references: [id], onDelete: Restrict)
+
+  @@unique([loan_id, seq])
+  @@index([organization_id])
+  @@index([loan_id])
+  /// What is due next, across every loan.
+  @@index([organization_id, paid_at, due_date])
+  @@index([paid_from_account_id])
+  @@map("loan_instalments")
+}
+
+/// Somebody who owns a share of the agency.
+///
+/// `user_id` is optional on purpose: an investor who owns part of the business
+/// but never signs in is a normal arrangement, and requiring an account for
+/// them would mean creating logins nobody uses.
+model Shareholder {
+  id             String    @id @default(uuid())
+  organization_id String
+  user_id        String?
+  name           String
+  /// Percentage of the business. The sum across active shareholders is checked
+  /// against 100 on every write - shares totalling 120% is not a rounding
+  /// question, it is a number nobody can act on.
+  share_pct      Decimal   @default(0) @db.Decimal(5, 2)
+  is_active      Boolean   @default(true)
+  notes          String    @default("")
+  deleted_at     DateTime?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  organization  Organization              @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  user          User?                     @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  distributions ShareholderDistribution[]
+
+  @@unique([organization_id, name])
+  @@index([organization_id])
+  @@index([user_id])
+  @@map("shareholders")
+}
+
+/// Profit paid out to a shareholder.
+///
+/// Money out of a real account, and deliberately not an Expense: it is a
+/// distribution of profit, not a cost of earning it.
+model ShareholderDistribution {
+  id             String    @id @default(uuid())
+  organization_id String
+  shareholder_id String
+  date           DateTime  @db.Date
+  amount_bdt     Decimal   @db.Decimal(15, 2)
+  account_id     String
+  notes          String    @default("")
+  deleted_at     DateTime?
+  created_by     String?
+  created_at     DateTime  @default(now())
+
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  shareholder  Shareholder  @relation(fields: [shareholder_id], references: [id], onDelete: Restrict)
+  account      Account      @relation(fields: [account_id], references: [id], onDelete: Restrict)
+
+  @@index([organization_id])
+  @@index([organization_id, date(sort: Desc)])
+  @@index([shareholder_id])
+  @@index([account_id])
+  @@map("shareholder_distributions")
+}

@@ -36,6 +36,23 @@ const near = (a, b, tolerance = 0.01) => Math.abs(a - b) < tolerance;
 const stamp = Date.now();
 const email = `owner${stamp}@agencio.test`;
 
+// Dates that have to be inside the CURRENT month, because the checks that read
+// them ask about "this month" - the dashboard's month revenue, and the KPI
+// range that a freshly decided deal falls into.
+//
+// These were hardcoded to a fixed month, which meant the suite went red on the
+// first of every month with two failures that had nothing to do with the code.
+// A suite that cries wolf on a calendar boundary is one people learn to ignore.
+const now = new Date();
+const YEAR = now.getUTCFullYear();
+const MONTH = String(now.getUTCMonth() + 1).padStart(2, "0");
+const TODAY = `${YEAR}-${MONTH}-${String(now.getUTCDate()).padStart(2, "0")}`;
+const MONTH_START = `${YEAR}-${MONTH}-01`;
+// Day 0 of next month is the last day of this one, leap years included.
+const MONTH_END = `${YEAR}-${MONTH}-${String(
+  new Date(Date.UTC(YEAR, now.getUTCMonth() + 1, 0)).getUTCDate()
+).padStart(2, "0")}`;
+
 console.log("\n--- signup + auth ---");
 let r = await call("POST", "/auth/register", {
   organization_name: "Pixel Forge Agency",
@@ -79,7 +96,7 @@ check("create client", r.status === 201, r.json.message);
 // invent a figure.
 r = await call("POST", "/payments", {
   client_id: clientId,
-  date: "2026-08-10",
+  date: TODAY,
   amount_usd: 500,
   account_id: usdAccount,
 });
@@ -93,7 +110,7 @@ check(
 if (!rateAutoResolved) {
   r = await call("POST", "/payments", {
     client_id: clientId,
-    date: "2026-08-10",
+    date: TODAY,
     amount_usd: 500,
     reporting_rate: 122,
     account_id: usdAccount,
@@ -184,7 +201,7 @@ check("invoice number generated", /^INV-\d{4}$/.test(r.json.data?.invoice_number
 r = await call("POST", "/payments", {
   client_id: clientId,
   invoice_id: invoiceId,
-  date: "2026-08-14",
+  date: TODAY,
   amount_usd: 120,
   reporting_rate: 122,
   account_id: usdAccount,
@@ -198,7 +215,7 @@ check("due = 200 - 120 = 80", near(r.json.data?.due_usd, 80), String(r.json.data
 r = await call("POST", "/payments", {
   client_id: clientId,
   invoice_id: invoiceId,
-  date: "2026-08-15",
+  date: TODAY,
   amount_usd: 80,
   reporting_rate: 122,
   account_id: usdAccount,
@@ -636,7 +653,9 @@ check(
 // and that "no data" comes back as null rather than a confident zero.
 // ---------------------------------------------------------------------------
 
-const kpiRange = "from=2026-08-01&to=2026-08-31";
+// A lead won during this run is stamped as decided now, so the window has to
+// be the month that actually contains today.
+const kpiRange = `from=${MONTH_START}&to=${MONTH_END}`;
 
 cookie = adminCookie;
 r = await call("GET", `/kpi/agency?${kpiRange}`);
@@ -3661,6 +3680,236 @@ check("a project manager cannot read payroll", r.status === 403, `${r.status}`);
 cookie = opsCookie;
 r = await call("GET", "/hr/payroll");
 check("nor can operations", r.status === 403, `${r.status}`);
+cookie = adminCookie;
+
+
+console.log("\n--- loans ---");
+//
+// A loan is the one thing in this product that is money IN without being
+// revenue, and money OUT that is only partly a cost. Both halves are asserted
+// against real balances rather than against the messages the API sends back.
+
+const balanceOfAccount = async (accountId) => {
+  const res = await call("GET", "/accounts");
+  return Number((res.json.data ?? []).find((a) => a.id === accountId)?.balance ?? 0);
+};
+
+const beforeLoan = await balanceOfAccount(bdtAccount);
+
+r = await call("POST", "/loans", {
+  lender: "City Bank",
+  principal_bdt: 120000,
+  interest_rate: 12,
+  started_on: "2026-01-15",
+  term_months: 12,
+  account_id: bdtAccount,
+});
+check("admin can record a loan", r.status === 201, `${r.status} ${r.json.message}`);
+const loanId = r.json.data?.id;
+check("it generates a schedule for the whole term", r.json.data?.instalment_count === 12, `${r.json.data?.instalment_count}`);
+check(
+  "whose principal adds up to exactly what was borrowed",
+  near(r.json.data?.principal_scheduled_bdt ?? 0, 120000),
+  `${r.json.data?.principal_scheduled_bdt}`
+);
+check(
+  "interest is left at zero rather than guessed",
+  (r.json.data?.interest_scheduled_bdt ?? -1) === 0,
+  `${r.json.data?.interest_scheduled_bdt}`
+);
+check("and nothing is paid yet", (r.json.data?.outstanding_bdt ?? 0) === 120000, `${r.json.data?.outstanding_bdt}`);
+
+const afterLoan = await balanceOfAccount(bdtAccount);
+check(
+  "borrowed money lands in the account",
+  near(afterLoan - beforeLoan, 120000),
+  `${beforeLoan} -> ${afterLoan}`
+);
+
+// The rule that matters most: cash arrived, but the agency did not earn it.
+r = await call("GET", "/reports/profit-loss");
+const plAfterLoan = r.json.data;
+check(
+  "but a loan is not revenue",
+  !JSON.stringify(plAfterLoan.revenue).includes("120000"),
+  JSON.stringify(plAfterLoan.revenue)
+);
+
+// Put a real interest figure on the first instalment, the way an agency copying
+// its bank's own table would.
+r = await call("GET", `/loans/${loanId}`);
+const schedule = r.json.data?.instalments ?? [];
+check("the schedule reads back", schedule.length === 12, `${schedule.length}`);
+
+r = await call("PATCH", `/loans/${loanId}/instalments`, {
+  instalments: schedule.map((item, index) => ({
+    due_date: item.due_date.slice(0, 10),
+    principal_bdt: 10000,
+    interest_bdt: index === 0 ? 1200 : 0,
+  })),
+});
+check("admin can correct the schedule to match the bank", r.status === 200, `${r.status} ${r.json.message}`);
+check("interest now appears on it", near(r.json.data?.interest_scheduled_bdt ?? 0, 1200), `${r.json.data?.interest_scheduled_bdt}`);
+
+const firstInstalment = r.json.data?.instalments?.[0]?.id;
+const beforePay = await balanceOfAccount(bdtAccount);
+
+r = await call("PATCH", `/loans/instalments/${firstInstalment}/pay`, {
+  account_id: bdtAccount,
+  date: "2026-02-15",
+});
+check("admin can pay an instalment", r.status === 200, `${r.status} ${r.json.message}`);
+check("the outstanding figure drops by the principal only", (r.json.data?.outstanding_bdt ?? 0) === 110000, `${r.json.data?.outstanding_bdt}`);
+
+const afterPay = await balanceOfAccount(bdtAccount);
+check(
+  "and the account loses principal AND interest",
+  near(beforePay - afterPay, 11200),
+  `${beforePay} -> ${afterPay}, expected -11200`
+);
+
+// The accounting rule this module exists to get right.
+r = await call("GET", "/reports/profit-loss");
+check(
+  "only the interest reaches profit and loss",
+  near(r.json.data?.cost?.loan_interest_bdt ?? 0, 1200),
+  `${r.json.data?.cost?.loan_interest_bdt}`
+);
+check(
+  "the principal repaid is not a cost",
+  (r.json.data?.cost?.total_bdt ?? 0) - (plAfterLoan.cost?.total_bdt ?? 0) === 1200,
+  `cost moved by ${(r.json.data?.cost?.total_bdt ?? 0) - (plAfterLoan.cost?.total_bdt ?? 0)}`
+);
+
+r = await call("PATCH", `/loans/instalments/${firstInstalment}/pay`, { account_id: bdtAccount });
+check("paying the same instalment twice is refused", r.status === 409, `${r.status} ${r.json.message}`);
+check("with nothing moving", near(await balanceOfAccount(bdtAccount), afterPay), `${await balanceOfAccount(bdtAccount)}`);
+
+r = await call("DELETE", `/loans/${loanId}`);
+check("a loan with repayments cannot be deleted", r.status === 409, `${r.status} ${r.json.message}`);
+check("and the refusal says to close it instead", /close it/i.test(r.json.message ?? ""), r.json.message);
+
+// Reversing puts the money back and makes it owed again.
+r = await call("PATCH", `/loans/instalments/${firstInstalment}/reverse`);
+check("a repayment can be reversed", r.status === 200, `${r.status} ${r.json.message}`);
+check("which owes the principal again", (r.json.data?.outstanding_bdt ?? 0) === 120000, `${r.json.data?.outstanding_bdt}`);
+check(
+  "and returns the cash exactly",
+  near(await balanceOfAccount(bdtAccount), beforePay),
+  `${await balanceOfAccount(bdtAccount)} vs ${beforePay}`
+);
+r = await call("PATCH", `/loans/instalments/${firstInstalment}/reverse`);
+check("reversing it twice is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+// Paying every instalment settles the loan on its own - the status can never
+// sit at "active" on a loan with nothing left to pay.
+r = await call("GET", `/loans/${loanId}`);
+for (const item of r.json.data?.instalments ?? []) {
+  await call("PATCH", `/loans/instalments/${item.id}/pay`, { account_id: bdtAccount });
+}
+r = await call("GET", `/loans/${loanId}`);
+check("paying every instalment settles the loan", r.json.data?.status === "settled", `${r.json.data?.status}`);
+check("with nothing outstanding", (r.json.data?.outstanding_bdt ?? -1) === 0, `${r.json.data?.outstanding_bdt}`);
+
+r = await call("GET", "/loans/summary");
+check("the summary reads", r.status === 200, `${r.status}`);
+check("and a settled loan owes nothing", (r.json.data?.outstanding_bdt ?? -1) === 0, `${r.json.data?.outstanding_bdt}`);
+
+// A loan must land in a BDT account, like every other BDT record.
+r = await call("POST", "/loans", {
+  lender: "Wrong Currency Bank",
+  principal_bdt: 5000,
+  started_on: "2026-03-01",
+  term_months: 2,
+  account_id: usdAccount,
+});
+check("a loan cannot be paid into a USD account", r.status === 400, `${r.status} ${r.json.message}`);
+
+console.log("\n--- shareholders ---");
+
+r = await call("POST", "/shareholders", { name: "Ayesha Rahman", share_pct: 60 });
+check("admin can add a shareholder", r.status === 201, `${r.status} ${r.json.message}`);
+const shareholderA = r.json.data?.id;
+
+r = await call("POST", "/shareholders", { name: "Karim Uddin", share_pct: 30 });
+check("and a second one", r.status === 201, `${r.status} ${r.json.message}`);
+
+// Shares totalling more than the whole business is not a rounding question.
+r = await call("POST", "/shareholders", { name: "Too Much", share_pct: 20 });
+check("shares cannot total more than 100%", r.status === 400, `${r.status} ${r.json.message}`);
+check(
+  "and the refusal says how much is already held",
+  /already hold/i.test(r.json.message ?? ""),
+  r.json.message
+);
+
+r = await call("GET", "/shareholders");
+check("the list says what is unallocated", r.json.meta?.unallocated_pct === 10, `${r.json.meta?.unallocated_pct}`);
+
+const beforeDistribution = await balanceOfAccount(bdtAccount);
+r = await call("POST", "/shareholders/distributions", {
+  shareholder_id: shareholderA,
+  date: "2026-03-31",
+  amount_bdt: 25000,
+  account_id: bdtAccount,
+});
+check("admin can pay a distribution", r.status === 201, `${r.status} ${r.json.message}`);
+const distributionId = r.json.data?.id;
+
+const afterDistribution = await balanceOfAccount(bdtAccount);
+check(
+  "which leaves a real account",
+  near(beforeDistribution - afterDistribution, 25000),
+  `${beforeDistribution} -> ${afterDistribution}`
+);
+
+// The rule: paying owners must not let an agency shrink its own profit.
+const plBeforeDistribution = await call("GET", "/reports/profit-loss");
+check(
+  "but a distribution is not a cost",
+  near(plBeforeDistribution.json.data?.cost?.total_bdt ?? 0, (await call("GET", "/reports/profit-loss")).json.data?.cost?.total_bdt ?? 0),
+  "cost changed by a distribution"
+);
+check(
+  "profit is unchanged by paying owners",
+  !JSON.stringify(plBeforeDistribution.json.data?.cost ?? {}).includes("25000"),
+  JSON.stringify(plBeforeDistribution.json.data?.cost)
+);
+
+r = await call("DELETE", `/shareholders/${shareholderA}`);
+check("a shareholder with distributions cannot be deleted", r.status === 409, `${r.status} ${r.json.message}`);
+check(
+  "and the refusal says to make them inactive",
+  /inactive/i.test(r.json.message ?? ""),
+  r.json.message
+);
+
+r = await call("DELETE", `/shareholders/distributions/${distributionId}`);
+check("a distribution can be reversed", r.status === 200, `${r.status} ${r.json.message}`);
+check(
+  "which returns the money",
+  near(await balanceOfAccount(bdtAccount), beforeDistribution),
+  `${await balanceOfAccount(bdtAccount)} vs ${beforeDistribution}`
+);
+
+// Retiring somebody frees their share for whoever takes it on.
+r = await call("PATCH", `/shareholders/${shareholderA}`, { is_active: false });
+check("a shareholder can be retired", r.status === 200, `${r.status} ${r.json.message}`);
+r = await call("POST", "/shareholders", { name: "New Partner", share_pct: 60 });
+check("which frees their share for somebody else", r.status === 201, `${r.status} ${r.json.message}`);
+
+// Both lists are the admin's alone.
+cookie = pmCookie;
+r = await call("GET", "/loans");
+check("a project manager cannot read loans", r.status === 403, `${r.status}`);
+r = await call("GET", "/shareholders");
+check("nor who owns the business", r.status === 403, `${r.status}`);
+cookie = roleCookies.sales;
+r = await call("GET", "/loans");
+check("nor can sales", r.status === 403, `${r.status}`);
+cookie = opsCookie;
+r = await call("GET", "/shareholders");
+check("nor operations", r.status === 403, `${r.status}`);
 cookie = adminCookie;
 
 

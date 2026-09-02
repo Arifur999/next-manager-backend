@@ -44,6 +44,13 @@ enum LedgerSource {
   exchange_in
   due_received
   due_payment
+  // Borrowed money arriving, and instalments going back out. Both move a
+  // real account; neither is revenue or cost, which is why profit and loss
+  // reads payments and expenses rather than the ledger.
+  loan_received
+  loan_repayment
+  // Profit handed to an owner. A sibling of owner_withdrawal, not of expense.
+  shareholder_distribution
   adjustment
 }
 
@@ -261,4 +268,16 @@ enum PayrollStatus {
   draft
   /// Paid. The payouts exist and the ledger has moved.
   completed
+}
+
+/// Where a loan stands as an arrangement.
+///
+/// What is still owed is computed from the instalments, never stored, so this
+/// cannot contradict the money. A loan settles itself when the last instalment
+/// is paid; closed is the manual case - ended by agreement or written off with
+/// a balance remaining.
+enum LoanStatus {
+  active
+  settled
+  closed
 }

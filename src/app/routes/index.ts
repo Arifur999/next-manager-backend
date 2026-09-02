@@ -11,6 +11,7 @@ import { ExchangeRoutes } from "../module/exchange/exchange.route.js";
 import { ExpenseRoutes } from "../module/expense/expense.route.js";
 import { ExpenseCategoryRoutes } from "../module/expenseCategory/expenseCategory.route.js";
 import { HrRoutes } from "../module/hr/hr.route.js";
+import { LoanRoutes, ShareholderRoutes } from "../module/loan/loan.route.js";
 import { InvoiceRoutes } from "../module/invoice/invoice.route.js";
 import { InviteRoutes, PublicInviteRoutes } from "../module/invite/invite.route.js";
 import { KpiRoutes } from "../module/kpi/kpi.route.js";
@@ -47,6 +48,8 @@ router.use("/auth", AuthRoutes);
 router.use("/dashboard", DashboardRoutes);
 router.use("/users", UserRoutes);
 router.use("/hr", HrRoutes);
+router.use("/loans", LoanRoutes);
+router.use("/shareholders", ShareholderRoutes);
 router.use("/departments", DepartmentRoutes);
 router.use("/team-invites", InviteRoutes);
 // Public: whoever is opening the link has no account yet.

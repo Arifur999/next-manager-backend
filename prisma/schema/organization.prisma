@@ -42,6 +42,9 @@ model Organization {
   leave_types       LeaveType[]
   leave_requests    LeaveRequest[]
   payroll_runs      PayrollRun[]
+  loans             Loan[]
+  shareholders      Shareholder[]
+  distributions     ShareholderDistribution[]
 
   @@map("organizations")
 }
@@ -95,6 +98,9 @@ model User {
   attendance         Attendance[]
   leave_requests     LeaveRequest[] @relation("LeaveRequester")
   payroll_items      PayrollItem[]
+  /// Optional both ways: somebody can own part of the business without ever
+  /// signing in, and most colleagues own none of it.
+  shareholdings      Shareholder[]
 
   @@index([organization_id])
   /// The FK, and the department filter on the team list.

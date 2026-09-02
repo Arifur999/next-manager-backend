@@ -455,6 +455,135 @@ ok(
     JSON.stringify(linkList.json.data)
 );
 
+
+// Loans and shareholders. What a company owes a bank and who owns it are the
+// two facts it keeps furthest from everybody - and every one of these routes
+// takes an id that a foreign key would accept from any tenant at all.
+const bLoan = (
+    await call(
+        "POST",
+        "/loans",
+        {
+            lender: "B's Bank",
+            principal_bdt: 50000,
+            started_on: "2026-01-01",
+            term_months: 4,
+            // Deliberately not paid into an account. The instalments exist
+            // either way, which is all these attacks need - and it keeps the
+            // check at the bottom of this file able to say B's balances are
+            // untouched at zero, which is the strongest form of that claim.
+        },
+        b.cookie
+    )
+).json.data as { id: string; instalments: { id: string }[] };
+
+const bShareholder = (
+    await call("POST", "/shareholders", { name: "B Owner", share_pct: 50 }, b.cookie)
+).json.data as { id: string };
+
+refused("read B's loan", await call("GET", `/loans/${bLoan.id}`, undefined, a.cookie));
+refused("edit B's loan", await call("PATCH", `/loans/${bLoan.id}`, { lender: "Owned" }, a.cookie));
+refused("delete B's loan", await call("DELETE", `/loans/${bLoan.id}`, undefined, a.cookie));
+refused(
+    "rewrite B's repayment schedule",
+    await call(
+        "PATCH",
+        `/loans/${bLoan.id}/instalments`,
+        { instalments: [{ due_date: "2026-06-01", principal_bdt: 1 }] },
+        a.cookie
+    )
+);
+
+// Paying somebody else's instalment out of your own account would move real
+// money on a record you cannot even see.
+refused(
+    "pay an instalment on B's loan",
+    await call(
+        "PATCH",
+        `/loans/instalments/${bLoan.instalments[0].id}/pay`,
+        { account_id: a.bdt.id },
+        a.cookie
+    )
+);
+refused(
+    "reverse a repayment on B's loan",
+    await call(
+        "PATCH",
+        `/loans/instalments/${bLoan.instalments[0].id}/reverse`,
+        undefined,
+        a.cookie
+    )
+);
+
+refused(
+    "edit B's shareholder",
+    await call("PATCH", `/shareholders/${bShareholder.id}`, { share_pct: 1 }, a.cookie)
+);
+refused(
+    "delete B's shareholder",
+    await call("DELETE", `/shareholders/${bShareholder.id}`, undefined, a.cookie)
+);
+
+// The one that moves money: paying B's owner out of A's account.
+refused(
+    "pay a distribution to B's shareholder",
+    await call(
+        "POST",
+        "/shareholders/distributions",
+        {
+            shareholder_id: bShareholder.id,
+            date: "2026-04-01",
+            amount_bdt: 1000,
+            account_id: a.bdt.id,
+        },
+        a.cookie
+    )
+);
+
+// And the other direction: A's own shareholder, paid out of B's account.
+const aShareholder = (
+    await call("POST", "/shareholders", { name: "A Owner", share_pct: 50 }, a.cookie)
+).json.data as { id: string };
+refused(
+    "pay A's own shareholder out of B's account",
+    await call(
+        "POST",
+        "/shareholders/distributions",
+        {
+            shareholder_id: aShareholder.id,
+            date: "2026-04-01",
+            amount_bdt: 1000,
+            account_id: b.bdt.id,
+        },
+        a.cookie
+    )
+);
+
+const loanList = await call("GET", "/loans", undefined, a.cookie);
+ok(
+    "A's loan list carries none of B's",
+    Array.isArray(loanList.json.data) &&
+        !(loanList.json.data as { id: string }[]).some((row) => row.id === bLoan.id),
+    JSON.stringify((loanList.json.data as { lender: string }[])?.map((row) => row.lender))
+);
+
+const shareholderList = await call("GET", "/shareholders", undefined, a.cookie);
+ok(
+    "A's shareholders carry none of B's",
+    Array.isArray(shareholderList.json.data) &&
+        !(shareholderList.json.data as { id: string }[]).some((row) => row.id === bShareholder.id),
+    JSON.stringify((shareholderList.json.data as { name: string }[])?.map((row) => row.name))
+);
+
+// The summary is an aggregate, so a leak here would not name anything - it
+// would just be a number that quietly included somebody else's debt.
+const loanSummary = await call("GET", "/loans/summary", undefined, a.cookie);
+ok(
+    "and A's outstanding total does not include B's borrowing",
+    (loanSummary.json.data as { borrowed_bdt: number })?.borrowed_bdt === 0,
+    JSON.stringify(loanSummary.json.data)
+);
+
 console.log("\n--- A tries to MODIFY B's records ---");
 refused("edit B's client", await call("PATCH", `/clients/${b.client.id}`, { name: "Owned" }, a.cookie));
 refused("edit B's project", await call("PATCH", `/projects/${b.project.id}`, { name: "Owned" }, a.cookie));

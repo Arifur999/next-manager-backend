@@ -34,13 +34,19 @@ import {
  * correction. Both appear under "everything" and nowhere else, rather than
  * being quietly folded into income and overstating what the agency made.
  */
+// Bucketed by DIRECTION, not by accounting nature. Borrowed money arriving is
+// money in and shows under Income here, even though it is not revenue - this
+// screen answers "what moved", and profit and loss answers "what did we
+// earn". The same reason an owner withdrawal already sits under Expenses.
 const KINDS = {
-    income: [LedgerSource.payment, LedgerSource.due_received],
+    income: [LedgerSource.payment, LedgerSource.due_received, LedgerSource.loan_received],
     expense: [
         LedgerSource.expense,
         LedgerSource.team_payout,
         LedgerSource.owner_withdrawal,
         LedgerSource.due_payment,
+        LedgerSource.loan_repayment,
+        LedgerSource.shareholder_distribution,
     ],
     transfer: [LedgerSource.exchange_in, LedgerSource.exchange_out],
 } as const;

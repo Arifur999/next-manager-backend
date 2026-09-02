@@ -29,9 +29,9 @@ const rangeOf = (options: ListOptions) => {
     return from || to ? { gte: from, lte: to } : undefined;
 };
 
-const dateWhere = (options: ListOptions) => {
+const dateWhere = (options: ListOptions, column = "date") => {
     const range = rangeOf(options);
-    return range ? { date: range } : {};
+    return range ? { [column]: range } : {};
 };
 
 /**
@@ -39,7 +39,14 @@ const dateWhere = (options: ListOptions) => {
  *
  * An owner withdrawal is deliberately absent from costs: it is profit already
  * earned, leaving. Counting it as an expense would understate profit by exactly
- * the amount taken.
+ * the amount taken. A shareholder distribution is the same thing and is absent
+ * for the same reason.
+ *
+ * A loan is the mirror image. Borrowed money arriving is not revenue, so it is
+ * absent from the income side; but the INTEREST on it is a genuine cost of
+ * doing business and is counted. The principal repaid is not - that settles a
+ * liability - which is why the instalment carries the two as separate columns
+ * and only one of them is read here.
  *
  * Employee-type expense categories are reported separately from operating
  * expenses so they can be read alongside team payouts without being
@@ -48,7 +55,7 @@ const dateWhere = (options: ListOptions) => {
 const getProfitAndLoss = async (user: IRequestUser, options: ListOptions = {}) => {
     const scope = { organization_id: user.organizationId, deleted_at: null, ...dateWhere(options) };
 
-    const [income, expenseByType, payouts] = await Promise.all([
+    const [income, expenseByType, payouts, interest] = await Promise.all([
         prisma.payment.aggregate({
             where: scope,
             _sum: { amount_usd: true, amount_bdt_reporting: true },
@@ -59,6 +66,22 @@ const getProfitAndLoss = async (user: IRequestUser, options: ListOptions = {}) =
             select: { amount_bdt: true, category: { select: { type: true } } },
         }),
         prisma.teamPayout.aggregate({ where: scope, _sum: { amount_bdt: true } }),
+        // Borrowing costs money, and that cost is the interest only.
+        // Repaying principal settles a liability rather than spending
+        // anything, so counting a whole instalment here would understate
+        // profit by the principal every single month.
+        //
+        // Dated by when it was PAID, not by when it fell due: an instalment
+        // sitting overdue has not cost anything yet.
+        prisma.loanInstalment.aggregate({
+            where: {
+                organization_id: user.organizationId,
+                loan: { deleted_at: null },
+                paid_at: { not: null },
+                ...dateWhere(options, "paid_at"),
+            },
+            _sum: { interest_bdt: true },
+        }),
     ]);
 
     let operatingBdt = 0;
@@ -76,7 +99,8 @@ const getProfitAndLoss = async (user: IRequestUser, options: ListOptions = {}) =
     const revenueUsd = income._sum.amount_usd?.toNumber() ?? 0;
     const revenueBdt = income._sum.amount_bdt_reporting?.toNumber() ?? 0;
     const payoutBdt = payouts._sum.amount_bdt?.toNumber() ?? 0;
-    const totalCostBdt = operatingBdt + employeeBdt + payoutBdt;
+    const interestBdt = interest._sum.interest_bdt?.toNumber() ?? 0;
+    const totalCostBdt = operatingBdt + employeeBdt + payoutBdt + interestBdt;
 
     return {
         revenue: { usd: revenueUsd, bdt_reporting: revenueBdt, payment_count: income._count },
@@ -84,6 +108,7 @@ const getProfitAndLoss = async (user: IRequestUser, options: ListOptions = {}) =
             operating_expense_bdt: operatingBdt,
             employee_expense_bdt: employeeBdt,
             team_payout_bdt: payoutBdt,
+            loan_interest_bdt: interestBdt,
             total_bdt: totalCostBdt,
         },
         // BDT only: it is the one currency in which both sides of this exist.

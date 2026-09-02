@@ -104,6 +104,10 @@ model User {
   shareholdings      Shareholder[]
   conversations      ConversationMember[]
   sent_messages      Message[]     @relation("MessageSender")
+  /// What they brought in. Both SetNull, so a departure never deletes a
+  /// client or a deal - it only leaves them unowned.
+  owned_clients      Client[]      @relation("ClientOwner")
+  owned_leads        Lead[]        @relation("LeadOwner")
 
   @@index([organization_id])
   /// The FK, and the department filter on the team list.

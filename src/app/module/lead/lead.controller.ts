@@ -7,8 +7,11 @@ import { sendResponse } from "../../shared/sendResponse.js";
 import { LeadService } from "./lead.service.js";
 
 const getPipeline = catchAsync(async (req: Request, res: Response) => {
-    const options = parseListOptions(req.query as Record<string, unknown>);
-    const result = await LeadService.getPipeline(req.user as IRequestUser, options);
+    const query = req.query as Record<string, unknown>;
+    const options = parseListOptions(query);
+    const result = await LeadService.getPipeline(req.user as IRequestUser, options, {
+        mine: query.mine === "true",
+    });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

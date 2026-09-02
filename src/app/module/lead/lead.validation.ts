@@ -14,6 +14,9 @@ export const createLeadZodSchema = z.object({
     // Estimates are always USD - that is the currency the agency bills in.
     estimated_value_usd: z.number("Estimated value must be a number").nonnegative().optional(),
     notes: z.string("Notes must be string").optional(),
+    // Whose deal this is. Left out, it is whoever entered it - and it travels
+    // onto the client when the deal is won.
+    owner_id: z.uuid("owner_id must be a valid id").nullable().optional(),
 });
 
 export const updateLeadZodSchema = createLeadZodSchema.partial();

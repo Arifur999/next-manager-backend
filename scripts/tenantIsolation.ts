@@ -649,6 +649,42 @@ ok(
 
 aSocket.ws?.close();
 
+
+// Ownership. "Who brought this in" points at a user, and a foreign key would
+// accept a user id from any agency at all - which would put another company's
+// employee onto this company's client, and that client into their own report.
+refused(
+    "file a client under one of B's people",
+    await call("POST", "/clients", { name: "Cuckoo", owner_id: b.member.id }, a.cookie)
+);
+refused(
+    "reassign A's own client to one of B's people",
+    await call("PATCH", `/clients/${a.client.id}`, { owner_id: b.member.id }, a.cookie)
+);
+refused(
+    "file a lead under one of B's people",
+    await call("POST", "/leads", { name: "Cuckoo Deal", owner_id: b.member.id }, a.cookie)
+);
+
+// B owns its own client. A asking for "mine" must never reach across.
+await call("PATCH", `/clients/${b.client.id}`, { owner_id: b.member.id }, b.cookie);
+
+const aOwnBook = await call("GET", "/clients?mine=true", undefined, a.cookie);
+ok(
+    "A's own book carries none of B's clients",
+    Array.isArray(aOwnBook.json.data) &&
+        !(aOwnBook.json.data as { id: string }[]).some((row) => row.id === b.client.id),
+    JSON.stringify((aOwnBook.json.data as { name: string }[])?.map((row) => row.name))
+);
+
+const aSalesTasks = await call("GET", "/tasks?client_owner=me", undefined, a.cookie);
+ok(
+    "and their sales board carries none of B's work",
+    Array.isArray(aSalesTasks.json.data) &&
+        !(aSalesTasks.json.data as { id: string }[]).some((row) => row.id === b.task.id),
+    JSON.stringify((aSalesTasks.json.data as { title: string }[])?.map((row) => row.title))
+);
+
 console.log("\n--- A tries to MODIFY B's records ---");
 refused("edit B's client", await call("PATCH", `/clients/${b.client.id}`, { name: "Owned" }, a.cookie));
 refused("edit B's project", await call("PATCH", `/projects/${b.project.id}`, { name: "Owned" }, a.cookie));

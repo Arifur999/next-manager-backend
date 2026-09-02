@@ -15,6 +15,7 @@ const getAllClients = catchAsync(async (req: Request, res: Response) => {
             typeof query.status === "string" && query.status in ClientStatus
                 ? (query.status as ClientStatus)
                 : undefined,
+        mine: query.mine === "true",
     });
     sendResponse(res, {
         success: true,

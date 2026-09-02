@@ -9,6 +9,13 @@ model Client {
   phone          String       @default("")
   country        String       @default("")
   status         ClientStatus @default(active)
+  /// Who brought this client in.
+  ///
+  /// Null is a real answer, not missing data: everything that existed before
+  /// this column belongs to nobody, and a backfill that guessed would invent a
+  /// fact. SetNull rather than Cascade - somebody leaving the agency must not
+  /// take their clients out of the database with them.
+  owner_id       String?
   notes          String       @default("")
   deleted_at     DateTime?
   deleted_by     String?
@@ -16,6 +23,7 @@ model Client {
   updated_at     DateTime     @updatedAt
 
   organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  owner        User?        @relation("ClientOwner", fields: [owner_id], references: [id], onDelete: SetNull)
   projects     Project[]
   payments     Payment[]
   invoices     Invoice[]
@@ -27,6 +35,12 @@ model Client {
   @@index([organization_id, status])
   /// The clients list, in the order it is shown.
   @@index([organization_id, created_at(sort: Desc)])
+  /// "My clients" - the filter the sales reports and task board are built on.
+  @@index([organization_id, owner_id])
+  /// The FK itself. The composite above leads with organization_id, so it
+  /// cannot serve a lookup on owner_id alone - which is exactly what deleting
+  /// a user has to do to check this constraint.
+  @@index([owner_id])
   @@map("clients")
 }
 
@@ -70,6 +84,14 @@ model Lead {
   /// the currency the agency actually bills in.
   estimated_value_usd Decimal @default(0) @db.Decimal(15, 2)
   notes          String    @default("")
+  /// Who brought this in.
+  ///
+  /// Null is a real answer, not missing data: everything that existed before
+  /// this column belongs to nobody, and a backfill that guessed would invent a
+  /// fact. SetNull rather than Cascade - somebody leaving the agency must not
+  /// take their clients out of the database with them.
+  owner_id       String?
+
   /// Set when the lead is converted, so a won deal can be traced to its client.
   converted_client_id String?
   converted_at   DateTime?
@@ -78,6 +100,7 @@ model Lead {
   updated_at     DateTime  @updatedAt
 
   organization     Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  owner            User?        @relation("LeadOwner", fields: [owner_id], references: [id], onDelete: SetNull)
   source           LeadSource?  @relation(fields: [source_id], references: [id], onDelete: SetNull)
   converted_client Client?      @relation(fields: [converted_client_id], references: [id], onDelete: SetNull)
   stage_events     LeadStageEvent[]
@@ -90,6 +113,12 @@ model Lead {
   /// this, and the FK needs an index regardless.
   @@index([source_id])
   @@index([converted_client_id])
+  /// "My pipeline" - the filter a salesperson opens their own board with.
+  @@index([organization_id, owner_id])
+  /// The FK itself. The composite above leads with organization_id, so it
+  /// cannot serve a lookup on owner_id alone - which is exactly what deleting
+  /// a user has to do to check this constraint.
+  @@index([owner_id])
   @@map("leads")
 }
 

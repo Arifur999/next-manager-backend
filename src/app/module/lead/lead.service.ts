@@ -16,10 +16,16 @@ import { ICreateLeadPayload, IUpdateLeadPayload } from "./lead.validation.js";
  * just move the same work somewhere slower.
  */
 
-const getPipeline = async (user: IRequestUser, options: ListOptions = {}) => {
+const getPipeline = async (
+    user: IRequestUser,
+    options: ListOptions = {},
+    filters: { mine?: boolean } = {}
+) => {
     const where: Prisma.LeadWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
+        // Their own board rather than the agency's, when they ask for it.
+        ...(filters.mine ? { owner_id: user.userId } : {}),
         ...(options.search
             ? {
                 OR: [
@@ -89,9 +95,32 @@ const assertSource = async (
     }
 };
 
+/**
+ * An owner has to be somebody on this team.
+ *
+ * The foreign key proves the user row exists, never that it is ours.
+ */
+const assertOwner = async (
+    tx: Prisma.TransactionClient,
+    ownerId: string | null | undefined,
+    user: IRequestUser
+) => {
+    if (!ownerId) return;
+
+    const member = await tx.user.findFirst({
+        where: { id: ownerId, organization_id: user.organizationId, deleted_at: null },
+        select: { id: true },
+    });
+
+    if (!member) {
+        throw new AppError(status.NOT_FOUND, "That person is not on your team");
+    }
+};
+
 const createLead = async (payload: ICreateLeadPayload, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
         await assertSource(tx, payload.source_id, user);
+        await assertOwner(tx, payload.owner_id, user);
 
         const lead = await tx.lead.create({
             data: {
@@ -104,6 +133,7 @@ const createLead = async (payload: ICreateLeadPayload, user: IRequestUser) => {
                 stage: payload.stage,
                 estimated_value_usd: payload.estimated_value_usd ?? 0,
                 notes: payload.notes ?? "",
+                owner_id: payload.owner_id ?? user.userId,
             },
         });
 
@@ -133,6 +163,7 @@ const updateLead = async (id: string, payload: IUpdateLeadPayload, user: IReques
         }
 
         await assertSource(tx, payload.source_id, user);
+        await assertOwner(tx, payload.owner_id, user);
 
         const updated = await tx.lead.update({ where: { id }, data: payload });
 
@@ -186,6 +217,11 @@ const convertToClient = async (id: string, user: IRequestUser) => {
                 phone: lead.phone,
                 status: ClientStatus.active,
                 notes: lead.notes,
+                // The whole point of recording an owner on the lead. Without
+                // this line, winning a deal loses the person who won it - and
+                // their own client report would be empty the day after their
+                // best month.
+                owner_id: lead.owner_id,
             },
         });
 

@@ -19,6 +19,29 @@ import { ICreateClientPayload, IUpdateClientPayload } from "./client.validation.
  * the agency already works with before approaching anybody, and delivery needs
  * to know whose work it is scheduling.
  */
+/**
+ * An owner has to be somebody on this team.
+ *
+ * The foreign key proves the user row exists, never that it is ours - so
+ * without this an admin could file a client under another agency's employee.
+ */
+const assertOwn = async (
+    tx: Prisma.TransactionClient | typeof prisma,
+    ownerId: string | null | undefined,
+    user: IRequestUser
+) => {
+    if (!ownerId) return;
+
+    const member = await tx.user.findFirst({
+        where: { id: ownerId, organization_id: user.organizationId, deleted_at: null },
+        select: { id: true },
+    });
+
+    if (!member) {
+        throw new AppError(status.NOT_FOUND, "That person is not on your team");
+    }
+};
+
 const visibilityScope = (user: IRequestUser): Prisma.ClientWhereInput =>
     user.role === Role.operations
         ? { projects: { some: { members: { some: { user_id: user.userId } } } } }
@@ -27,12 +50,15 @@ const visibilityScope = (user: IRequestUser): Prisma.ClientWhereInput =>
 const getAllClients = async (
     user: IRequestUser,
     options: ListOptions = {},
-    filters: { status?: ClientStatus } = {}
+    filters: { status?: ClientStatus; mine?: boolean } = {}
 ) => {
     const where: Prisma.ClientWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
         ...visibilityScope(user),
+        // An explicit ask for their own book, not a role rule - it composes
+        // with the visibility scope above rather than replacing it.
+        ...(filters.mine ? { owner_id: user.userId } : {}),
         // Archived is a state, not a deletion: the client stays, its history
         // stays, and it drops out of the list somebody works from.
         ...(filters.status ? { status: filters.status } : {}),
@@ -155,6 +181,8 @@ const getClientFinancials = async (id: string, user: IRequestUser) => {
 // create - the row on its own would not need one.
 const createClient = async (payload: ICreateClientPayload, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
+        await assertOwn(tx, payload.owner_id, user);
+
         const client = await tx.client.create({
             data: {
                 organization_id: user.organizationId,
@@ -165,6 +193,10 @@ const createClient = async (payload: ICreateClientPayload, user: IRequestUser) =
                 country: payload.country ?? "",
                 status: payload.status,
                 notes: payload.notes ?? "",
+                // Defaults to whoever entered them. Recording the truth costs
+                // nothing and an unowned client is invisible to every "mine"
+                // filter in the product.
+                owner_id: payload.owner_id ?? user.userId,
             },
         });
 
@@ -187,6 +219,10 @@ const updateClient = async (id: string, payload: IUpdateClientPayload, user: IRe
     if (!existing) {
         throw new AppError(status.NOT_FOUND, "Client not found");
     }
+
+    // Reassigning is how a client moves between salespeople, and how the
+    // ones that predate this column get an owner at all.
+    await assertOwn(prisma, payload.owner_id, user);
 
     return prisma.client.update({ where: { id }, data: payload });
 };

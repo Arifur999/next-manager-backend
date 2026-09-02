@@ -74,6 +74,7 @@ const getAllTasks = async (
         assigneeId?: string;
         statusId?: string;
         mine?: boolean;
+        clientOwnerMine?: boolean;
         overdue?: boolean;
     },
     options: ListOptions = {}
@@ -83,6 +84,11 @@ const getAllTasks = async (
         deleted_at: null,
         ...visibilityScope(user),
         ...(filters.mine ? { assignee_id: user.userId } : {}),
+        // Not "tasks assigned to me" but "tasks inside work I brought in" -
+        // a salesperson watching their own client without touching it.
+        ...(filters.clientOwnerMine
+            ? { project: { client: { owner_id: user.userId } } }
+            : {}),
         ...(filters.projectId ? { project_id: filters.projectId } : {}),
         ...(filters.assigneeId ? { assignee_id: filters.assigneeId } : {}),
         ...(filters.statusId ? { status_id: filters.statusId } : {}),

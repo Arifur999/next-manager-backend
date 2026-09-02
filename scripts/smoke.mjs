@@ -4106,5 +4106,129 @@ for (const socket of [adminSocket, opsSocket, salesSocket]) socket.ws?.close();
 cookie = adminCookie;
 
 
+console.log("\n--- who brought them in ---");
+//
+// Two salespeople in one agency, a client each. A filter that silently matched
+// everything would pass every check that only ever looks at one person, so
+// both books are checked from both sides.
+
+// Two owners, not two salespeople: ownership is not role-specific, and the
+// plan's seats are already spent on the four roles above.
+const seller2Id = adminUserId;
+const seller2Cookie = adminCookie;
+
+// Each files their own client.
+cookie = roleCookies.sales;
+r = await call("POST", "/clients", { name: "Alpha Corp" });
+check("a salesperson can add a client", r.status === 201, `${r.status} ${r.json.message}`);
+const alphaId = r.json.data?.id;
+check(
+  "and it records them as the owner without being asked",
+  r.json.data?.owner_id === roleUserIds.sales,
+  `${r.json.data?.owner_id} vs ${roleUserIds.sales}`
+);
+
+cookie = seller2Cookie;
+r = await call("POST", "/clients", { name: "Beta Ltd" });
+check("the second one too", r.status === 201, `${r.status} ${r.json.message}`);
+const betaId = r.json.data?.id;
+
+// The check that catches a filter matching everything.
+cookie = roleCookies.sales;
+r = await call("GET", "/clients?mine=true");
+let ownBook = (r.json.data ?? []).map((c) => c.id);
+check("a seller's own book holds their client", ownBook.includes(alphaId), JSON.stringify(ownBook.length));
+check("and NOT the other seller's", !ownBook.includes(betaId), "the other book leaked");
+
+cookie = seller2Cookie;
+r = await call("GET", "/clients?mine=true");
+ownBook = (r.json.data ?? []).map((c) => c.id);
+check("and it holds from the other side too", ownBook.includes(betaId) && !ownBook.includes(alphaId), JSON.stringify(ownBook));
+
+// Unfiltered is still the whole book - sales needs to know who the agency
+// already works with before approaching anybody.
+r = await call("GET", "/clients");
+const all = (r.json.data ?? []).map((c) => c.id);
+check("unfiltered still shows the whole agency", all.includes(alphaId) && all.includes(betaId), JSON.stringify(all.length));
+
+// An owner from another agency would be a foreign key doing what it cannot.
+cookie = adminCookie;
+r = await call("POST", "/clients", { name: "Ghost Owned", owner_id: "00000000-0000-0000-0000-000000000000" });
+check("a client cannot be filed under somebody who is not on the team", r.status === 404, `${r.status} ${r.json.message}`);
+
+// Reassigning is how the clients that predate this column get an owner.
+r = await call("PATCH", `/clients/${alphaId}`, { owner_id: seller2Id });
+check("admin can reassign a client", r.status === 200, `${r.status} ${r.json.message}`);
+cookie = roleCookies.sales;
+r = await call("GET", "/clients?mine=true");
+check(
+  "which takes it out of the first seller's book",
+  !(r.json.data ?? []).map((c) => c.id).includes(alphaId),
+  "still theirs"
+);
+cookie = adminCookie;
+await call("PATCH", `/clients/${alphaId}`, { owner_id: roleUserIds.sales });
+
+// A won deal must not lose the person who won it.
+cookie = roleCookies.sales;
+r = await call("POST", "/leads", { name: "Gamma Deal", estimated_value_usd: 5000 });
+check("a salesperson can add a lead", r.status === 201, `${r.status} ${r.json.message}`);
+check("owned by them", r.json.data?.owner_id === roleUserIds.sales, `${r.json.data?.owner_id}`);
+const gammaLead = r.json.data?.id;
+
+r = await call("GET", "/leads?mine=true");
+const myLeadIds = (r.json.data?.stages ?? []).flatMap((column) =>
+  (column.leads ?? []).map((l) => l.id)
+);
+check("their own pipeline holds it", myLeadIds.includes(gammaLead), JSON.stringify(myLeadIds.length));
+
+r = await call("POST", `/leads/${gammaLead}/convert`, {});
+check("and it converts", r.status === 201, `${r.status} ${r.json.message}`);
+const gammaClient = r.json.data?.id ?? r.json.data?.client?.id;
+
+cookie = adminCookie;
+r = await call("GET", `/clients/${gammaClient}`);
+check(
+  "the converted client keeps the person who won it",
+  r.json.data?.owner_id === roleUserIds.sales,
+  `${r.json.data?.owner_id} vs ${roleUserIds.sales}`
+);
+
+// Sales Tasks: every task inside work they brought in, whoever it is assigned to.
+r = await call("PATCH", `/clients/${clientId}`, { owner_id: roleUserIds.sales });
+check("a delivered client can be handed to a seller", r.status === 200, `${r.status} ${r.json.message}`);
+
+r = await call("GET", `/tasks?project_id=${timeProjectId}`);
+const projectTasks = (r.json.data ?? []).map((t) => t.id);
+check("that client's project already has work on it", projectTasks.length > 0, `${projectTasks.length}`);
+const alphaTask = projectTasks[0];
+
+cookie = roleCookies.sales;
+r = await call("GET", "/tasks?client_owner=me");
+const salesTasks = (r.json.data ?? []).map((t) => t.id);
+check("their sales board shows work inside it", salesTasks.includes(alphaTask), JSON.stringify(salesTasks.length));
+
+r = await call("GET", "/tasks?mine=true");
+check(
+  "while their own task list does not - it is not their job to do",
+  !(r.json.data ?? []).map((t) => t.id).includes(alphaTask),
+  "it showed up as their own work"
+);
+
+cookie = seller2Cookie;
+r = await call("GET", "/tasks?client_owner=me");
+check(
+  "and the other owner sees nothing of it",
+  !(r.json.data ?? []).map((t) => t.id).includes(alphaTask),
+  "the other book leaked"
+);
+
+// Put it back, so nothing after this section inherits a changed owner.
+cookie = adminCookie;
+await call("PATCH", `/clients/${clientId}`, { owner_id: null });
+
+cookie = adminCookie;
+
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

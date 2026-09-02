@@ -4230,5 +4230,73 @@ await call("PATCH", `/clients/${clientId}`, { owner_id: null });
 cookie = adminCookie;
 
 
+console.log("\n--- the sales workspace ---");
+//
+// A page opening is half a claim. The other half is what the API still refuses,
+// and that is the half a role test usually forgets.
+
+cookie = roleCookies.sales;
+
+// The directory. Asserted on the RESPONSE BODY rather than on a screen: the
+// point is that the sensitive fields never arrive, not that nothing renders
+// them today.
+r = await call("GET", "/users");
+check("sales can read the team directory", r.status === 200, `${r.status} ${r.json.message}`);
+const directory = r.json.data ?? [];
+check("which lists the whole team", directory.length > 0, `${directory.length}`);
+check(
+  "carrying names and how to reach them",
+  directory.every((person) => person.full_name !== undefined && person.email !== undefined),
+  JSON.stringify(Object.keys(directory[0] ?? {}))
+);
+check(
+  "but NO permissions on anybody",
+  directory.every((person) => person.permissions === undefined),
+  JSON.stringify(Object.keys(directory[0] ?? {}))
+);
+check(
+  "and no account status either",
+  directory.every((person) => person.status === undefined),
+  JSON.stringify(Object.keys(directory[0] ?? {}))
+);
+
+// A single person is still management, not directory.
+r = await call("GET", `/users/${roleUserIds.operations}`);
+check("sales cannot open somebody's user record", r.status === 403, `${r.status}`);
+
+// Admin keeps the management view - narrowing the projection must not have
+// narrowed it for the people who run the team.
+cookie = adminCookie;
+r = await call("GET", "/users");
+check(
+  "admin still sees permissions on the team list",
+  (r.json.data ?? []).every((person) => Array.isArray(person.permissions)),
+  JSON.stringify(Object.keys((r.json.data ?? [])[0] ?? {}))
+);
+
+// Watching delivery. Sales reads, and only reads.
+cookie = roleCookies.sales;
+r = await call("GET", "/projects");
+check("sales can read projects", r.status === 200, `${r.status}`);
+r = await call("GET", `/projects/${timeProjectId}`);
+check("and open one", r.status === 200, `${r.status}`);
+r = await call("GET", "/tasks");
+check("and read the task board", r.status === 200, `${r.status}`);
+
+// The line the whole role rests on.
+r = await call("PATCH", `/projects/${timeProjectId}`, { name: "Renamed by sales" });
+check("but cannot change a project", r.status === 403, `${r.status} ${r.json.message}`);
+r = await call("POST", "/tasks", { project_id: timeProjectId, title: "Do this now" });
+check("nor create a task", r.status === 403, `${r.status} ${r.json.message}`);
+r = await call("GET", `/projects/${timeProjectId}/financials`);
+check("nor see what a project earns", r.status === 403, `${r.status} ${r.json.message}`);
+r = await call("GET", `/clients/${clientId}/financials`);
+check("nor what a client is worth", r.status === 403, `${r.status} ${r.json.message}`);
+r = await call("GET", "/payments");
+check("nor the money that came in", r.status === 403, `${r.status}`);
+
+cookie = adminCookie;
+
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

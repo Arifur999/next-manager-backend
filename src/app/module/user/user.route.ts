@@ -11,7 +11,9 @@ import {
 
 const router = Router();
 
-router.get("/", checkAuth(Role.admin, Role.project_manager), UserController.getAllUsers);
+// Sales sees a DIRECTORY here, not the management view: the service picks a
+// narrower projection for them, with no permissions and no status on it.
+router.get("/", checkAuth(Role.admin, Role.project_manager, Role.sales), UserController.getAllUsers);
 router.get("/:id", checkAuth(Role.admin, Role.project_manager), UserController.getSingleUser);
 router.post("/", checkAuth(Role.admin), validateRequest(createUserZodSchema), UserController.createUser);
 router.patch("/:id", checkAuth(Role.admin), validateRequest(updateUserZodSchema), UserController.updateUser);

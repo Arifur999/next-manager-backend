@@ -14,6 +14,27 @@ import {
     IUpdateUserPayload,
 } from "./user.validation.js";
 
+/**
+ * What a directory shows.
+ *
+ * Deliberately narrower than PUBLIC_USER_FIELDS below: no permissions, no
+ * status, no email_verified. Who is allowed to do what is a management fact,
+ * not a contact detail, and handing every salesperson the whole permission
+ * map of every colleague is a bigger answer than the question deserves.
+ *
+ * Kept as its own object rather than a runtime `delete` on the other one, so
+ * a field added there does not silently appear here too.
+ */
+const DIRECTORY_FIELDS = {
+    id: true,
+    email: true,
+    full_name: true,
+    phone: true,
+    avatar_url: true,
+    role: true,
+    department: { select: { id: true, name: true } },
+} as const;
+
 const PUBLIC_USER_FIELDS = {
     id: true,
     email: true,
@@ -54,12 +75,20 @@ const getAllUsers = async (
             : {}),
     };
 
+    // Admin and the project manager run the team and get the management view.
+    // Everybody else gets the directory - which is the whole reason this route
+    // could be opened to sales at all.
+    const fields =
+        user.role === Role.admin || user.role === Role.project_manager
+            ? PUBLIC_USER_FIELDS
+            : DIRECTORY_FIELDS;
+
     const slice = pageSlice(options);
 
     if (!slice) {
         const rows = await prisma.user.findMany({
             where,
-            select: PUBLIC_USER_FIELDS,
+            select: fields,
             orderBy: { created_at: "desc" },
         });
         return { rows, total: rows.length };
@@ -68,7 +97,7 @@ const getAllUsers = async (
     const [rows, total] = await Promise.all([
         prisma.user.findMany({
             where,
-            select: PUBLIC_USER_FIELDS,
+            select: fields,
             orderBy: { created_at: "desc" },
             skip: slice.skip,
             take: slice.take,

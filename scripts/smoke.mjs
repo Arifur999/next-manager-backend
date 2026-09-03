@@ -4498,5 +4498,51 @@ r = await call("PATCH", `/projects/${timeProjectId}`, { status_id: planningId })
 check("and the project can be moved back", r.status === 200, `${r.status}`);
 
 
+
+console.log("\n--- the project manager and the team ---");
+//
+// Taking the management SCREEN away must not take the JUDGEMENTS away. A PM
+// approves hours and decides leave; they do not add, edit or remove people.
+
+cookie = pmCookie;
+
+r = await call("GET", "/users");
+check("a project manager reads the team", r.status === 200, `${r.status}`);
+
+// Every write on a colleague, named one by one: any of these opening is the
+// exact failure this step exists to prevent, and a single check of "can they
+// manage users" would not say which.
+r = await call("POST", "/users", {
+  full_name: "Snuck In",
+  email: `snuck${stamp}@agencio.test`,
+  password: "Passw0rd123",
+  role: "operations",
+});
+check("but cannot hire", r.status === 403, `${r.status} ${r.json.message}`);
+
+r = await call("PATCH", `/users/${roleUserIds.operations}`, { role: "admin" });
+check("nor change somebody's role", r.status === 403, `${r.status} ${r.json.message}`);
+
+r = await call("PATCH", `/users/${roleUserIds.operations}`, { status: "suspended" });
+check("nor deactivate them", r.status === 403, `${r.status} ${r.json.message}`);
+
+r = await call("DELETE", `/users/${roleUserIds.operations}`);
+check("nor remove them", r.status === 403, `${r.status} ${r.json.message}`);
+
+r = await call("PATCH", `/users/${roleUserIds.operations}/permissions`, { permissions: [] });
+check("nor set what they may do", r.status === 403, `${r.status} ${r.json.message}`);
+
+// And the duties they keep. Removing a screen must not remove a judgement.
+r = await call("GET", "/time-entries?status=submitted");
+check("a project manager still sees hours to approve", r.status === 200, `${r.status}`);
+
+r = await call("GET", "/hr/leave");
+check("and still sees leave to decide", r.status === 200, `${r.status}`);
+
+r = await call("GET", "/hr/leave-types");
+check("with the kinds to decide against", r.status === 200, `${r.status}`);
+
+cookie = adminCookie;
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

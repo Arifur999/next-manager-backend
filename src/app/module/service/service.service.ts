@@ -44,6 +44,58 @@ const getAll = async (user: IRequestUser, filters: { categoryId?: string } = {})
         orderBy: [{ is_active: "desc" }, { sort_order: "asc" }, { name: "asc" }],
     });
 
+/**
+ * One service, and where it is actually being sold.
+ *
+ * The catalogue row alone answers nothing a salesperson opens it for. What they
+ * want is who bought it and what it is on, so this carries the projects it runs
+ * under and the clients those belong to.
+ *
+ * Money is deliberately absent. Which clients bought a service is a sales fact;
+ * what it earned is an income one, and that lives on the admin's revenue-by-
+ * service report.
+ */
+const getOne = async (id: string, user: IRequestUser) => {
+    const service = await prisma.service.findFirst({
+        where: { id, organization_id: user.organizationId },
+        select: {
+            ...SELECT,
+            _count: { select: { invoice_items: true, projects: true, template_items: true } },
+            projects: {
+                where: { deleted_at: null },
+                orderBy: { created_at: "desc" },
+                select: {
+                    id: true,
+                    name: true,
+                    code: true,
+                    // A row, not an enum column, since custom statuses landed -
+                    // a bare select would hand back status_id and nothing a
+                    // screen can print.
+                    status: { select: { id: true, name: true, category: true } },
+                    client: { select: { id: true, name: true, company: true } },
+                },
+            },
+        },
+    });
+
+    // The same answer an unknown id gets: whether it exists in somebody else's
+    // agency is not the caller's business to learn.
+    if (!service) {
+        throw new AppError(status.NOT_FOUND, "Service not found");
+    }
+
+    // The clients who have it, each once, however many projects they run on it.
+    const clients = [
+        ...new Map(
+            service.projects
+                .filter((project) => project.client)
+                .map((project) => [project.client.id, project.client])
+        ).values(),
+    ];
+
+    return { ...service, clients };
+};
+
 const assertUniqueName = async (organizationId: string, name: string, exceptId?: string) => {
     const duplicate = await prisma.service.findFirst({
         where: {
@@ -276,4 +328,4 @@ const getRevenue = async (user: IRequestUser) => {
     return rows.sort((a, b) => b.billed_usd - a.billed_usd);
 };
 
-export const ServiceService = { getAll, create, update, remove, getRevenue };
+export const ServiceService = { getAll, getOne, create, update, remove, getRevenue };

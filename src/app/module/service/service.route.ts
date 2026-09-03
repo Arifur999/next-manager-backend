@@ -55,6 +55,9 @@ router.delete("/templates/:id", checkAuth(Role.admin), ServiceController.deleteT
 router.get("/revenue", checkAuth(Role.admin), requireCompany, ServiceController.getRevenue);
 
 router.get("/", checkAuth(), requireCompany, ServiceController.getServices);
+// Declared after the literal paths above so /categories, /templates and
+// /revenue are not swallowed by the parameter route.
+router.get("/:id", checkAuth(), requireCompany, ServiceController.getService);
 router.post(
     "/",
     checkAuth(...seller),

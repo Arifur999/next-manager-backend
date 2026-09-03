@@ -21,6 +21,16 @@ const getServices = catchAsync(async (req: Request, res: Response) => {
     ok(res, "Services retrieved successfully", result);
 });
 
+const getService = catchAsync(async (req: Request, res: Response) => {
+    const result = await ServiceService.getOne(req.params.id as string, req.user as IRequestUser);
+    sendResponse(res, {
+        success: true,
+        httpStatus: status.OK,
+        message: "Service retrieved successfully",
+        data: result,
+    });
+});
+
 const createService = catchAsync(async (req: Request, res: Response) => {
     const result = await ServiceService.create(req.body, req.user as IRequestUser);
     ok(res, "Service added successfully", result, status.CREATED);
@@ -100,6 +110,7 @@ const deleteTemplate = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const ServiceController = {
+    getService,
     getServices,
     createService,
     updateService,

@@ -4337,6 +4337,26 @@ r = await call("POST", "/payments", {
 });
 check("the seller's client has paid something", r.status === 201, `${r.status} ${r.json.message}`);
 
+// A service's own page: who bought it and what it is running on.
+r = await call("GET", "/services");
+const anyService = (r.json.data ?? [])[0]?.id;
+r = await call("GET", `/services/${anyService}`);
+check("a service has its own page", r.status === 200, `${r.status} ${r.json.message}`);
+check("carrying the projects it runs on", Array.isArray(r.json.data?.projects), typeof r.json.data?.projects);
+check("and the clients who bought it, each once", Array.isArray(r.json.data?.clients), typeof r.json.data?.clients);
+check(
+  "with a printable status on every project, not a bare id",
+  (r.json.data?.projects ?? []).every((project) => project.status?.name !== undefined),
+  JSON.stringify((r.json.data?.projects ?? []).map((x) => x.status))
+);
+r = await call("GET", "/services/00000000-0000-0000-0000-000000000000");
+check("and an unknown one is not found", r.status === 404, `${r.status}`);
+
+cookie = roleCookies.sales;
+r = await call("GET", `/services/${anyService}`);
+check("sales can open it too", r.status === 200, `${r.status}`);
+cookie = adminCookie;
+
 r = await call("GET", "/reports/client-revenue");
 const adminRows = r.json.data ?? [];
 check("admin sees the whole book", adminRows.length > 1, `${adminRows.length} clients`);

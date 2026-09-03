@@ -48,6 +48,7 @@ model Project {
   time_entries TimeEntry[]
   milestones   ProjectMilestone[]
   conversations Conversation[]
+  links         ProjectLink[]
 
   /// Project codes are unique per agency, not globally.
   @@unique([organization_id, code])
@@ -118,4 +119,31 @@ model Task {
   /// The FK itself, for the same reason as on projects.
   @@index([status_id])
   @@map("tasks")
+}
+
+/// Where a project's work actually lives.
+///
+/// Links, not uploads. An agency's files are already in Drive, Figma and
+/// GitHub; storing copies would mean a second place for them to go stale, and
+/// the one that goes stale is always the copy. This is the same shape as
+/// ClientLink, deliberately - a project and a client keep their material the
+/// same way.
+model ProjectLink {
+  id             String    @id @default(uuid())
+  organization_id String
+  project_id     String
+  label          String
+  url            String
+  notes          String    @default("")
+  deleted_at     DateTime?
+  created_by     String?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([organization_id])
+  /// The project detail page: one project, newest first.
+  @@index([project_id, created_at(sort: Desc)])
+  @@map("project_links")
 }

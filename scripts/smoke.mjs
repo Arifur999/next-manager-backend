@@ -4616,5 +4616,57 @@ for (const path of ["/reports/profit-loss", "/reports/cash-flow", "/reports/clie
 
 cookie = adminCookie;
 
+
+console.log("\n--- where a project's work lives ---");
+//
+// Links, not uploads: the files are already in Drive and Figma, and a copy here
+// would be a second place for them to go stale.
+
+cookie = pmCookie;
+r = await call("POST", "/project-links", {
+  project_id: timeProjectId,
+  label: "Figma file",
+  url: "https://figma.com/file/abc",
+});
+check("a project manager can add a link", r.status === 201, `${r.status} ${r.json.message}`);
+const projectLink = r.json.data?.id;
+
+// The one that matters: a stored javascript: URL is one somebody's browser
+// follows later from a link on the project page.
+r = await call("POST", "/project-links", {
+  project_id: timeProjectId,
+  label: "Nasty",
+  url: "javascript:alert(1)",
+});
+check("but not a javascript: one", r.status === 400, `${r.status} ${r.json.message}`);
+r = await call("POST", "/project-links", {
+  project_id: timeProjectId,
+  label: "Also nasty",
+  url: "data:text/html,<script>alert(1)</script>",
+});
+check("nor a data: one", r.status === 400, `${r.status} ${r.json.message}`);
+
+r = await call("GET", `/project-links?project_id=${timeProjectId}`);
+check("the link reads back", (r.json.data ?? []).some((row) => row.id === projectLink), JSON.stringify((r.json.data ?? []).length));
+
+// Sales watches a project; they do not set it up.
+cookie = roleCookies.sales;
+r = await call("POST", "/project-links", {
+  project_id: timeProjectId,
+  label: "Theirs",
+  url: "https://example.com",
+});
+check("a salesperson cannot add one", r.status === 403, `${r.status}`);
+r = await call("DELETE", `/project-links/${projectLink}`);
+check("nor remove one", r.status === 403, `${r.status}`);
+
+cookie = pmCookie;
+r = await call("DELETE", `/project-links/${projectLink}`);
+check("but the project manager can", r.status === 200, `${r.status} ${r.json.message}`);
+r = await call("GET", `/project-links?project_id=${timeProjectId}`);
+check("and it is gone from the list", !(r.json.data ?? []).some((row) => row.id === projectLink), "still listed");
+
+cookie = adminCookie;
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

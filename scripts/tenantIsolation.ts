@@ -685,6 +685,73 @@ ok(
     JSON.stringify((aSalesTasks.json.data as { title: string }[])?.map((row) => row.title))
 );
 
+
+// Project links. A pointer to where somebody's work lives is a pointer into
+// their Drive and their Figma, so it is attacked the same way everything else
+// that carries a project id is.
+const bProjectLink = (
+    await call(
+        "POST",
+        "/project-links",
+        { project_id: b.project.id, label: "B's board", url: "https://example.com/b" },
+        b.cookie
+    )
+).json.data as { id: string };
+
+refused(
+    "add a link to B's project",
+    await call(
+        "POST",
+        "/project-links",
+        { project_id: b.project.id, label: "Owned", url: "https://example.com/owned" },
+        a.cookie
+    )
+);
+refused(
+    "edit a link on B's project",
+    await call("PATCH", `/project-links/${bProjectLink.id}`, { label: "Owned" }, a.cookie)
+);
+refused(
+    "remove a link from B's project",
+    await call("DELETE", `/project-links/${bProjectLink.id}`, undefined, a.cookie)
+);
+
+const projectLinkList = await call("GET", "/project-links", undefined, a.cookie);
+ok(
+    "A's project links carry none of B's",
+    Array.isArray(projectLinkList.json.data) &&
+        !(projectLinkList.json.data as { id: string }[]).some((row) => row.id === bProjectLink.id),
+    JSON.stringify((projectLinkList.json.data as { label: string }[])?.map((row) => row.label))
+);
+
+// Asking for B's project by id explicitly - the filter is the obvious way in.
+const filtered = await call(
+    "GET",
+    `/project-links?project_id=${b.project.id}`,
+    undefined,
+    a.cookie
+);
+ok(
+    "and asking for B's project by id returns nothing",
+    Array.isArray(filtered.json.data) && (filtered.json.data as unknown[]).length === 0,
+    JSON.stringify(filtered.json.data)
+);
+
+// The workload endpoint carries people. It must carry only A's.
+const workload = await call("GET", "/time-entries/workload", undefined, a.cookie);
+ok(
+    "A's workload carries nobody from B",
+    Array.isArray(workload.json.data?.rows) &&
+        !(workload.json.data.rows as { user: { id: string } }[]).some(
+            (row) => row.user.id === b.member.id
+        ),
+    JSON.stringify(
+        (workload.json.data?.rows as { user: { full_name: string } }[])?.map(
+            (row) => row.user.full_name
+        )
+    )
+);
+
 console.log("\n--- A tries to MODIFY B's records ---");
 refused("edit B's client", await call("PATCH", `/clients/${b.client.id}`, { name: "Owned" }, a.cookie));
 refused("edit B's project", await call("PATCH", `/projects/${b.project.id}`, { name: "Owned" }, a.cookie));

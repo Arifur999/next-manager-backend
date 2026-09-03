@@ -120,6 +120,17 @@ const getCapacities = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const getWorkload = catchAsync(async (req: Request, res: Response) => {
+    const options = parseListOptions(req.query as Record<string, unknown>);
+    const result = await TimeEntryService.getWorkload(req.user as IRequestUser, options);
+    sendResponse(res, {
+        success: true,
+        httpStatus: status.OK,
+        message: "Workload retrieved successfully",
+        data: result,
+    });
+});
+
 const setCapacity = catchAsync(async (req: Request, res: Response) => {
     const result = await TimeEntryService.setCapacity(
         req.params.userId as string,
@@ -143,5 +154,6 @@ export const TimeEntryController = {
     unapproveEntry,
     deleteEntry,
     getCapacities,
+    getWorkload,
     setCapacity,
 };

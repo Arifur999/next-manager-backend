@@ -19,6 +19,13 @@ const parseFilters = (query: Record<string, unknown>) => ({
     // would let anybody read anybody else's book by guessing.
     clientOwnerMine: query.client_owner === "me",
     overdue: query.overdue === "true",
+    // Anything else is ignored rather than rejected, like every filter here: a
+    // stale bookmark should show the unfiltered board, not an error page.
+    due:
+        query.due === "today" || query.due === "upcoming"
+            ? (query.due as "today" | "upcoming")
+            : undefined,
+    completed: query.completed === "true",
 });
 
 const getAllTasks = catchAsync(async (req: Request, res: Response) => {

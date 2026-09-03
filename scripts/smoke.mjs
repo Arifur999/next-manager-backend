@@ -4668,5 +4668,98 @@ check("and it is gone from the list", !(r.json.data ?? []).some((row) => row.id 
 
 cookie = adminCookie;
 
+
+console.log("\n--- what do I need to do ---");
+//
+// Five readings of one board. Each is checked for the rows it holds AND the
+// rows it leaves out - a filter that silently matched everything passes every
+// check of the first kind on its own.
+
+cookie = adminCookie;
+
+const dayOffset = (days) => {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+const madeTasks = {};
+for (const [key, title, due] of [
+  ["today", "Due today thing", dayOffset(0)],
+  ["soon", "Due in three days", dayOffset(3)],
+  ["far", "Due in thirty days", dayOffset(30)],
+  ["late", "Was due last week", dayOffset(-7)],
+  ["undated", "No date at all", null],
+]) {
+  r = await call("POST", "/tasks", {
+    project_id: timeProjectId,
+    title,
+    assignee_id: roleUserIds.operations,
+    ...(due ? { due_date: due } : {}),
+  });
+  check(`a task ${key === "undated" ? "with no date" : `due ${due}`} exists`, r.status === 201, `${r.status} ${r.json.message}`);
+  madeTasks[key] = r.json.data?.id;
+}
+
+// Finish one, so Completed has something and the others must not show it.
+const board = await call("GET", "/workflow-statuses?kind=task");
+const doneId = (board.json.data ?? []).find((row) => row.category === "done")?.id;
+r = await call("PATCH", `/tasks/${madeTasks.today}/status`, {}).catch(() => ({}));
+r = await call("PATCH", `/tasks/${madeTasks.far}`, { status_id: doneId });
+check("one of them is finished", r.status === 200, `${r.status} ${r.json.message}`);
+
+cookie = opsCookie;
+const idsOf = async (query) => {
+  const res = await call("GET", `/tasks?${query}`);
+  return (res.json.data ?? []).map((t) => t.id);
+};
+
+// Due today: today's, and nothing else's.
+let myIds = await idsOf("due=today");
+check("Due Today holds today's task", myIds.includes(madeTasks.today), JSON.stringify(myIds.length));
+check("and not the one due in three days", !myIds.includes(madeTasks.soon), "three-day task showed as today");
+check("nor the late one", !myIds.includes(madeTasks.late), "a late task showed as due today");
+
+// Upcoming: the seven-day window, so day 3 is in and day 30 is not.
+myIds = await idsOf("due=upcoming");
+check("Upcoming holds the one due in three days", myIds.includes(madeTasks.soon), JSON.stringify(myIds.length));
+check("but NOT the one thirty days out", !myIds.includes(madeTasks.far), "the window is not seven days");
+check("nor today's", !myIds.includes(madeTasks.today), "today is not upcoming");
+
+// Overdue: past AND unfinished.
+myIds = await idsOf("overdue=true");
+check("Overdue holds the late one", myIds.includes(madeTasks.late), JSON.stringify(myIds.length));
+check("and not today's", !myIds.includes(madeTasks.today), "today showed as late");
+
+// Completed: by category, so a finished task appears and open ones do not.
+myIds = await idsOf("completed=true");
+check("Completed holds the finished one", myIds.includes(madeTasks.far), JSON.stringify(myIds.length));
+check("and no open work", !myIds.includes(madeTasks.today) && !myIds.includes(madeTasks.late), "open work showed as completed");
+
+// The rule that makes Completed survive an agency's own vocabulary.
+cookie = adminCookie;
+await call("PATCH", `/workflow-statuses/${doneId}`, { name: "Shipped" });
+cookie = opsCookie;
+myIds = await idsOf("completed=true");
+check(
+  "renaming Done to Shipped does not empty Completed",
+  myIds.includes(madeTasks.far),
+  "the view is reading a name, not a category"
+);
+cookie = adminCookie;
+await call("PATCH", `/workflow-statuses/${doneId}`, { name: "Done" });
+
+// A task with no due date belongs to none of the dated views - it has not been
+// promised for a day.
+cookie = opsCookie;
+for (const query of ["due=today", "due=upcoming", "overdue=true"]) {
+  ids = await idsOf(query);
+  check(`an undated task is not in ${query}`, !myIds.includes(madeTasks.undated), "it was placed anyway");
+}
+myIds = await idsOf("mine=true");
+check("but it is still on My Tasks", myIds.includes(madeTasks.undated), "an undated task vanished entirely");
+
+cookie = adminCookie;
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

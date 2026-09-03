@@ -72,6 +72,12 @@ const startOfToday = () => {
     return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 };
 
+/** Seven days out, inclusive. The far edge of "upcoming". */
+const endOfUpcoming = () => {
+    const today = startOfToday();
+    return new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+};
+
 const getAllTasks = async (
     user: IRequestUser,
     filters: {
@@ -82,6 +88,8 @@ const getAllTasks = async (
         mine?: boolean;
         clientOwnerMine?: boolean;
         overdue?: boolean;
+        due?: "today" | "upcoming";
+        completed?: boolean;
     },
     options: ListOptions = {}
 ) => {
@@ -103,6 +111,21 @@ const getAllTasks = async (
         ...(filters.statusName
             ? { status: { name: { equals: filters.statusName, mode: "insensitive" } } }
             : {}),
+        // Due today, and due soon. Compared on the DAY boundary through the
+        // same startOfToday() overdue uses: due_date is a date column, and
+        // comparing it against `now` would call a task due today overdue from
+        // one second past midnight.
+        //
+        // "Upcoming" is a seven-day window rather than everything with a future
+        // date, so the list stays a week of work instead of a backlog.
+        ...(filters.due === "today" ? { due_date: startOfToday() } : {}),
+        ...(filters.due === "upcoming"
+            ? { due_date: { gt: startOfToday(), lte: endOfUpcoming() } }
+            : {}),
+        // Finished, read by CATEGORY rather than by a status name - an agency
+        // that renames Done to Shipped keeps a working view. Cancelled is not
+        // finished work, so it is not on this list either.
+        ...(filters.completed ? { status: { category: StatusCategory.done } } : {}),
         // Overdue means past its date AND not finished. A task delivered
         // late is not still overdue - it is done, and putting it on this
         // list would make a screen of things to chase that cannot shrink.

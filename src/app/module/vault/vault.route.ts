@@ -9,12 +9,15 @@ import { createCredentialZodSchema, updateCredentialZodSchema } from "./vault.va
 
 const router = Router();
 
-router.get("/", checkAuth(Role.admin, Role.sales, Role.project_manager), VaultController.getAllCredentials);
+// Operations reads this through the project detail page, never the standalone
+// vault screen - the route rule keeps that page shut. WHICH credentials they
+// get is decided in the service: only those on a project they are a member of.
+router.get("/", checkAuth(Role.admin, Role.sales, Role.project_manager, Role.operations), VaultController.getAllCredentials);
 
 // Reveal is the only route that returns a real password, so it gets the tight
 // rate limit as well as the role gate: someone walking the id space one request
 // at a time is the realistic way this gets abused from inside.
-router.get("/:id/reveal", checkAuth(Role.admin, Role.sales, Role.project_manager), requirePermission("vault.reveal"), authRateLimit, VaultController.revealCredential);
+router.get("/:id/reveal", checkAuth(Role.admin, Role.sales, Role.project_manager, Role.operations), requirePermission("vault.reveal"), authRateLimit, VaultController.revealCredential);
 
 // Who looked at what is an admin question, not something every colleague
 // needs - and it names colleagues.

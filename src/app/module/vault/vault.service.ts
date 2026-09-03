@@ -1,6 +1,6 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { CredentialAction } from "../../../generated/prisma/enums.js";
+import { CredentialAction, Role } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
@@ -58,6 +58,24 @@ export interface CredentialFilters {
     projectId?: string;
 }
 
+/**
+ * Credentials this person may see.
+ *
+ * The vault's FIRST visibility scope. Every role that could open it before saw
+ * all of it, and operations could not open it at all - so this adds a rule
+ * where there was none rather than narrowing one that existed.
+ *
+ * Operations sees credentials attached to a project they are a member of. A
+ * credential attached to a CLIENT but to no project is not theirs: there is no
+ * project membership to check it against, and inventing one would be guessing.
+ * If an agency keeps its staging logins on the client, the honest fix is to
+ * attach them to the project.
+ */
+const visibilityScope = (user: IRequestUser): Prisma.CredentialWhereInput =>
+    user.role === Role.operations
+        ? { project: { members: { some: { user_id: user.userId } } } }
+        : {};
+
 const getAllCredentials = async (
     user: IRequestUser,
     options: ListOptions = {},
@@ -68,6 +86,7 @@ const getAllCredentials = async (
     const where: Prisma.CredentialWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
+        ...visibilityScope(user),
         // Filtering by id, not by text. Search matches label/url/username, so a
         // project id typed into it would match nothing - which is exactly the
         // trap the project screen fell into before these existed.
@@ -128,7 +147,15 @@ const revealCredential = async (
 ) => {
     return prisma.$transaction(async (tx) => {
         const credential = await tx.credential.findFirst({
-            where: { id, organization_id: user.organizationId, deleted_at: null },
+            // The same scope the list uses. Without it here, a row hidden from
+            // the list would still hand over its password to anybody who knew
+            // its id - which is not a scope, it is a slower search.
+            where: {
+                id,
+                organization_id: user.organizationId,
+                deleted_at: null,
+                ...visibilityScope(user),
+            },
             select: { id: true, label: true, username: true, password_cipher: true, notes_cipher: true },
         });
 

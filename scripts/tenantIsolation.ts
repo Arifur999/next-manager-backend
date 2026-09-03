@@ -752,6 +752,51 @@ ok(
     )
 );
 
+
+// The vault across a tenant line, reached by an operations member who is on a
+// project of their own. Their new scope is a project membership check, and a
+// membership check that forgot the organization would pass for anybody whose
+// project id somebody could guess.
+const bCredential = (
+    await call(
+        "POST",
+        "/vault",
+        {
+            label: "B's staging",
+            username: "b",
+            password: "b-secret",
+            project_id: b.project.id,
+        },
+        b.cookie
+    )
+).json.data as { id: string };
+
+refused(
+    "read B's credential by id",
+    await call(`GET`, `/vault/${bCredential.id}`, undefined, a.cookie)
+);
+refused(
+    "reveal B's credential",
+    await call("GET", `/vault/${bCredential.id}/reveal`, undefined, a.cookie)
+);
+refused(
+    "attach a credential to B's project",
+    await call(
+        "POST",
+        "/vault",
+        { label: "Owned", username: "x", password: "y", project_id: b.project.id },
+        a.cookie
+    )
+);
+
+const vaultList = await call("GET", "/vault", undefined, a.cookie);
+ok(
+    "A's vault carries none of B's",
+    Array.isArray(vaultList.json.data) &&
+        !(vaultList.json.data as { id: string }[]).some((row) => row.id === bCredential.id),
+    JSON.stringify((vaultList.json.data as { label: string }[])?.map((row) => row.label))
+);
+
 console.log("\n--- A tries to MODIFY B's records ---");
 refused("edit B's client", await call("PATCH", `/clients/${b.client.id}`, { name: "Owned" }, a.cookie));
 refused("edit B's project", await call("PATCH", `/projects/${b.project.id}`, { name: "Owned" }, a.cookie));

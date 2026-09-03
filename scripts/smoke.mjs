@@ -4853,5 +4853,91 @@ check("and cannot open somebody's user record", r.status === 403, `${r.status}`)
 
 cookie = adminCookie;
 
+
+console.log("\n--- the vault, scoped for the first time ---");
+//
+// Every role that could open the vault saw all of it. This adds a rule where
+// there was none, so BOTH read paths are checked: a list that hides a row while
+// reveal still answers for its id is not a scope, it is a slower search.
+
+cookie = adminCookie;
+
+// One credential on the project operations is on, one on the project they are
+// deliberately kept off.
+r = await call("POST", "/vault", {
+  label: "Staging login",
+  username: "ops",
+  password: "s3cret-ops",
+  project_id: timeProjectId,
+});
+check("a credential on their project", r.status === 201, `${r.status} ${r.json.message}`);
+const ownCredential = r.json.data?.id;
+
+r = await call("POST", "/vault", {
+  label: "Off limits login",
+  username: "nope",
+  password: "s3cret-nope",
+  project_id: offLimitsProject,
+});
+check("and one on a project they are not on", r.status === 201, `${r.status} ${r.json.message}`);
+const otherCredential = r.json.data?.id;
+
+// A client-only credential: no project, so no membership to check it against.
+r = await call("POST", "/vault", {
+  label: "Client-only login",
+  username: "client",
+  password: "s3cret-client",
+  client_id: clientId,
+});
+check("and one attached to a client with no project", r.status === 201, `${r.status} ${r.json.message}`);
+const clientOnlyCredential = r.json.data?.id;
+
+cookie = opsCookie;
+r = await call("GET", "/vault");
+check("operations can read the vault", r.status === 200, `${r.status}`);
+const opsVault = (r.json.data ?? []).map((c) => c.id);
+check("and gets the one on their own project", opsVault.includes(ownCredential), JSON.stringify(opsVault.length));
+check("but NOT one from a project they are not on", !opsVault.includes(otherCredential), "a credential leaked");
+check(
+  "nor a client-only one, which has no project to check them against",
+  !opsVault.includes(clientOnlyCredential),
+  "a client-only credential leaked"
+);
+
+// Never the ciphertext, whoever is asking.
+check(
+  "and no ciphertext comes back on the list",
+  (r.json.data ?? []).every((c) => c.password_cipher === undefined),
+  JSON.stringify(Object.keys((r.json.data ?? [])[0] ?? {}))
+);
+
+// The path that returns a real password, checked with the same rule.
+r = await call(`GET`, `/vault/${ownCredential}/reveal`);
+check("they can reveal their own project's credential", r.status === 200, `${r.status} ${r.json.message}`);
+check("and it is the real password", r.json.data?.password === "s3cret-ops", `${r.json.data?.password}`);
+
+// The check this whole step exists for.
+r = await call("GET", `/vault/${otherCredential}/reveal`);
+check("but reveal refuses one from a project they are not on", r.status === 404, `${r.status} ${r.json.message}`);
+r = await call("GET", `/vault/${clientOnlyCredential}/reveal`);
+check("and refuses a client-only one too", r.status === 404, `${r.status} ${r.json.message}`);
+
+// Reading is all they get.
+r = await call("POST", "/vault", { label: "Mine", username: "me", password: "x", project_id: timeProjectId });
+check("they cannot add a credential", r.status === 403, `${r.status}`);
+
+// And everybody else still sees the whole vault - adding a scope for one role
+// must not have narrowed it for the others.
+cookie = roleCookies.sales;
+r = await call("GET", "/vault");
+const salesVault = (r.json.data ?? []).map((c) => c.id);
+check(
+  "sales still sees the whole vault",
+  salesVault.includes(ownCredential) && salesVault.includes(otherCredential),
+  JSON.stringify(salesVault.length)
+);
+
+cookie = adminCookie;
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

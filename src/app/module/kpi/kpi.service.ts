@@ -316,8 +316,26 @@ const agencyScope = async (user: IRequestUser, range: Range) => {
  * current stage, so a deal won inside the window counts for the window even if
  * it has since been reopened or archived.
  */
-const salesScope = async (user: IRequestUser, range: Range) => {
-    const targets = await loadTargets(user.organizationId, range, null);
+/**
+ * The sales numbers.
+ *
+ * `mine` narrows every one of them to the deals this person owns. It is not a
+ * filter over a total that was computed anyway — each query carries the owner,
+ * so a salesperson's win rate is theirs and not the agency's with their name on
+ * it.
+ *
+ * Targets follow the same line: a personal view is measured against personal
+ * targets, because holding one person to the whole agency's number would
+ * report "off track" at somebody doing fine.
+ */
+const salesScope = async (user: IRequestUser, range: Range, mine = false) => {
+    const targets = await loadTargets(user.organizationId, range, mine ? user.userId : null);
+
+    // Applied to the leads themselves and, through the relation, to their stage
+    // events — the events are what win rate and cycle length are counted from,
+    // and scoping only the leads would leave both agency-wide.
+    const ownLead = mine ? { owner_id: user.userId } : {};
+    const ownEvent = mine ? { lead: { owner_id: user.userId } } : {};
 
     const [decided, openLeads, wonLeads, wonJourneys] = await Promise.all([
         prisma.leadStageEvent.groupBy({
@@ -326,6 +344,7 @@ const salesScope = async (user: IRequestUser, range: Range) => {
                 organization_id: user.organizationId,
                 to_stage: { in: [LeadStage.won, LeadStage.lost] },
                 changed_at: dateColumn(range),
+                ...ownEvent,
             },
             _count: { _all: true },
         }),
@@ -334,6 +353,7 @@ const salesScope = async (user: IRequestUser, range: Range) => {
                 organization_id: user.organizationId,
                 deleted_at: null,
                 stage: { in: OPEN_LEAD_STAGES },
+                ...ownLead,
             },
             _sum: { estimated_value_usd: true },
             _count: { _all: true },
@@ -346,6 +366,7 @@ const salesScope = async (user: IRequestUser, range: Range) => {
                 stage_events: {
                     some: { to_stage: LeadStage.won, changed_at: dateColumn(range) },
                 },
+                ...ownLead,
             },
             _sum: { estimated_value_usd: true },
             _count: { _all: true },
@@ -357,6 +378,7 @@ const salesScope = async (user: IRequestUser, range: Range) => {
                 organization_id: user.organizationId,
                 lead: {
                     deleted_at: null,
+                    ...ownLead,
                     stage_events: {
                         some: { to_stage: LeadStage.won, changed_at: dateColumn(range) },
                     },
@@ -878,7 +900,15 @@ const getScope = async (scope: string, user: IRequestUser, options: ListOptions 
         case "agency":
             return { ...meta, ...(await agencyScope(user, range)) };
         case "sales":
-            return { ...meta, ...(await salesScope(user, range)) };
+            // A salesperson gets THEIR numbers, forced rather than asked:
+            // the agency's win rate is a management figure, and reading the
+            // narrowing from a query parameter would put it one dropped
+            // parameter away. An admin still sees the whole board.
+            return {
+                ...meta,
+                ...(await salesScope(user, range, user.role === Role.sales)),
+                mine: user.role === Role.sales,
+            };
         case "delivery":
             return { ...meta, ...(await deliveryScope(user, range)) };
         case "me":

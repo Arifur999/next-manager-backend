@@ -9,7 +9,9 @@ const router = Router();
 // them accept ?from= and ?to= as YYYY-MM-DD.
 router.get("/profit-loss", checkAuth(Role.admin), ReportController.getProfitAndLoss);
 router.get("/cash-flow", checkAuth(Role.admin), ReportController.getCashFlow);
-router.get("/client-revenue", checkAuth(Role.admin), ReportController.getClientRevenue);
+// Sales reaches this one, and only ever in its scoped form - the controller
+// forces `mine` for them rather than reading it from the query.
+router.get("/client-revenue", checkAuth(Role.admin, Role.sales), ReportController.getClientRevenue);
 router.get("/project-profitability", checkAuth(Role.admin), ReportController.getProjectProfitability);
 router.get("/monthly", checkAuth(Role.admin), ReportController.getMonthlySeries);
 

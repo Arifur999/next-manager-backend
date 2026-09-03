@@ -162,16 +162,43 @@ const getCashFlow = async (user: IRequestUser, options: ListOptions = {}) => {
 };
 
 /** Revenue per client, highest first. */
-const getClientRevenue = async (user: IRequestUser, options: ListOptions = {}) => {
+/**
+ * Revenue per client, highest first.
+ *
+ * `mine` narrows it to the clients the caller brought in, which is the ONLY
+ * form a salesperson may ask for. The distinction is what keeps "no income for
+ * sales" honest without making the role useless: they see what the
+ * relationships they own are worth, and never the agency's total.
+ *
+ * The filter is applied to the PAYMENTS as well as to the client list. Doing it
+ * only on the list would still group every payment in the agency and then drop
+ * the names, which leaks nothing on screen but computes the whole book to throw
+ * most of it away - and would put somebody else's revenue under a null client.
+ */
+const getClientRevenue = async (
+    user: IRequestUser,
+    options: ListOptions = {},
+    filters: { mine?: boolean } = {}
+) => {
+    const ownScope = filters.mine ? { client: { owner_id: user.userId } } : {};
+
     const grouped = await prisma.payment.groupBy({
         by: ["client_id"],
-        where: { organization_id: user.organizationId, deleted_at: null, ...dateWhere(options) },
+        where: {
+            organization_id: user.organizationId,
+            deleted_at: null,
+            ...ownScope,
+            ...dateWhere(options),
+        },
         _sum: { amount_usd: true, amount_bdt_reporting: true },
         _count: true,
     });
 
     const clients = await prisma.client.findMany({
-        where: { organization_id: user.organizationId },
+        where: {
+            organization_id: user.organizationId,
+            ...(filters.mine ? { owner_id: user.userId } : {}),
+        },
         select: { id: true, name: true, company: true },
     });
 

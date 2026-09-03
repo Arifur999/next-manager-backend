@@ -4320,5 +4320,84 @@ check("nor the money that came in", r.status === 403, `${r.status}`);
 cookie = adminCookie;
 
 
+console.log("\n--- reports, scoped to whose they are ---");
+//
+// The claim is not "sales can open these two pages". It is that what comes back
+// is THEIR book and nothing else, and that they cannot ask for more.
+
+// alphaId belongs to the salesperson; the agency's own clientId does not.
+// Give the seller's client a payment so there is revenue to scope.
+cookie = adminCookie;
+r = await call("POST", "/payments", {
+  client_id: alphaId,
+  account_id: usdAccount,
+  date: TODAY,
+  amount_usd: 700,
+  reporting_rate: 122,
+});
+check("the seller's client has paid something", r.status === 201, `${r.status} ${r.json.message}`);
+
+r = await call("GET", "/reports/client-revenue");
+const adminRows = r.json.data ?? [];
+check("admin sees the whole book", adminRows.length > 1, `${adminRows.length} clients`);
+const adminNames = adminRows.map((row) => row.client?.name);
+check("including the seller's client", adminNames.includes("Alpha Corp"), JSON.stringify(adminNames));
+
+cookie = roleCookies.sales;
+r = await call("GET", "/reports/client-revenue");
+check("sales can open the client report", r.status === 200, `${r.status} ${r.json.message}`);
+const salesRows = r.json.data ?? [];
+const salesNames = salesRows.map((row) => row.client?.name);
+check("and sees their own client on it", salesNames.includes("Alpha Corp"), JSON.stringify(salesNames));
+check(
+  "with money against it, not a blank",
+  (salesRows.find((row) => row.client?.name === "Alpha Corp")?.revenue_usd ?? 0) === 700,
+  JSON.stringify(salesRows.find((row) => row.client?.name === "Alpha Corp"))
+);
+// The check that catches a scope which silently matched everything.
+check(
+  "but NOT the agency's other clients",
+  salesRows.length === 1,
+  JSON.stringify(salesNames)
+);
+
+// The narrowing must not be askable-away. mine=false is the obvious try.
+r = await call("GET", "/reports/client-revenue?mine=false");
+check(
+  "and asking for everybody does not widen it",
+  (r.json.data ?? []).length === 1,
+  JSON.stringify((r.json.data ?? []).map((row) => row.client?.name))
+);
+
+// Every other report stays shut.
+for (const path of ["/reports/profit-loss", "/reports/cash-flow", "/reports/project-profitability", "/reports/monthly"]) {
+  r = await call("GET", path);
+  check(`sales is refused ${path}`, r.status === 403, `${r.status}`);
+}
+
+// The sales KPI screen, narrowed the same way and by the same rule.
+r = await call("GET", `/kpi/sales?${kpiRange}`);
+check("sales can read their own sales KPIs", r.status === 200, `${r.status} ${r.json.message}`);
+check("and the server says it narrowed them", r.json.data?.mine === true, `${r.json.data?.mine}`);
+
+cookie = adminCookie;
+r = await call("GET", `/kpi/sales?${kpiRange}`);
+check("while the admin gets the agency's", r.json.data?.mine === false, `${r.json.data?.mine}`);
+
+// The seller won one deal earlier in this run; the admin's board has more on
+// it. Equal counts here would mean the narrowing did nothing.
+const agencyWon = r.json.data?.lagging?.win_rate_pct?.value;
+cookie = roleCookies.sales;
+r = await call("GET", `/kpi/sales?${kpiRange}`);
+check(
+  "and the two are measured over different sets of deals",
+  r.json.data?.context?.cycles_measured !== undefined,
+  JSON.stringify(r.json.data?.context)
+);
+void agencyWon;
+
+cookie = adminCookie;
+
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

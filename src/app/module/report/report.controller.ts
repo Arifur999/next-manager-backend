@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { Role } from "../../../generated/prisma/enums.js";
 import status from "http-status";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
@@ -29,8 +30,17 @@ const getCashFlow = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getClientRevenue = catchAsync(async (req: Request, res: Response) => {
-    const options = parseListOptions(req.query as Record<string, unknown>);
-    const result = await ReportService.getClientRevenue(req.user as IRequestUser, options);
+    const query = req.query as Record<string, unknown>;
+    const options = parseListOptions(query);
+    const user = req.user as IRequestUser;
+
+    // Sales is FORCED into their own book, never asked. Reading it from the
+    // query would mean the whole agency's revenue was one dropped parameter
+    // away - and a parameter that has to be present for a rule to hold is not
+    // a rule. An admin may narrow to their own; they are just not made to.
+    const mine = user.role === Role.sales ? true : query.mine === "true";
+
+    const result = await ReportService.getClientRevenue(user, options, { mine });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

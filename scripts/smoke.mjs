@@ -4419,5 +4419,84 @@ void agencyWon;
 cookie = adminCookie;
 
 
+console.log("\n--- the project manager's views ---");
+//
+// A sub-view returning 200 proves nothing. Each one is checked for the rows it
+// is supposed to hold AND for the rows it is supposed to leave out - a filter
+// that silently matched everything passes every check of the first kind.
+
+cookie = adminCookie;
+
+// Review is on the board a new agency starts with.
+r = await call("GET", "/workflow-statuses?kind=project");
+const projectBoard = (r.json.data ?? []).map((row) => row.name);
+check("a new agency's project board has Review", projectBoard.includes("Review"), JSON.stringify(projectBoard));
+const reviewStatus = (r.json.data ?? []).find((row) => row.name === "Review");
+check(
+  "and it counts as in-flight, not finished",
+  reviewStatus?.category === "active",
+  `${reviewStatus?.category}`
+);
+check(
+  "sitting after Active on the board",
+  (r.json.data ?? []).find((row) => row.name === "Active")?.sort_order <
+    (reviewStatus?.sort_order ?? -1),
+  JSON.stringify((r.json.data ?? []).map((x) => `${x.name}:${x.sort_order}`))
+);
+
+// Two projects on different statuses, so a filter has something to get wrong.
+const planningId = (r.json.data ?? []).find((row) => row.name === "Planning")?.id;
+r = await call("PATCH", `/projects/${timeProjectId}`, { status_id: reviewStatus?.id });
+check("a project can be moved to Review", r.status === 200, `${r.status} ${r.json.message}`);
+
+r = await call("GET", "/projects?status=Review");
+let ids = (r.json.data ?? []).map((p) => p.id);
+check("the Review view holds it", ids.includes(timeProjectId), JSON.stringify(ids.length));
+check("and holds ONLY review projects", (r.json.data ?? []).every((p) => p.status?.name === "Review"), JSON.stringify((r.json.data ?? []).map((p) => p.status?.name)));
+
+r = await call("GET", "/projects?status=Planning");
+ids = (r.json.data ?? []).map((p) => p.id);
+check("the Planning view leaves it out", !ids.includes(timeProjectId), "a review project showed under planning");
+
+// Case does not matter - a sidebar href should not have to match capitalisation.
+r = await call("GET", "/projects?status=review");
+check(
+  "and the name is matched however it is capitalised",
+  (r.json.data ?? []).map((p) => p.id).includes(timeProjectId),
+  JSON.stringify((r.json.data ?? []).length)
+);
+
+// A name nobody uses is an empty view, not everything.
+r = await call("GET", "/projects?status=Nonexistent");
+check("an unknown status shows nothing, not everything", (r.json.data ?? []).length === 0, `${(r.json.data ?? []).length}`);
+
+// My Projects: membership, not authorship.
+cookie = pmCookie;
+r = await call("GET", "/projects?mine=true");
+const pmMine = (r.json.data ?? []).map((p) => p.id);
+r = await call("GET", "/projects");
+const pmAll = (r.json.data ?? []).map((p) => p.id);
+check("a project manager's own list is a subset of all of them", pmMine.every((id) => pmAll.includes(id)), `${pmMine.length} of ${pmAll.length}`);
+check(
+  "and holds only projects they are actually on",
+  pmMine.length < pmAll.length || pmAll.length === 0,
+  `mine ${pmMine.length}, all ${pmAll.length}`
+);
+
+// Tasks by status name, the Review view on the task board.
+cookie = adminCookie;
+r = await call("GET", "/tasks?status=In review");
+check("tasks can be filtered by status name", r.status === 200, `${r.status}`);
+check(
+  "and only review tasks come back",
+  (r.json.data ?? []).every((t) => t.status?.name === "In review"),
+  JSON.stringify((r.json.data ?? []).map((t) => t.status?.name))
+);
+
+// Put it back, so nothing after this section inherits a moved project.
+r = await call("PATCH", `/projects/${timeProjectId}`, { status_id: planningId });
+check("and the project can be moved back", r.status === 200, `${r.status}`);
+
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

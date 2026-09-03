@@ -73,6 +73,7 @@ const getAllTasks = async (
         projectId?: string;
         assigneeId?: string;
         statusId?: string;
+        statusName?: string;
         mine?: boolean;
         clientOwnerMine?: boolean;
         overdue?: boolean;
@@ -92,6 +93,11 @@ const getAllTasks = async (
         ...(filters.projectId ? { project_id: filters.projectId } : {}),
         ...(filters.assigneeId ? { assignee_id: filters.assigneeId } : {}),
         ...(filters.statusId ? { status_id: filters.statusId } : {}),
+        // By name, for the same reason projects are: a sidebar entry cannot
+        // carry an id that differs per agency.
+        ...(filters.statusName
+            ? { status: { name: { equals: filters.statusName, mode: "insensitive" } } }
+            : {}),
         // Overdue means past its date AND not finished. A task delivered
         // late is not still overdue - it is done, and putting it on this
         // list would make a screen of things to chase that cannot shrink.

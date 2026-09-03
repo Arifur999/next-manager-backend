@@ -12,6 +12,7 @@ const parseFilters = (query: Record<string, unknown>) => ({
     projectId: typeof query.project_id === "string" ? query.project_id : undefined,
     assigneeId: typeof query.assignee_id === "string" ? query.assignee_id : undefined,
     statusId: typeof query.status_id === "string" ? query.status_id : undefined,
+    statusName: typeof query.status === "string" ? query.status : undefined,
     mine: query.mine === "true",
     // Every task on the clients this person brought in - the sales board.
     // Deliberately a fixed "me" rather than an id from the query: taking one

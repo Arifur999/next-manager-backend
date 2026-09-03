@@ -7,8 +7,12 @@ import { sendResponse } from "../../shared/sendResponse.js";
 import { ProjectService } from "./project.service.js";
 
 const getAllProjects = catchAsync(async (req: Request, res: Response) => {
-    const options = parseListOptions(req.query as Record<string, unknown>);
-    const { rows, total } = await ProjectService.getAllProjects(req.user as IRequestUser, options);
+    const query = req.query as Record<string, unknown>;
+    const options = parseListOptions(query);
+    const { rows, total } = await ProjectService.getAllProjects(req.user as IRequestUser, options, {
+        statusName: typeof query.status === "string" ? query.status : undefined,
+        mine: query.mine === "true",
+    });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

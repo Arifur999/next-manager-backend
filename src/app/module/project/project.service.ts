@@ -30,11 +30,28 @@ const visibilityScope = (user: IRequestUser): Prisma.ProjectWhereInput =>
         ? { members: { some: { user_id: user.userId } } }
         : {};
 
-const getAllProjects = async (user: IRequestUser, options: ListOptions = {}) => {
+const getAllProjects = async (
+    user: IRequestUser,
+    options: ListOptions = {},
+    filters: { statusName?: string; mine?: boolean } = {}
+) => {
     const where: Prisma.ProjectWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
         ...visibilityScope(user),
+        // Matched on NAME, case-insensitively, because a sidebar href is a
+        // static string: a status id differs per agency so it cannot appear in
+        // one, and category cannot tell Active from Review - both are
+        // `active`. An agency that renames a column sees an empty view for it
+        // until the entry is renamed too, which is the same trade the Clients
+        // sub-views already make.
+        ...(filters.statusName
+            ? { status: { name: { equals: filters.statusName, mode: "insensitive" } } }
+            : {}),
+        // Projects this person is actually on, whatever their role. Not the
+        // same as the operations visibility scope above, which is a rule rather
+        // than a choice - this one is asked for.
+        ...(filters.mine ? { members: { some: { user_id: user.userId } } } : {}),
         ...(options.search
             ? {
                 OR: [

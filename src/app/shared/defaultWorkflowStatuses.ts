@@ -24,9 +24,14 @@ const TASK_STATUSES = [
 const PROJECT_STATUSES = [
     { name: "Planning", category: StatusCategory.open, sort_order: 0, is_default: true },
     { name: "Active", category: StatusCategory.active, sort_order: 1, is_default: false },
-    { name: "On hold", category: StatusCategory.blocked, sort_order: 2, is_default: false },
-    { name: "Completed", category: StatusCategory.done, sort_order: 3, is_default: false },
-    { name: "Cancelled", category: StatusCategory.cancelled, sort_order: 4, is_default: false },
+    // Work that is done but not signed off. Category `active` on purpose: it is
+    // not finished, so it must keep counting as in-flight everywhere the code
+    // reasons about category rather than name - a Review that read as `done`
+    // would quietly close projects nobody had accepted.
+    { name: "Review", category: StatusCategory.active, sort_order: 2, is_default: false },
+    { name: "On hold", category: StatusCategory.blocked, sort_order: 3, is_default: false },
+    { name: "Completed", category: StatusCategory.done, sort_order: 4, is_default: false },
+    { name: "Cancelled", category: StatusCategory.cancelled, sort_order: 5, is_default: false },
 ];
 
 export const seedWorkflowStatuses = async (

@@ -3243,12 +3243,23 @@ check(
 );
 await call("PATCH", `/workflow-statuses/${TODO}`, { is_default: true });
 
-// Shaping the board is a reporting decision, not a personal preference.
+// Shaping the board is a reporting decision, not a personal preference - and
+// it belongs to whoever runs delivery. This used to be admin-only, and a
+// project manager got a settings page whose every button returned 403.
 cookie = pmCookie;
 r = await call("GET", "/workflow-statuses");
 check("a project manager can read the board", r.status === 200, `${r.status}`);
 r = await call("POST", "/workflow-statuses", { kind: "task", name: "Mine", category: "open" });
-check("but cannot add a column", r.status === 403, `${r.status}`);
+check("and shape it", r.status === 201, `${r.status} ${r.json.message}`);
+const pmColumn = r.json.data?.id;
+
+// Sales does NOT. They watch the board; they do not decide what its columns are.
+cookie = roleCookies.sales;
+r = await call("POST", "/workflow-statuses", { kind: "task", name: "Theirs", category: "open" });
+check("but a salesperson cannot", r.status === 403, `${r.status}`);
+
+cookie = pmCookie;
+await call("DELETE", `/workflow-statuses/${pmColumn}`);
 cookie = adminCookie;
 
 
@@ -4541,6 +4552,67 @@ check("and still sees leave to decide", r.status === 200, `${r.status}`);
 
 r = await call("GET", "/hr/leave-types");
 check("with the kinds to decide against", r.status === 200, `${r.status}`);
+
+cookie = adminCookie;
+
+
+console.log("\n--- what the project manager measures and shapes ---");
+
+cookie = pmCookie;
+
+// The task report. Every figure on it already exists on the board; the point is
+// that nobody should have to count four columns by eye.
+r = await call("GET", "/tasks/report");
+check("a project manager can read the task report", r.status === 200, `${r.status} ${r.json.message}`);
+const taskReport = r.json.data ?? {};
+check("counting every task", typeof taskReport.total === "number" && taskReport.total > 0, `${taskReport.total}`);
+check("broken down by status", Array.isArray(taskReport.by_status) && taskReport.by_status.length > 0, JSON.stringify(taskReport.by_status?.length));
+check("and by who is carrying it", Array.isArray(taskReport.by_assignee), typeof taskReport.by_assignee);
+
+// The parts must add up to the whole, or the page is lying about a total.
+const statusTotal = (taskReport.by_status ?? []).reduce((sum, row) => sum + row.count, 0);
+check("the status counts add up to the total", statusTotal === taskReport.total, `${statusTotal} vs ${taskReport.total}`);
+const assigneeTotal = (taskReport.by_assignee ?? []).reduce((sum, row) => sum + row.total, 0);
+check("and so do the per-person counts", assigneeTotal === taskReport.total, `${assigneeTotal} vs ${taskReport.total}`);
+
+// Done is decided by CATEGORY, not by a status name - so renaming a column
+// must not change the count.
+r = await call("GET", "/workflow-statuses?kind=task");
+const doneStatus = (r.json.data ?? []).find((row) => row.category === "done");
+r = await call("PATCH", `/workflow-statuses/${doneStatus?.id}`, { name: "Shipped" });
+check("a project manager can rename a column", r.status === 200, `${r.status} ${r.json.message}`);
+r = await call("GET", "/tasks/report");
+check(
+  "and renaming Done does not change what counts as done",
+  r.json.data?.done_count === taskReport.done_count,
+  `${taskReport.done_count} -> ${r.json.data?.done_count}`
+);
+await call("PATCH", `/workflow-statuses/${doneStatus?.id}`, { name: "Done" });
+
+// Shaping the board is theirs to control, so all three writes must work.
+r = await call("POST", "/workflow-statuses", { kind: "task", name: "Blocked on client", category: "blocked" });
+check("and add a column", r.status === 201, `${r.status} ${r.json.message}`);
+const addedStatus = r.json.data?.id;
+r = await call("DELETE", `/workflow-statuses/${addedStatus}`);
+check("and remove an unused one", r.status === 200, `${r.status} ${r.json.message}`);
+
+// Delivery is measured for the whole agency, unlike a salesperson's book.
+r = await call("GET", "/reports/project-profitability");
+check("a project manager sees project profitability", r.status === 200, `${r.status}`);
+r = await call("GET", `/kpi/delivery?${kpiRange}`);
+check("and the delivery scope behind the team report", r.status === 200, `${r.status}`);
+
+// The catalogue: read, never shaped.
+r = await call("GET", "/services");
+check("a project manager reads the catalogue", r.status === 200, `${r.status}`);
+r = await call("POST", "/services", { name: "Snuck In Service" });
+check("but cannot add to it", r.status === 403, `${r.status} ${r.json.message}`);
+
+// The company's money stays shut, which is the line this whole role sits on.
+for (const path of ["/reports/profit-loss", "/reports/cash-flow", "/reports/client-revenue", "/transactions", "/accounts"]) {
+  r = await call("GET", path);
+  check(`still refused ${path}`, r.status === 403, `${r.status}`);
+}
 
 cookie = adminCookie;
 

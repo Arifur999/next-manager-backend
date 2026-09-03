@@ -68,4 +68,16 @@ const deleteTask = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
-export const TaskController = { getAllTasks, createTask, updateTask, deleteTask };
+const getReport = catchAsync(async (req: Request, res: Response) => {
+    const options = parseListOptions(req.query as Record<string, unknown>);
+    const result = await TaskService.getReport(req.user as IRequestUser, options);
+    sendResponse(res, {
+        success: true,
+        httpStatus: status.OK,
+        message: "Task report retrieved successfully",
+        data: result,
+    });
+});
+
+export const TaskController = {
+    getReport, getAllTasks, createTask, updateTask, deleteTask };

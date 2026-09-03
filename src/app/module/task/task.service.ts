@@ -12,7 +12,12 @@ import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
 import { defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
 import { notify } from "../../shared/notify.js";
-import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
+import {
+    dateRangeWhere,
+    escapeLikeTerm,
+    pageSlice,
+    type ListOptions,
+} from "../../shared/listQuery.js";
 import { ICreateTaskPayload, IUpdateTaskPayload } from "./task.validation.js";
 
 const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
@@ -284,7 +289,93 @@ const deleteTask = async (id: string, user: IRequestUser) => {
     return { message: "Task deleted successfully" };
 };
 
+/**
+ * The task board, counted.
+ *
+ * Every figure here already exists on the board; none of them has ever been
+ * added up. Which is the point - a project manager asking "where is everything"
+ * should not have to count four columns by eye.
+ *
+ * Read through the same visibilityScope the board uses, so a report never shows
+ * somebody work they could not open.
+ *
+ * "Done" and "overdue" are decided by CATEGORY, never by a status name. An
+ * agency that renames Done to Shipped keeps a correct report, and one that adds
+ * "In QA" gets it counted as in-flight without telling this function about it.
+ */
+const getReport = async (user: IRequestUser, options: ListOptions = {}) => {
+    const where: Prisma.TaskWhereInput = {
+        organization_id: user.organizationId,
+        deleted_at: null,
+        ...visibilityScope(user),
+        ...dateRangeWhere(options, "created_at"),
+    };
+
+    const [byStatus, tasks] = await Promise.all([
+        prisma.task.groupBy({ by: ["status_id"], where, _count: { _all: true } }),
+        prisma.task.findMany({
+            where,
+            select: {
+                id: true,
+                due_date: true,
+                completed_at: true,
+                status: { select: { id: true, name: true, category: true, sort_order: true } },
+                assignee: { select: { id: true, full_name: true, avatar_url: true, role: true } },
+            },
+        }),
+    ]);
+
+    const statusById = new Map(
+        tasks.filter((task) => task.status).map((task) => [task.status.id, task.status])
+    );
+
+    const today = startOfToday();
+    const isOpen = (category: StatusCategory) =>
+        category !== StatusCategory.done && category !== StatusCategory.cancelled;
+
+    // Late means past its date AND unfinished. A task delivered late is done,
+    // and counting it here would make a number to chase that cannot shrink.
+    const overdue = tasks.filter(
+        (task) => task.due_date && task.status && isOpen(task.status.category) && task.due_date < today
+    );
+
+    const perAssignee = new Map<
+        string,
+        { user: (typeof tasks)[number]["assignee"]; total: number; done: number; overdue: number }
+    >();
+
+    for (const task of tasks) {
+        // Unassigned work is its own row rather than dropped: "nobody is doing
+        // eleven of these" is the most useful line on the page.
+        const key = task.assignee?.id ?? "unassigned";
+        const entry = perAssignee.get(key) ?? { user: task.assignee, total: 0, done: 0, overdue: 0 };
+
+        entry.total += 1;
+        if (task.status && !isOpen(task.status.category)) entry.done += 1;
+        if (task.due_date && task.status && isOpen(task.status.category) && task.due_date < today) {
+            entry.overdue += 1;
+        }
+
+        perAssignee.set(key, entry);
+    }
+
+    return {
+        total: tasks.length,
+        overdue_count: overdue.length,
+        done_count: tasks.filter((task) => task.status && !isOpen(task.status.category)).length,
+        unassigned_count: tasks.filter((task) => !task.assignee).length,
+        by_status: byStatus
+            .map((row) => ({
+                status: statusById.get(row.status_id) ?? null,
+                count: row._count._all,
+            }))
+            .sort((a, b) => (a.status?.sort_order ?? 0) - (b.status?.sort_order ?? 0)),
+        by_assignee: [...perAssignee.values()].sort((a, b) => b.total - a.total),
+    };
+};
+
 export const TaskService = {
+    getReport,
     getAllTasks,
     createTask,
     updateTask,

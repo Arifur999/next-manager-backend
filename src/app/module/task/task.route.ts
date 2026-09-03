@@ -13,6 +13,12 @@ const router = Router();
 // tasks, so "My Tasks" and the project board are one endpoint with a different
 // scope rather than two near-identical ones that drift apart.
 // ?mine=true, ?project_id=, ?assignee_id=, ?status= all narrow further.
+// The board, counted. Declared before any parameter route so the literal path
+// is not swallowed. Open to everybody the board is open to, and read through
+// the same visibility scope - a report must never show somebody work they
+// could not open.
+router.get("/report", checkAuth(), requireCompany, TaskController.getReport);
+
 router.get("/", checkAuth(), requireCompany, TaskController.getAllTasks);
 
 // Who may edit a task they can reach, and what "edit" means, depend on who

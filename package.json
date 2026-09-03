@@ -23,6 +23,7 @@
     "test:reset": "tsx -r dotenv/config scripts/resetFlow.ts",
     "test:mail": "tsx -r dotenv/config scripts/mailTest.ts",
     "test:isolation": "tsx -r dotenv/config scripts/tenantIsolation.ts",
+    "test:api-matrix": "tsx -r dotenv/config scripts/apiMatrix.ts",
     "test:leaks": "tsx -r dotenv/config scripts/responseLeaks.ts"
   },
   "dependencies": {

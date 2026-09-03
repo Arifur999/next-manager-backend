@@ -4800,5 +4800,58 @@ check("nor add a link", r.status === 403, `${r.status} ${r.json.message}`);
 
 cookie = adminCookie;
 
+
+console.log("\n--- who operations works for, and with ---");
+
+cookie = opsCookie;
+
+// The clients whose projects they are on, and nothing else. Scoped by the API,
+// which has done this since long before the role had a page for it.
+r = await call("GET", "/clients");
+check("operations can read clients", r.status === 200, `${r.status}`);
+const opsClients = (r.json.data ?? []).map((c) => c.id);
+check("and gets the one they work for", opsClients.includes(clientId), JSON.stringify(opsClients.length));
+
+// alphaId belongs to the salesperson and has no project this person is on.
+check(
+  "but NOT one they have no project with",
+  !opsClients.includes(alphaId),
+  "a client they do not work for came back"
+);
+
+r = await call("POST", "/clients", { name: "Mine now" });
+check("they cannot add a client", r.status === 403, `${r.status} ${r.json.message}`);
+r = await call("PATCH", `/clients/${clientId}`, { name: "Renamed" });
+check("nor rename one", r.status === 403, `${r.status} ${r.json.message}`);
+r = await call("GET", `/clients/${clientId}/financials`);
+check("nor see what one is worth", r.status === 403, `${r.status}`);
+
+// The directory. Asserted on the RESPONSE BODY, because the point is that the
+// sensitive fields never arrive - not that nothing renders them today.
+r = await call("GET", "/users");
+check("operations can read the directory", r.status === 200, `${r.status}`);
+const opsDirectory = r.json.data ?? [];
+check("which lists the whole team", opsDirectory.length > 0, `${opsDirectory.length}`);
+check(
+  "carrying names and how to reach them",
+  opsDirectory.every((person) => person.full_name !== undefined && person.email !== undefined),
+  JSON.stringify(Object.keys(opsDirectory[0] ?? {}))
+);
+check(
+  "but NO permissions on anybody",
+  opsDirectory.every((person) => person.permissions === undefined),
+  JSON.stringify(Object.keys(opsDirectory[0] ?? {}))
+);
+check(
+  "and no account status either",
+  opsDirectory.every((person) => person.status === undefined),
+  JSON.stringify(Object.keys(opsDirectory[0] ?? {}))
+);
+
+r = await call("GET", `/users/${roleUserIds.sales}`);
+check("and cannot open somebody's user record", r.status === 403, `${r.status}`);
+
+cookie = adminCookie;
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

@@ -28,6 +28,13 @@ import { jwtUtils } from "../utils/jwt.js";
  * Delivery is best-effort by design. Messages are persisted over HTTP first and
  * broadcast second; a dropped socket loses nothing, because the thread is
  * fetched over HTTP when the page opens.
+ *
+ * The connections live in THIS process's memory, which is what makes the
+ * process stateful. Behind more than one instance, a message posted to A would
+ * reach nobody holding a socket on B - so the push goes out over the chat bus
+ * (Postgres LISTEN/NOTIFY) and every instance delivers to its own sockets.
+ * There is one delivery path, not a local one and a remote one that could
+ * drift: the publisher hears its own notification like everybody else.
  */
 
 /** Every live connection, by the user it was proven to belong to. */
@@ -92,13 +99,18 @@ const forget = (userId: string, socket: WebSocket) => {
 };
 
 /**
- * Push to specific people, by user id.
+ * Push to specific people, by user id, on THIS instance only.
  *
- * The only way anything leaves this server over a socket. Callers pass the
- * member ids they read from the database a moment earlier; this function has no
- * concept of a conversation and cannot be asked for one.
+ * The only way anything leaves this server over a socket. Not exported to the
+ * services any more: they publish to the bus instead, and every instance -
+ * including the one that published - arrives here. Routing a push straight to
+ * local sockets would work perfectly on one instance and silently drop half the
+ * deliveries on two.
+ *
+ * It has no concept of a conversation and cannot be asked for one; the member
+ * ids are read from the database a moment before publishing.
  */
-export const pushToUsers = (userIds: string[], payload: unknown) => {
+export const deliverLocally = (userIds: string[], payload: unknown) => {
     const body = JSON.stringify(payload);
     let delivered = 0;
 

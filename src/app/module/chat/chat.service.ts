@@ -4,7 +4,7 @@ import { ConversationType } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
-import { pushToUsers } from "../../socket/chatSocket.js";
+import { publishChatEvent } from "../../socket/chatBus.js";
 import { pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import {
     IAddMembersPayload,
@@ -347,12 +347,24 @@ const sendMessage = async (
         return { message: created, recipients: await memberIdsOf(tx, conversationId) };
     });
 
-    // Outside the transaction: a socket that is slow or gone must never hold a
-    // database transaction open, and the message is already safely stored.
+    // Outside the transaction: publishing must never hold a database
+    // transaction open, and the message is already safely stored.
     //
-    // The sender is included on purpose - they may have this conversation open
-    // in another tab, and that tab should see the message like anybody else's.
-    pushToUsers(recipients, { type: "message", conversation_id: conversationId, message });
+    // Published to the bus rather than pushed to local sockets. Every instance
+    // hears it, including this one, so there is one delivery path instead of a
+    // local one that works and a remote one that silently does not.
+    //
+    // A HINT, not the message. The browser refetches rather than trusting what
+    // a socket hands it - which is what makes a dropped connection harmless -
+    // and a NOTIFY payload is capped at 8000 bytes while a body may be 4000
+    // characters. Either reason alone would decide it.
+    //
+    // The sender is included on purpose: they may have this conversation open
+    // in another tab, and that tab should update like anybody else's.
+    await publishChatEvent(
+        (sql, values) => prisma.$queryRawUnsafe(sql, ...values),
+        { recipients, conversationId }
+    );
 
     return message;
 };

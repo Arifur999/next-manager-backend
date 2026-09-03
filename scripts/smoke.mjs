@@ -4093,10 +4093,27 @@ check(
   delivered(salesSocket).length === 0,
   JSON.stringify(salesSocket.received)
 );
+// A HINT, not the message. The browser refetches rather than trusting what a
+// socket hands it, and a NOTIFY payload is capped at 8000 bytes while a body
+// may be 4000 characters - so the push names the conversation and nothing more.
 check(
-  "and the body arrives intact",
-  delivered(opsSocket)[0]?.message?.body === "Over the wire",
-  JSON.stringify(delivered(opsSocket)[0]?.message?.body)
+  "and it names the conversation to refetch",
+  delivered(opsSocket)[0]?.conversation_id === dmId,
+  JSON.stringify(delivered(opsSocket)[0])
+);
+check(
+  "carrying no message body, so a long one cannot break the bus",
+  delivered(opsSocket)[0]?.message === undefined,
+  JSON.stringify(Object.keys(delivered(opsSocket)[0] ?? {}))
+);
+
+// The reason the payload can be a hint at all: the thread is the HTTP read, and
+// it has the message whether the socket said anything or not.
+r = await call("GET", `/chat/${dmId}/messages`);
+check(
+  "and the thread itself carries the message",
+  (r.json.data ?? []).some((m) => m.body === "Over the wire"),
+  JSON.stringify((r.json.data ?? []).map((m) => m.body))
 );
 
 // A client cannot ask to be subscribed to anything - there is no protocol in

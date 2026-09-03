@@ -1,7 +1,8 @@
 import { Server } from "http";
 import app from "./app.js";
 import { seedSuperAdmin } from "./app/utils/seed.js";
-import { attachChatSocket } from "./app/socket/chatSocket.js";
+import { startChatBus, stopChatBus } from "./app/socket/chatBus.js";
+import { attachChatSocket, deliverLocally } from "./app/socket/chatSocket.js";
 import { env } from "./config/env.js";
 
 let server: Server;
@@ -17,14 +18,21 @@ const bootstrap = async () => {
         // port of its own, so it needs no extra firewall rule and inherits
         // the same TLS termination in front of it.
         //
-        // DEPLOYMENT: this makes the process stateful. Live connections live
-        // in memory on ONE instance, so behind more than one instance a
-        // message posted to instance A does not reach a socket held by
-        // instance B. Nothing is LOST - messages are persisted over HTTP and
-        // the thread is fetched on open - but the live update stops working
-        // until the page is reloaded. Running more than one instance needs
-        // sticky sessions or a shared pub/sub, and that is a decision to make
-        // before scaling out rather than after.
+        // The socket keeps its connections in THIS process's memory, which is
+        // what makes the process stateful. The bus is what makes that safe
+        // behind more than one instance: a message published on any instance
+        // reaches every instance, and each delivers to its own sockets.
+        //
+        // Started before the socket server so a connection that arrives in the
+        // first millisecond is never served by a process that cannot hear the
+        // bus yet.
+        startChatBus((event) =>
+            deliverLocally(event.recipients, {
+                type: "message",
+                conversation_id: event.conversationId,
+            })
+        );
+
         attachChatSocket(server);
     } catch (error) {
         console.error("Failed to start server:", error);
@@ -33,6 +41,8 @@ const bootstrap = async () => {
 
 const shutdown = (signal: string) => {
     console.log(`${signal} signal received. Shutting down server...`);
+    // Its own connection, so it does not close with the HTTP server.
+    void stopChatBus();
     if (server) {
         server.close(() => {
             console.log("Server closed gracefully.");

@@ -4761,5 +4761,44 @@ check("but it is still on My Tasks", myIds.includes(madeTasks.undated), "an unda
 
 cookie = adminCookie;
 
+
+console.log("\n--- the projects operations is on ---");
+
+cookie = opsCookie;
+
+r = await call("GET", "/projects");
+check("operations can read projects", r.status === 200, `${r.status}`);
+const opsProjects = (r.json.data ?? []).map((p) => p.id);
+check("and gets the one they are a member of", opsProjects.includes(timeProjectId), JSON.stringify(opsProjects.length));
+
+// The scope is the API's, not the page's. offLimitsProject is the one operations
+// was deliberately never added to.
+check(
+  "but NOT a project they are not on",
+  !opsProjects.includes(offLimitsProject),
+  "a project they are not a member of came back"
+);
+
+r = await call("GET", `/projects/${timeProjectId}`);
+check("they can open their own project", r.status === 200, `${r.status}`);
+r = await call("GET", `/projects/${offLimitsProject}`);
+check("and not one they are not on", r.status === 404, `${r.status}`);
+
+// Every write behind those pages.
+r = await call("POST", "/projects", { client_id: clientId, name: "Mine now", code: `OPS-${stamp}` });
+check("they cannot create a project", r.status === 403, `${r.status} ${r.json.message}`);
+r = await call("PATCH", `/projects/${timeProjectId}`, { name: "Renamed" });
+check("nor rename one they are on", r.status === 403, `${r.status} ${r.json.message}`);
+r = await call("GET", `/projects/${timeProjectId}/financials`);
+check("nor see what it earns", r.status === 403, `${r.status} ${r.json.message}`);
+r = await call("POST", "/project-members", { project_id: timeProjectId, user_id: roleUserIds.sales });
+check("nor put somebody on it", r.status === 403, `${r.status} ${r.json.message}`);
+r = await call("POST", "/milestones", { project_id: timeProjectId, title: "Mine", due_date: "2026-12-01" });
+check("nor add a milestone", r.status === 403, `${r.status} ${r.json.message}`);
+r = await call("POST", "/project-links", { project_id: timeProjectId, label: "Mine", url: "https://example.com" });
+check("nor add a link", r.status === 403, `${r.status} ${r.json.message}`);
+
+cookie = adminCookie;
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

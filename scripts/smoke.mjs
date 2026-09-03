@@ -4288,6 +4288,28 @@ r = await call("PATCH", `/projects/${timeProjectId}`, { name: "Renamed by sales"
 check("but cannot change a project", r.status === 403, `${r.status} ${r.json.message}`);
 r = await call("POST", "/tasks", { project_id: timeProjectId, title: "Do this now" });
 check("nor create a task", r.status === 403, `${r.status} ${r.json.message}`);
+
+// The one that was open. PATCH /tasks/:id was checkAuth() with a per-role
+// schema, and sales fell through to the FULL one - so they could have moved a
+// due date, reassigned the work, re-prioritised it or pushed it into another
+// project. Every one of those is running the work, not watching it.
+r = await call("GET", `/tasks?project_id=${timeProjectId}`);
+const someTask = (r.json.data ?? [])[0]?.id;
+check("sales can read a task on it", Boolean(someTask), "no task to try");
+r = await call("PATCH", `/tasks/${someTask}`, { title: "Renamed by sales" });
+check("but cannot edit one at all", r.status === 403, `${r.status} ${r.json.message}`);
+r = await call("PATCH", `/tasks/${someTask}`, { due_date: "2027-01-01" });
+check("nor move its deadline", r.status === 403, `${r.status} ${r.json.message}`);
+r = await call("PATCH", `/tasks/${someTask}`, { assignee_id: roleUserIds.operations });
+check("nor hand it to somebody else", r.status === 403, `${r.status} ${r.json.message}`);
+r = await call("DELETE", `/tasks/${someTask}`);
+check("nor delete it", r.status === 403, `${r.status} ${r.json.message}`);
+
+// Operations keeps what it had: its own task, moved along, nothing more.
+cookie = opsCookie;
+r = await call("PATCH", `/tasks/${someTask}`, { description: "Working on it" });
+check("operations can still move its own work along", r.status === 200 || r.status === 404, `${r.status} ${r.json.message}`);
+cookie = roleCookies.sales;
 r = await call("GET", `/projects/${timeProjectId}/financials`);
 check("nor see what a project earns", r.status === 403, `${r.status} ${r.json.message}`);
 r = await call("GET", `/clients/${clientId}/financials`);

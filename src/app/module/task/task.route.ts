@@ -15,11 +15,22 @@ const router = Router();
 // ?mine=true, ?project_id=, ?assignee_id=, ?status= all narrow further.
 router.get("/", checkAuth(), requireCompany, TaskController.getAllTasks);
 
-// Operations can move their own task along but not create or delete work.
-// Anyone signed in may edit a task they can reach - and what "edit" means
-// depends on who they are. Operations gets status and description; the fields
-// that define the commitment stay with whoever owns the schedule.
-router.patch("/:id", checkAuth(), requireCompany, validateRequestBy(taskUpdateSchemaFor), TaskController.updateTask);
+// Who may edit a task they can reach, and what "edit" means, depend on who
+// they are. Operations gets status and description; the fields that define the
+// commitment stay with whoever owns the schedule.
+//
+// Sales is named OUT of this list on purpose. They read the board to see where
+// a client they brought in has got to, and reading is the whole of it - moving
+// a task along IS controlling execution. Left as checkAuth() they fell through
+// to the full update schema and could have moved a due date, reassigned the
+// work, re-prioritised it or pushed it into another project.
+router.patch(
+    "/:id",
+    checkAuth(Role.admin, Role.project_manager, Role.operations),
+    requireCompany,
+    validateRequestBy(taskUpdateSchemaFor),
+    TaskController.updateTask
+);
 
 router.post("/", checkAuth(Role.admin, Role.project_manager), requirePermission("tasks.manage"), validateRequest(createTaskZodSchema), TaskController.createTask);
 router.delete("/:id", checkAuth(Role.admin, Role.project_manager), requirePermission("tasks.manage"), TaskController.deleteTask);

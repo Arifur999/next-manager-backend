@@ -1,7 +1,8 @@
 import status from "http-status";
-import { AttendanceSource, Role } from "../../../generated/prisma/enums.js";
+import { AttendanceSource } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
+import { resolveScope } from "../../shared/resolveScope.js";
 import { prisma } from "../../lib/prisma.js";
 import { IRecordAttendancePayload } from "./hr.validation.js";
 
@@ -47,7 +48,10 @@ const getAll = async (
     user: IRequestUser,
     filters: { from?: string; to?: string; userId?: string } = {}
 ) => {
-    const ownOnly = user.role === Role.operations;
+    // Read from the permission rows now. Only "all" sees the whole company;
+    // every narrower answer means their own rows, because attendance belongs to
+    // one person and there is nothing between "mine" and "everybody".
+    const ownOnly = (await resolveScope(user, "attendance", "view")) !== "all";
 
     return prisma.attendance.findMany({
         where: {

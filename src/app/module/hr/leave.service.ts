@@ -1,7 +1,8 @@
 import status from "http-status";
-import { LeaveStatus, NotificationEvent, Role } from "../../../generated/prisma/enums.js";
+import { LeaveStatus, NotificationEvent } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
+import { resolveScope } from "../../shared/resolveScope.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
 import { notify } from "../../shared/notify.js";
@@ -116,7 +117,9 @@ const getRequests = async (
     user: IRequestUser,
     filters: { status?: LeaveStatus; userId?: string; mine?: boolean } = {}
 ) => {
-    const ownOnly = user.role === Role.operations || filters.mine;
+    // Read from the rows, or asked for explicitly. "mine" is a filter somebody
+    // chose; the scope is a rule about them - either one narrows.
+    const ownOnly = (await resolveScope(user, "leave", "view")) !== "all" || filters.mine;
 
     return prisma.leaveRequest.findMany({
         where: {

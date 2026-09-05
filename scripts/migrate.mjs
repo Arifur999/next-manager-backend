@@ -30,8 +30,43 @@ import pg from "pg";
 const DIR = "prisma/migrations";
 const dry = process.argv.includes("--dry");
 
+// Named rather than assumed. With DATABASE_URL unset, pg falls through to
+// libpq's defaults - host 127.0.0.1, with the user and database both taken
+// from the OS user, which inside the container is `node`. The operator then
+// gets `role "node" does not exist` on their first deploy and goes looking for
+// a Postgres problem that does not exist. The npm script passes
+// -r dotenv/config and the container does not, so this is exactly the path
+// that loses the variable.
+if (!process.env.DATABASE_URL) {
+    console.error("FAILED DATABASE_URL is not set. Nothing to migrate against.");
+    process.exit(1);
+}
+
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await client.connect();
+
+// Only one of these may run at a time, across every machine.
+//
+// Migrations run at container start and this server is built to run behind
+// more than one instance, so two replicas booting together is the normal case
+// rather than the unlucky one. Without a lock both see an empty history, both
+// apply the first migration, and the loser dies on `type "Role" already
+// exists` - which reads like a broken migration rather than a race.
+//
+// A SESSION-level advisory lock, taken before the table check below, so it
+// covers the CREATE TABLE too: checking for the table and creating it are two
+// statements, and the gap between them is the same race. Postgres releases the
+// lock when the connection ends, including when this process is killed, so
+// there is nothing to clean up by hand. `prisma migrate deploy` takes one for
+// exactly this reason; this script replaced the command without replacing the
+// lock.
+//
+// Held during --dry as well. A dry run that reported a half-applied database
+// would be worse than one that waited.
+//
+// The key is arbitrary but must never change - it IS the identity of the lock.
+const MIGRATION_LOCK_KEY = 72707369;
+await client.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK_KEY]);
 
 // Prisma's own bookkeeping table, created here when the database has never
 // seen it.
@@ -125,9 +160,21 @@ for (const name of names) {
         console.log(`OK     ${name}`);
         ran += 1;
     } catch (error) {
-        await client.query("ROLLBACK");
+        // The rollback gets a try of its own. When a migration fails BY
+        // killing the connection - a server restart, an OOM kill, an
+        // idle-transaction timeout - ROLLBACK rejects as well, and that
+        // rejection would replace the real error with a connection error and
+        // never name the migration that was in flight.
+        try {
+            await client.query("ROLLBACK");
+        } catch {
+            // Nothing to roll back on a dead connection: Postgres discarded
+            // the transaction with the session. The original error below is
+            // the one worth reporting.
+        }
+
         console.error(`FAILED ${name}\n       ${error.message}`);
-        await client.end();
+        await client.end().catch(() => {});
         process.exit(1);
     }
 }

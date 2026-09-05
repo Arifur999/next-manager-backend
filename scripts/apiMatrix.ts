@@ -78,6 +78,7 @@ const ENDPOINTS = [
     "/departments",
     "/activity",
     "/notification-rules",
+    "/permissions",
     "/security/login-events",
     "/reports/profit-loss",
     "/reports/cash-flow",

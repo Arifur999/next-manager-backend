@@ -4958,5 +4958,82 @@ check(
 
 cookie = adminCookie;
 
+
+console.log("\n--- the permission grid ---");
+//
+// The screen behind this is a table, so the read hands back the whole table at
+// once. Three round trips to draw one grid would be three chances to show a
+// mixture of two moments.
+
+cookie = adminCookie;
+
+r = await call("GET", "/permissions");
+check("the grid reads", r.status === 200, `${r.status} ${r.json.message}`);
+check(
+  "carrying the catalogue",
+  (r.json.data?.catalogue?.modules ?? []).length === 12,
+  `${(r.json.data?.catalogue?.modules ?? []).length} modules`
+);
+check(
+  "and a row for every square",
+  (r.json.data?.role_permissions ?? []).length === 168,
+  `${(r.json.data?.role_permissions ?? []).length}`
+);
+// An empty list and "nobody asked" are different answers, so one of them is
+// null rather than both being [].
+check(
+  "with null for a person nobody asked about",
+  r.json.data?.user === null && r.json.data?.user_permissions === null
+);
+
+r = await call("GET", `/permissions?user_id=${roleUserIds.operations}`);
+check(
+  "asking about somebody names them",
+  r.json.data?.user?.id === roleUserIds.operations,
+  JSON.stringify(r.json.data?.user)
+);
+check("and gives an empty override list, not null", Array.isArray(r.json.data?.user_permissions));
+
+r = await call("PATCH", "/permissions/roles", {
+  role: "super_admin",
+  module: "projects",
+  action: "view",
+  scope: "all",
+});
+check("a role an agency does not configure is refused", r.status === 400, `${r.status} ${r.json.message}`);
+
+r = await call("PATCH", "/permissions/roles", {
+  role: "operations",
+  module: "nonsense",
+  action: "view",
+  scope: "all",
+});
+check("and a module the catalogue never heard of", r.status === 400, `${r.status}`);
+
+r = await call("DELETE", `/permissions/users/${roleUserIds.operations}/nonsense/view`);
+check("a bad path is a bad request, not a silent no-op", r.status === 400, `${r.status}`);
+
+// The one thing a permission system must never allow.
+cookie = opsCookie;
+r = await call("GET", "/permissions");
+check("only an admin reads the grid", r.status === 403, `${r.status}`);
+r = await call("PATCH", "/permissions/roles", {
+  role: "operations",
+  module: "accounts",
+  action: "view",
+  scope: "all",
+});
+check("and nobody can widen themselves", r.status === 403, `${r.status}`);
+
+cookie = pmCookie;
+r = await call("PATCH", `/permissions/users/${roleUserIds.operations}`, {
+  module: "accounts",
+  action: "view",
+  scope: "all",
+});
+check("nor widen somebody else", r.status === 403, `${r.status}`);
+
+cookie = adminCookie;
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);

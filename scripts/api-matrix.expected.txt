@@ -31,6 +31,7 @@ ENDPOINT                       admin            sales            project_manager
 /departments                   200              200              200              200
 /activity                      200              403              403              403
 /notification-rules            200              403              403              403
+/permissions                   200              403              403              403
 /security/login-events         200              403              403              403
 /reports/profit-loss           200              403              403              403
 /reports/cash-flow             200              403              403              403

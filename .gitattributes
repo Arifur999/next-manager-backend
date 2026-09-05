@@ -8,3 +8,12 @@
 #
 # Pinned to LF so the bytes are the same on every machine and in every clone.
 *.sql text eol=lf
+
+# Shell scripts run in Alpine, where CRLF is a syntax error rather than
+# whitespace: `set -e` followed by a carriage return is read as `set -e<CR>`
+# and the shell answers `illegal option`. With core.autocrlf=true - which is
+# the default on Windows and is set on this machine - git rewrites these on
+# checkout, so the entrypoint was correct in the repository, correct in the
+# image I built from a working copy that predated the checkout, and broken in
+# every fresh clone. Pinned to LF for the same reason the migrations are.
+*.sh text eol=lf

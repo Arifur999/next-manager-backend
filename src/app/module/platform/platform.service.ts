@@ -5,6 +5,7 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { seedLeadSources } from "../../shared/defaultLeadSources.js";
 import { seedLeaveTypes } from "../../shared/defaultLeaveTypes.js";
+import { seedRolePermissions } from "../../shared/defaultPermissions.js";
 import { seedWorkflowStatuses } from "../../shared/defaultWorkflowStatuses.js";
 import { logPlatformActivity } from "../../shared/platformActivity.js";
 import { passwordUtils } from "../../utils/password.js";
@@ -487,6 +488,7 @@ const createCompany = async (payload: ICreateCompanyPayload, user: IRequestUser)
         await seedLeadSources(tx, organization.id);
         await seedWorkflowStatuses(tx, organization.id);
         await seedLeaveTypes(tx, organization.id);
+        await seedRolePermissions(tx, organization.id);
 
         const admin = await tx.user.create({
             data: {

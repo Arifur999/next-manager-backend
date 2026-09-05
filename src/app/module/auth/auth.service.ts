@@ -9,6 +9,7 @@ import { prisma } from "../../lib/prisma.js";
 import { getBrand, getPlatformSettings } from "../../shared/platformSettings.js";
 import { seedLeadSources } from "../../shared/defaultLeadSources.js";
 import { seedLeaveTypes } from "../../shared/defaultLeaveTypes.js";
+import { seedRolePermissions } from "../../shared/defaultPermissions.js";
 import { seedWorkflowStatuses } from "../../shared/defaultWorkflowStatuses.js";
 import { jwtUtils } from "../../utils/jwt.js";
 import { passwordUtils } from "../../utils/password.js";
@@ -89,6 +90,7 @@ const register = async (payload: IRegisterPayload) => {
         await seedLeadSources(tx, organization.id);
         await seedWorkflowStatuses(tx, organization.id);
         await seedLeaveTypes(tx, organization.id);
+        await seedRolePermissions(tx, organization.id);
 
         if (settings.default_plan_id) {
             const trialDays = settings.default_trial_days;

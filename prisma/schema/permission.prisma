@@ -1,0 +1,62 @@
+// Who may do what, and how far it reaches.
+//
+// The rule this whole area rests on, repeated here because a schema is where
+// somebody looks first:
+//
+//   TENANT ISOLATION IS NOT A SCOPE. organization_id is applied before any of
+//   these rows are consulted, and nothing here can remove it. Scope decides how
+//   much of your OWN agency you see, never whether you see another one.
+//
+// Two tables because a template and an exception are different things: an
+// agency sets what a role gets, and overrides one person when it has to.
+
+/// What a role gets, per agency.
+///
+/// Seeded at organization creation from exactly what the services did before
+/// this existed, so an agency upgrades into the product it already had.
+model RolePermission {
+  id             String   @id @default(uuid())
+  organization_id String
+  role           Role
+  /// From the catalogue in permissionCatalogue.ts. Stored as text rather than
+  /// an enum: adding a module should be a deploy, not a migration, and a row
+  /// naming a module the code no longer has is ignored rather than fatal.
+  module         String
+  action         String
+  scope          String
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  /// One answer per square. Without this an agency could hold two scopes for
+  /// the same thing and the resolver would have to pick, which is a coin toss
+  /// nobody could explain.
+  @@unique([organization_id, role, module, action])
+  @@index([organization_id])
+  /// The resolver's own read: every row for one role, in one query.
+  @@index([organization_id, role])
+  @@map("role_permissions")
+}
+
+/// One person's exception to their role.
+///
+/// Absent means "inherit", which is what almost every square will be — so this
+/// table stays small and a person with no rows behaves exactly as their role
+/// says. That is also the hatch that makes turning this on safe: nobody loses
+/// anything on the morning of the upgrade.
+model UserPermission {
+  id         String   @id @default(uuid())
+  user_id    String
+  module     String
+  action     String
+  scope      String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, module, action])
+  @@index([user_id])
+  @@map("user_permissions")
+}

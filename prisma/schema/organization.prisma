@@ -46,6 +46,7 @@ model Organization {
   shareholders      Shareholder[]
   distributions     ShareholderDistribution[]
   conversations     Conversation[]
+  role_permissions  RolePermission[]
 
   @@map("organizations")
 }
@@ -102,6 +103,7 @@ model User {
   /// Optional both ways: somebody can own part of the business without ever
   /// signing in, and most colleagues own none of it.
   shareholdings      Shareholder[]
+  permission_overrides UserPermission[]
   conversations      ConversationMember[]
   sent_messages      Message[]     @relation("MessageSender")
   /// What they brought in. Both SetNull, so a departure never deletes a

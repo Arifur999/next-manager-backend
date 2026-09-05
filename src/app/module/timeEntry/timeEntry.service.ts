@@ -1,8 +1,9 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { LeaveStatus, NotificationEvent, Role, UserStatus } from "../../../generated/prisma/enums.js";
+import { LeaveStatus, NotificationEvent, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
+import { resolveScope } from "../../shared/resolveScope.js";
 import { prisma } from "../../lib/prisma.js";
 import { notify } from "../../shared/notify.js";
 import { DEFAULT_WEEKLY_HOURS, loadCapacityRows } from "../../shared/capacity.js";
@@ -45,9 +46,40 @@ const INCLUDE = {
     task: { select: { id: true, title: true } },
 } as const;
 
-/** Operations sees only their own rows; everyone above sees the company's. */
-const visibilityScope = (user: IRequestUser): Prisma.TimeEntryWhereInput =>
-    user.role === Role.operations ? { user_id: user.userId } : {};
+/**
+ * Whose hours this person may read.
+ *
+ * From the permission rows now rather than `role === operations`. A time entry
+ * belongs to exactly one person, so there is nothing between "mine" and
+ * "everybody": only `all` sees the company's.
+ */
+const seesOnlyOwn = async (user: IRequestUser) =>
+    (await resolveScope(user, "time", "view")) !== "all";
+
+const visibilityScope = async (user: IRequestUser): Promise<Prisma.TimeEntryWhereInput> =>
+    (await seesOnlyOwn(user)) ? { user_id: user.userId } : {};
+
+/**
+ * The projects somebody may log against.
+ *
+ * Deliberately the PROJECTS scope, not the time one. Logging hours against a
+ * project you cannot see is the hole this closes, and the two questions have
+ * one answer: if the project list would not show it to you, you cannot bill it.
+ */
+const loggableProjectScope = async (user: IRequestUser): Promise<Prisma.ProjectWhereInput> => {
+    const scope = await resolveScope(user, "projects", "view");
+
+    switch (scope) {
+        case "all":
+            return {};
+        case "assigned":
+        case "own":
+            return { members: { some: { user_id: user.userId } } };
+        case "none":
+        default:
+            return { id: { in: [] } };
+    }
+};
 
 const assertHours = (hours: number) => {
     if (hours > MAX_HOURS_PER_ENTRY) {
@@ -70,13 +102,11 @@ const assertReferences = async (
                 organization_id: user.organizationId,
                 deleted_at: null,
                 // The same scope the project LIST applies. Without it the read
-                // was scoped and the write was not: operations could not see a
+                // was scoped and the write was not: somebody could not see a
                 // project but could still log hours against it by id, which
                 // both contradicts the picker in front of them and lets anybody
                 // pollute a project's cost figures.
-                ...(user.role === Role.operations
-                    ? { members: { some: { user_id: user.userId } } }
-                    : {}),
+                ...(await loggableProjectScope(user)),
             },
             select: { id: true },
         });
@@ -84,7 +114,7 @@ const assertReferences = async (
         if (!project) {
             throw new AppError(
                 status.NOT_FOUND,
-                user.role === Role.operations
+                (await seesOnlyOwn(user))
                     ? // Says what to do rather than just no. Being on the team
                       // is the thing that unlocks this, and the person cannot
                       // add themselves.
@@ -117,7 +147,7 @@ const getAllEntries = async (
     const where: Prisma.TimeEntryWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
-        ...visibilityScope(user),
+        ...(await visibilityScope(user)),
         ...dateRangeWhere(options),
         ...(filters.userId ? { user_id: filters.userId } : {}),
         ...(filters.projectId ? { project_id: filters.projectId } : {}),
@@ -156,9 +186,11 @@ const getSummary = async (
     filters: { userId?: string },
     options: ListOptions = {}
 ) => {
-    // Operations can only ever summarise themselves, whatever they ask for.
-    const targetUserId =
-        user.role === Role.operations ? user.userId : filters.userId ?? undefined;
+    // Somebody narrowed to their own hours can only ever summarise themselves,
+    // whatever the query asks for - the filter cannot widen the scope.
+    const targetUserId = (await seesOnlyOwn(user))
+        ? user.userId
+        : filters.userId ?? undefined;
 
     const where: Prisma.TimeEntryWhereInput = {
         organization_id: user.organizationId,
@@ -245,7 +277,7 @@ const updateEntry = async (id: string, payload: IUpdateTimeEntryPayload, user: I
                 id,
                 organization_id: user.organizationId,
                 deleted_at: null,
-                ...visibilityScope(user),
+                ...(await visibilityScope(user)),
             },
         });
 
@@ -313,7 +345,7 @@ const deleteEntry = async (id: string, user: IRequestUser) => {
             id,
             organization_id: user.organizationId,
             deleted_at: null,
-            ...visibilityScope(user),
+            ...(await visibilityScope(user)),
         },
     });
 

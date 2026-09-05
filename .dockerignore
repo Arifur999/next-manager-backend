@@ -11,7 +11,6 @@
 # the same leak with a longer memory.
 .env
 .env.*
-!.env.example
 .admin-password.txt
 .git
 .gitignore

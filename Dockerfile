@@ -1,12 +1,14 @@
 # Production image for the Naxified API.
 #
 # Four stages so the thing that ships carries neither the toolchain nor the dev
-# dependencies: ~200 MB of TypeScript, eslint and tsx never reach the server.
+# dependencies: the TypeScript compiler, eslint, tsx and the whole Prisma CLI
+# never reach the server.
 #
-# Pinned to a minor rather than floating on `node:alpine`, for the same reason
-# the nginx image next door is pinned - a major version should arrive because
-# somebody decided it would, not during a routine rebuild.
-ARG NODE_VERSION=24-alpine
+# Pinned to a MINOR, not a major. `24-alpine` floats across every 24.x release,
+# so two builds of the same commit a month apart would run different Node
+# versions - a change in TLS, HTTP parsing or ESM resolution arriving during a
+# routine rebuild is exactly the surprise a pin is supposed to prevent.
+ARG NODE_VERSION=24.20-alpine
 
 # ---------------------------------------------------------------- deps
 FROM node:${NODE_VERSION} AS deps
@@ -14,7 +16,10 @@ WORKDIR /app
 # Only the manifests, so this layer is reused on every build that did not
 # change a dependency - which is most of them.
 COPY package.json package-lock.json ./
-RUN npm ci
+# A cache mount rather than a layer: the downloaded tarballs are shared with
+# the prod-deps stage below and with every later build, and none of it ends up
+# in the image.
+RUN --mount=type=cache,target=/root/.npm npm ci
 
 # --------------------------------------------------------------- build
 FROM node:${NODE_VERSION} AS build
@@ -37,25 +42,25 @@ RUN npm run build
 FROM node:${NODE_VERSION} AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-# Known bloat, deliberately left alone for now: this layer is ~380 MB.
+
+# --omit=dev AND --omit=optional, which together are what actually drops the
+# Prisma CLI, Prisma Studio's browser UI, the Rust engines and typescript.
 #
-# @prisma/client declares `prisma` and `typescript` as PEER dependencies, and
-# npm installs peers automatically, so --omit=dev does NOT drop them. The image
-# therefore carries the Prisma CLI (40 MB), Prisma Studio's browser UI (42 MB),
-# the dev server (18 MB), the Rust engines (24 MB), typescript and effect -
-# none of which this server runs. It reaches Postgres through
-# @prisma/adapter-pg, and migrations go through scripts/migrate.mjs over plain
-# pg.
+# --omit=dev alone did not, and the reason is worth writing down because the
+# obvious explanation is wrong. @prisma/client declares `prisma` and
+# `typescript` as peers, but marks BOTH optional in peerDependenciesMeta, so
+# npm does not pull them in as peers at all. They survived because npm resolved
+# them into the tree as `devOptional` - 132 of the 395 entries in the lockfile
+# carry that flag - and npm drops a devOptional node only when both omissions
+# are given. `--omit=peer` was the wrong lever, which is why it recovered 9 MB
+# of 749 and no more.
 #
-# --omit=peer was tried and recovered 9 MB: `npm ci` reproduces the lockfile
-# exactly, so the flag has almost nothing to act on. Deleting the directories
-# by hand would work until the day the client lazily requires one of them, and
-# that failure would land in production rather than here.
+# The only strictly-optional package in the production set is pg-cloudflare, a
+# socket shim for Cloudflare Workers that a Node server never loads.
 #
-# Left as is because the cost is small in practice - the layer is cached and
-# only re-transfers when a dependency actually changes - and correctness beats
-# 300 MB. Worth revisiting if Prisma stops declaring the CLI as a peer.
-RUN npm ci --omit=dev && npm cache clean --force
+# This also skips prisma's install script, so the Rust engines are not even
+# downloaded during the build.
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --omit=optional
 
 # -------------------------------------------------------------- runner
 FROM node:${NODE_VERSION} AS runner
@@ -76,6 +81,7 @@ COPY --from=build /app/package.json ./package.json
 # schema-engine binary, neither of which is installed here.
 COPY --from=build /app/prisma/migrations ./prisma/migrations
 COPY --from=build /app/scripts/migrate.mjs ./scripts/migrate.mjs
+COPY --from=build /app/docker/entrypoint.sh ./docker/entrypoint.sh
 
 # The node user ships with the image and owns nothing outside /app. A process
 # that is compromised should not also be root inside its own container.
@@ -85,10 +91,14 @@ USER node
 # over the compose network, which is the only way in.
 EXPOSE 5000
 
-# Migrate, then serve. Sequential on purpose: a server that starts before its
-# schema exists answers 500s that look like application bugs.
-#
-# `node --run` rather than a shell chain, so signals reach the server process
-# directly and `docker stop` is a clean shutdown rather than a 10-second wait
-# followed by SIGKILL. server.ts installs handlers for SIGTERM and SIGINT.
-CMD ["sh", "-c", "node scripts/migrate.mjs && exec node dist/server.js"]
+# Distinguishes "still migrating", "serving" and "alive but listening to
+# nothing" from outside, which nothing else can. start-period covers the
+# migration, which on a fresh database applies every file before the port opens.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+    CMD node -e "fetch('http://127.0.0.1:5000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+# The entrypoint migrates, then EXECS the server so it becomes PID 1 and
+# receives SIGTERM directly - server.ts drains on it and exits 0. The migration
+# phase is signal-aware too; see docker/entrypoint.sh for why that needs more
+# than a shell chain.
+ENTRYPOINT ["sh", "docker/entrypoint.sh"]

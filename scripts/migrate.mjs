@@ -33,9 +33,51 @@ const dry = process.argv.includes("--dry");
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await client.connect();
 
-const { rows: applied } = await client.query(
-    `SELECT migration_name, checksum FROM _prisma_migrations WHERE finished_at IS NOT NULL`
+// Prisma's own bookkeeping table, created here when the database has never
+// seen it.
+//
+// `prisma migrate deploy` creates this on its first run. This script replaced
+// that command and never did — so it worked on a machine where an earlier
+// `migrate dev` had already made the table, and died on any database that had
+// never met Prisma. That is every production database on its first deploy:
+//
+//     error: relation "_prisma_migrations" does not exist
+//
+// Found by running the built container against an empty Postgres, which is the
+// only place the gap shows.
+//
+// The columns are Prisma's exact shape, so a later `prisma migrate` run on a
+// machine where the schema engine does work reads this history as its own
+// rather than as a stranger's table.
+const CREATE_MIGRATIONS_TABLE = `
+    CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
+        "id"                  VARCHAR(36)  PRIMARY KEY NOT NULL,
+        "checksum"            VARCHAR(64)  NOT NULL,
+        "finished_at"         TIMESTAMPTZ,
+        "migration_name"      VARCHAR(255) NOT NULL,
+        "logs"                TEXT,
+        "rolled_back_at"      TIMESTAMPTZ,
+        "started_at"          TIMESTAMPTZ  NOT NULL DEFAULT now(),
+        "applied_steps_count" INTEGER      NOT NULL DEFAULT 0
+    )
+`;
+
+const { rows: [{ present }] } = await client.query(
+    `SELECT to_regclass('_prisma_migrations') IS NOT NULL AS present`
 );
+
+// --dry stays read-only even here. Without the table nothing has been applied,
+// so an empty history is the honest answer rather than a reason to write.
+if (!present && !dry) {
+    await client.query(CREATE_MIGRATIONS_TABLE);
+    console.log("INIT   created _prisma_migrations (first deploy on this database)");
+}
+
+const { rows: applied } = present
+    ? await client.query(
+        `SELECT migration_name, checksum FROM _prisma_migrations WHERE finished_at IS NOT NULL`
+    )
+    : { rows: [] };
 const appliedBy = new Map(applied.map((row) => [row.migration_name, row.checksum]));
 
 const names = readdirSync(DIR, { withFileTypes: true })

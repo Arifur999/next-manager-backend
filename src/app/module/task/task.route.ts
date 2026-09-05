@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
-import { requirePermission } from "../../middleware/requirePermission.js";
+import { requireScope } from "../../middleware/requireScope.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest, validateRequestBy } from "../../middleware/validateRequest.js";
 import { TaskController } from "./task.controller.js";
@@ -38,7 +38,7 @@ router.patch(
     TaskController.updateTask
 );
 
-router.post("/", checkAuth(Role.admin, Role.project_manager), requirePermission("tasks.manage"), validateRequest(createTaskZodSchema), TaskController.createTask);
-router.delete("/:id", checkAuth(Role.admin, Role.project_manager), requirePermission("tasks.manage"), TaskController.deleteTask);
+router.post("/", checkAuth(Role.admin, Role.project_manager), requireScope("tasks", "create"), validateRequest(createTaskZodSchema), TaskController.createTask);
+router.delete("/:id", checkAuth(Role.admin, Role.project_manager), requireScope("tasks", "delete"), TaskController.deleteTask);
 
 export const TaskRoutes = router;

@@ -2775,78 +2775,90 @@ cookie = adminCookie;
 // Roles & Permissions: narrowing what a colleague may do inside their role.
 // ---------------------------------------------------------------------------
 //
-// The first check is the one that matters. This layer was mounted onto routes
-// that already worked, so the question is not "does it gate" - it is "did
-// turning it on take anything away from anybody". It must not have.
+// This used to be a flat list of capability strings stored on the user. It is
+// the grid now, and the WRITES ask the same rows the reads have asked since
+// scope became data - so a module turned off on the screen shortens the lists
+// and stops the writes together, instead of the two disagreeing.
+//
+// The first check is the one that matters. Nothing about this was supposed to
+// take anything away from anybody, so the starting state has to be the product
+// they already had.
 
 cookie = roleCookies.sales;
-r = await call("GET", "/auth/me");
-check(
-  "a colleague starts with an empty permission list",
-  (r.json.data?.permissions ?? []).length === 0,
-  JSON.stringify(r.json.data?.permissions)
-);
-
-const permClient = `Perm Co ${stamp}`;
-r = await call("POST", "/clients", { name: permClient });
-// The client is created for the check below to have something to reach for;
-// its id is never needed, only that the call succeeds.
-void r.json.data?.id;
-check(
-  "and an empty list still reaches everything the role allows",
-  r.status === 201,
-  `${r.status} ${r.json.message}`
-);
+r = await call("POST", "/clients", { name: `Perm Co ${stamp}` });
+check("sales starts able to do their job", r.status === 201, `${r.status} ${r.json.message}`);
 
 r = await call("POST", "/leads", { name: `Perm Lead ${stamp}`, stage: "new" });
 check("all of it, not just the first thing tried", r.status === 201, `${r.status} ${r.json.message}`);
 
-// Now narrow them, and confirm it bites.
+// Narrow the ROLE, and confirm it bites.
 cookie = adminCookie;
-r = await call("PATCH", `/users/${salesUserId}/permissions`, {
-  permissions: ["clients.manage"],
+r = await call("PATCH", "/permissions/roles", {
+  role: "sales",
+  module: "leads",
+  action: "create",
+  scope: "none",
 });
-check("admin can narrow a colleague", r.status === 200, `${r.status} ${r.json.message}`);
-
-r = await call("PATCH", `/users/${salesUserId}/permissions`, {
-  permissions: ["clients.manage", "not.a.real.permission"],
-});
-check("an unknown permission is refused, not stored", r.status === 400, `${r.status}`);
+check("admin can narrow a role", r.status === 200, `${r.status} ${r.json.message}`);
 
 cookie = roleCookies.sales;
-r = await call("POST", "/clients", { name: `Still Allowed ${stamp}` });
-check("the ticked box still works", r.status === 201, `${r.status} ${r.json.message}`);
-
 r = await call("POST", "/leads", { name: `Now Refused ${stamp}`, stage: "new" });
+check("and the write is refused", r.status === 403, `${r.status} ${r.json.message}`);
 check(
-  // Ticking one box flips somebody from "everything the role allows" to "only
-  // these". That reads backwards unless it is said out loud, which is why the
-  // screen says it.
-  "and everything else is now refused",
-  r.status === 403,
-  `${r.status} ${r.json.message}`
-);
-check(
-  "with the refusal naming the permission to ask for",
-  /leads\.manage/.test(r.json.message ?? ""),
+  "with the refusal naming the square to ask for",
+  /leads/.test(r.json.message ?? "") && /create/.test(r.json.message ?? ""),
   r.json.message
 );
 
-// Undo it. Refusing an empty list would leave no way back.
+// Narrowing one square must not narrow the next one along.
+r = await call("POST", "/clients", { name: `Still Allowed ${stamp}` });
+check("everything else still works", r.status === 201, `${r.status} ${r.json.message}`);
+
 cookie = adminCookie;
-r = await call("PATCH", `/users/${salesUserId}/permissions`, { permissions: [] });
-check("clearing the list is allowed", r.status === 200, `${r.status} ${r.json.message}`);
+r = await call("PATCH", "/permissions/roles", {
+  role: "sales",
+  module: "leads",
+  action: "create",
+  scope: "all",
+});
+check("putting it back is allowed", r.status === 200, `${r.status} ${r.json.message}`);
 
 cookie = roleCookies.sales;
 r = await call("POST", "/leads", { name: `Allowed Again ${stamp}`, stage: "new" });
-check("and gives everything back", r.status === 201, `${r.status} ${r.json.message}`);
+check("and gives it back", r.status === 201, `${r.status} ${r.json.message}`);
 
-// The layer narrows; it can never widen.
+// One person, against their role. An override that silently did nothing would
+// look exactly like a working one, so both directions are checked.
 cookie = adminCookie;
-r = await call("PATCH", `/users/${salesUserId}/permissions`, {
-  permissions: ["projects.manage", "time.approve"],
+r = await call("PATCH", `/permissions/users/${salesUserId}`, {
+  module: "leads",
+  action: "create",
+  scope: "none",
 });
-check("a colleague can be given a delivery permission", r.status === 200, `${r.status}`);
+check("one person can be excepted", r.status === 200, `${r.status} ${r.json.message}`);
+
+cookie = roleCookies.sales;
+r = await call("POST", "/leads", { name: `Person Refused ${stamp}`, stage: "new" });
+check("and the override beats the role", r.status === 403, `${r.status} ${r.json.message}`);
+
+cookie = adminCookie;
+r = await call("DELETE", `/permissions/users/${salesUserId}/leads/create`);
+check("clearing the override is allowed", r.status === 200, `${r.status} ${r.json.message}`);
+
+cookie = roleCookies.sales;
+r = await call("POST", "/leads", { name: `Inherits Again ${stamp}`, stage: "new" });
+check("and its absence inherits the role", r.status === 201, `${r.status} ${r.json.message}`);
+
+// The layer narrows; it can never widen. This is the property the whole design
+// rests on, so it is checked from the direction somebody would actually try.
+cookie = adminCookie;
+r = await call("PATCH", "/permissions/roles", {
+  role: "sales",
+  module: "tasks",
+  action: "create",
+  scope: "all",
+});
+check("a role can be given a delivery square", r.status === 200, `${r.status}`);
 
 cookie = roleCookies.sales;
 r = await call("POST", "/tasks", { project_id: timeProjectId, title: "Should be refused" });
@@ -2857,24 +2869,21 @@ check(
 );
 
 cookie = adminCookie;
-r = await call("PATCH", `/users/${salesUserId}/permissions`, { permissions: [] });
-
-// An admin passes every check, so storing a list against one would look like a
-// restriction and enforce nothing.
-r = await call("GET", "/users");
-const anAdmin = (r.json.data ?? []).find((u) => u.role === "admin");
-r = await call("PATCH", `/users/${anAdmin?.id}/permissions`, {
-  permissions: ["clients.manage"],
+await call("PATCH", "/permissions/roles", {
+  role: "sales",
+  module: "tasks",
+  action: "create",
+  scope: "none",
 });
-check(
-  "an admin cannot be given a permission list that would do nothing",
-  r.status === 400,
-  `${r.status} ${r.json.message}`
-);
 
 // Only admin hands access out.
 cookie = pmCookie;
-r = await call("PATCH", `/users/${salesUserId}/permissions`, { permissions: ["clients.manage"] });
+r = await call("PATCH", "/permissions/roles", {
+  role: "sales",
+  module: "leads",
+  action: "create",
+  scope: "none",
+});
 check("a project manager cannot change anyone's access", r.status === 403, `${r.status}`);
 cookie = adminCookie;
 
@@ -4559,7 +4568,11 @@ check("nor deactivate them", r.status === 403, `${r.status} ${r.json.message}`);
 r = await call("DELETE", `/users/${roleUserIds.operations}`);
 check("nor remove them", r.status === 403, `${r.status} ${r.json.message}`);
 
-r = await call("PATCH", `/users/${roleUserIds.operations}/permissions`, { permissions: [] });
+r = await call("PATCH", `/permissions/users/${roleUserIds.operations}`, {
+  module: "tasks",
+  action: "create",
+  scope: "all",
+});
 check("nor set what they may do", r.status === 403, `${r.status} ${r.json.message}`);
 
 // And the duties they keep. Removing a screen must not remove a judgement.

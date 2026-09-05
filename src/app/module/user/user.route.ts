@@ -5,7 +5,6 @@ import { validateRequest } from "../../middleware/validateRequest.js";
 import { UserController } from "./user.controller.js";
 import {
     createUserZodSchema,
-    setUserPermissionsZodSchema,
     updateUserZodSchema,
 } from "./user.validation.js";
 
@@ -27,15 +26,5 @@ router.post("/", checkAuth(Role.admin), validateRequest(createUserZodSchema), Us
 router.patch("/:id", checkAuth(Role.admin), validateRequest(updateUserZodSchema), UserController.updateUser);
 router.delete("/:id", checkAuth(Role.admin), UserController.deleteUser);
 
-
-// What a colleague may do inside their role. Admin only, and its own route
-// rather than a field on the user update: setting access is a deliberate act,
-// and an empty list means something specific - everything the role allows.
-router.patch(
-    "/:id/permissions",
-    checkAuth(Role.admin),
-    validateRequest(setUserPermissionsZodSchema),
-    UserController.setPermissions
-);
 
 export const UserRoutes = router;

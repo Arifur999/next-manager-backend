@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
-import { requirePermission } from "../../middleware/requirePermission.js";
+import { requireScope } from "../../middleware/requireScope.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { TimeEntryController } from "./timeEntry.controller.js";
@@ -32,7 +32,7 @@ router.patch("/capacity/:userId", checkAuth(Role.admin, Role.project_manager), v
 
 // Approval is what turns logged time into billable time, so it is a second
 // person's job by definition - the service also refuses self-approval.
-router.post("/:id/approve", checkAuth(Role.admin, Role.project_manager), requirePermission("time.approve"), TimeEntryController.approveEntry);
-router.post("/:id/unapprove", checkAuth(Role.admin, Role.project_manager), requirePermission("time.approve"), TimeEntryController.unapproveEntry);
+router.post("/:id/approve", checkAuth(Role.admin, Role.project_manager), requireScope("time", "edit"), TimeEntryController.approveEntry);
+router.post("/:id/unapprove", checkAuth(Role.admin, Role.project_manager), requireScope("time", "edit"), TimeEntryController.unapproveEntry);
 
 export const TimeEntryRoutes = router;

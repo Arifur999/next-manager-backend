@@ -4,21 +4,31 @@ import { Role } from "../../generated/prisma/enums.js";
 import AppError from "../errorHelpers/AppError.js";
 
 /**
- * Narrows what a colleague may do WITHIN the role checkAuth already allowed.
+ * Narrows what a PLATFORM operator may do inside their role.
  *
- * Always sits after checkAuth on a route, never instead of it: the role gate is
- * the outer boundary and this cannot widen it. An admin-only route stays
- * admin-only however the checkboxes are set.
+ * Company routes used to come through here too, checking a hand-written string
+ * against a flat list on the user. They ask the permission grid now, through
+ * `requireScope` - so a module turned off on the permissions screen stops the
+ * writes as well as shortening the lists, instead of the two disagreeing about
+ * what somebody may do.
  *
- * Two deliberate escape hatches, both of which make this safe to turn on for a
- * system that already has users:
+ * What is left is the platform side: `platform.companies.view`,
+ * `platform.plans.manage` and the rest, which are a different system with a
+ * different audience. They are not an agency's to configure, they never appear
+ * on the customer-facing grid, and there is no scope to give them - a platform
+ * operator either looks after billing or does not.
  *
- *   - An admin always passes. Locking an admin out of their own company with a
- *     checkbox is never the intent and there would be no way back.
- *   - A user with NO permissions stored passes. Every existing colleague has
- *     an empty column on the morning of the upgrade, so nobody loses access to
- *     anything they had yesterday. Restrictions begin only once somebody has
- *     actually ticked boxes for that user.
+ * Always sits after checkAuth, never instead of it. The role gate is the outer
+ * boundary and this cannot widen it.
+ *
+ * Two escape hatches, both of which made this safe to turn on for a system that
+ * already had users:
+ *
+ *   - A company admin always passes. They no longer reach this middleware at
+ *     all, but the branch stays because removing it would make the rule depend
+ *     on the routing rather than on the check.
+ *   - An operator with NO permissions stored passes, so the first operator is
+ *     never locked out of the console that hands permissions out.
  *
  * Several names may be given, and holding ANY of them is enough.
  */

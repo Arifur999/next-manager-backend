@@ -1,8 +1,9 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { CredentialAction, Role } from "../../../generated/prisma/enums.js";
+import { CredentialAction } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
+import { resolveScope } from "../../shared/resolveScope.js";
 import { prisma } from "../../lib/prisma.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { decryptSecret, encryptSecret, maskSecret } from "../../utils/crypto.js";
@@ -71,10 +72,25 @@ export interface CredentialFilters {
  * If an agency keeps its staging logins on the client, the honest fix is to
  * attach them to the project.
  */
-const visibilityScope = (user: IRequestUser): Prisma.CredentialWhereInput =>
-    user.role === Role.operations
-        ? { project: { members: { some: { user_id: user.userId } } } }
-        : {};
+const visibilityScope = async (user: IRequestUser): Promise<Prisma.CredentialWhereInput> => {
+    const scope = await resolveScope(user, "vault", "view");
+
+    switch (scope) {
+        case "all":
+            return {};
+        // A credential belongs to a project or a client, never to a person, so
+        // both narrowing scopes mean the same reach: the projects you are on.
+        // A credential attached to a CLIENT with no project stays out of it -
+        // there is no membership to check it against, and inventing one would
+        // be guessing.
+        case "assigned":
+        case "own":
+            return { project: { members: { some: { user_id: user.userId } } } };
+        case "none":
+        default:
+            return { id: { in: [] } };
+    }
+};
 
 const getAllCredentials = async (
     user: IRequestUser,
@@ -86,7 +102,7 @@ const getAllCredentials = async (
     const where: Prisma.CredentialWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
-        ...visibilityScope(user),
+        ...(await visibilityScope(user)),
         // Filtering by id, not by text. Search matches label/url/username, so a
         // project id typed into it would match nothing - which is exactly the
         // trap the project screen fell into before these existed.
@@ -154,7 +170,7 @@ const revealCredential = async (
                 id,
                 organization_id: user.organizationId,
                 deleted_at: null,
-                ...visibilityScope(user),
+                ...(await visibilityScope(user)),
             },
             select: { id: true, label: true, username: true, password_cipher: true, notes_cipher: true },
         });

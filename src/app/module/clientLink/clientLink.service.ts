@@ -1,9 +1,9 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { Role } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { resolveScope } from "../../shared/resolveScope.js";
 import {
     ICreateClientLinkPayload,
     IUpdateClientLinkPayload,
@@ -36,15 +36,46 @@ const SELECT = {
  * scoped read here: which of a company's clients exist is not information to
  * hand out.
  */
+/**
+ * How far this person's reach goes over clients, and therefore over the links
+ * hanging off them.
+ *
+ * Resolves the CLIENTS module, not one of its own: a link is a pointer that
+ * belongs to a client, not a thing somebody is granted separately, and two
+ * settings for one answer would be two things to keep in step.
+ */
+const clientScope = async (user: IRequestUser): Promise<Prisma.ClientWhereInput> => {
+    const scope = await resolveScope(user, "clients", "view");
+
+    switch (scope) {
+        case "all":
+            return {};
+        case "assigned":
+            return { projects: { some: { members: { some: { user_id: user.userId } } } } };
+        case "own":
+            return { owner_id: user.userId };
+        case "none":
+        default:
+            return { id: { in: [] } };
+    }
+};
+
+/** The same reach, expressed against the link rows themselves. */
+const linkScope = async (user: IRequestUser): Promise<Prisma.ClientLinkWhereInput> => {
+    const client = await clientScope(user);
+    // An empty clause means "everything", so it must NOT be nested. Wrapping
+    // {} gives { client: {} }, which is still everything - but wrapping the
+    // "none" case the same way would match every link instead of none.
+    return Object.keys(client).length === 0 ? {} : { client };
+};
+
 const assertClient = async (clientId: string, user: IRequestUser) => {
     const client = await prisma.client.findFirst({
         where: {
             id: clientId,
             organization_id: user.organizationId,
             deleted_at: null,
-            ...(user.role === Role.operations
-                ? { projects: { some: { members: { some: { user_id: user.userId } } } } }
-                : {}),
+            ...(await clientScope(user)),
         },
         select: { id: true },
     });
@@ -59,12 +90,10 @@ const getAll = async (user: IRequestUser, filters: { clientId?: string }) => {
         organization_id: user.organizationId,
         deleted_at: null,
         ...(filters.clientId ? { client_id: filters.clientId } : {}),
-        // Without a client filter, operations would otherwise see every link
-        // in the company - the scope has to be on the query, not on the caller
-        // remembering to pass a filter.
-        ...(user.role === Role.operations
-            ? { client: { projects: { some: { members: { some: { user_id: user.userId } } } } } }
-            : {}),
+        // Without a client filter, a narrowed person would otherwise see every
+        // link in the company - the scope has to be on the query, not on the
+        // caller remembering to pass a filter.
+        ...(await linkScope(user)),
     };
 
     const rows = await prisma.clientLink.findMany({
@@ -98,9 +127,7 @@ const findOwned = async (id: string, user: IRequestUser) => {
             id,
             organization_id: user.organizationId,
             deleted_at: null,
-            ...(user.role === Role.operations
-                ? { client: { projects: { some: { members: { some: { user_id: user.userId } } } } } }
-                : {}),
+            ...(await linkScope(user)),
         },
         select: { id: true, label: true },
     });

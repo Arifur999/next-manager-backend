@@ -1,8 +1,9 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { ClientStatus, InvoiceStatus, Role } from "../../../generated/prisma/enums.js";
+import { ClientStatus, InvoiceStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
+import { resolveScope } from "../../shared/resolveScope.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
@@ -18,6 +19,11 @@ import { ICreateClientPayload, IUpdateClientPayload } from "./client.validation.
  * Sales and the project manager keep the whole list: sales needs to know who
  * the agency already works with before approaching anybody, and delivery needs
  * to know whose work it is scheduling.
+ *
+ * Read from the permission rows now rather than from `role === operations`.
+ * Identical for a stock agency — that is what the seed says — and an agency can
+ * now say something else. It can never say another agency: organization_id sits
+ * above this in the same where clause and no scope removes it.
  */
 /**
  * An owner has to be somebody on this team.
@@ -42,10 +48,25 @@ const assertOwn = async (
     }
 };
 
-const visibilityScope = (user: IRequestUser): Prisma.ClientWhereInput =>
-    user.role === Role.operations
-        ? { projects: { some: { members: { some: { user_id: user.userId } } } } }
-        : {};
+const visibilityScope = async (user: IRequestUser): Promise<Prisma.ClientWhereInput> => {
+    const scope = await resolveScope(user, "clients", "view");
+
+    switch (scope) {
+        case "all":
+            return {};
+        // A client has an owner now, so the two differ here: "assigned" is the
+        // clients whose work you are on, "own" is the ones you brought in.
+        case "assigned":
+            return { projects: { some: { members: { some: { user_id: user.userId } } } } };
+        case "own":
+            return { owner_id: user.userId };
+        case "none":
+        default:
+            // Matches nothing, so the by-id read below 404s too. A list that
+            // hides a client while its id still answers is not a scope.
+            return { id: { in: [] } };
+    }
+};
 
 const getAllClients = async (
     user: IRequestUser,
@@ -55,7 +76,7 @@ const getAllClients = async (
     const where: Prisma.ClientWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
-        ...visibilityScope(user),
+        ...(await visibilityScope(user)),
         // An explicit ask for their own book, not a role rule - it composes
         // with the visibility scope above rather than replacing it.
         ...(filters.mine ? { owner_id: user.userId } : {}),
@@ -101,7 +122,7 @@ const getSingleClient = async (id: string, user: IRequestUser) => {
             id,
             organization_id: user.organizationId,
             deleted_at: null,
-            ...visibilityScope(user),
+            ...(await visibilityScope(user)),
         },
         include: {
             projects: {

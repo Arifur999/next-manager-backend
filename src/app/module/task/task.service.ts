@@ -2,12 +2,12 @@ import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
 import {
     NotificationEvent,
-    Role,
     StatusCategory,
     WorkflowKind,
 } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
+import { resolveScope } from "../../shared/resolveScope.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
 import { defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
@@ -61,8 +61,25 @@ const assertReferences = async (
  * task list being the same endpoint with a different scope, rather than two
  * near-identical ones that drift apart.
  */
-const visibilityScope = (user: IRequestUser): Prisma.TaskWhereInput =>
-    user.role === Role.operations ? { assignee_id: user.userId } : {};
+const visibilityScope = async (user: IRequestUser): Promise<Prisma.TaskWhereInput> => {
+    const scope = await resolveScope(user, "tasks", "view");
+
+    switch (scope) {
+        case "all":
+            return {};
+        // A task is assigned to exactly one person, so both narrowing scopes
+        // mean the same thing: yours. Kept apart in the catalogue because
+        // clients and projects distinguish them, and one vocabulary across
+        // twelve modules is worth more than a special case here.
+        case "assigned":
+        case "own":
+            return { assignee_id: user.userId };
+        case "none":
+        default:
+            // Nothing in the list, and 404 by id on the reads below.
+            return { id: { in: [] } };
+    }
+};
 
 /** Midnight today, UTC. due_date is a date column, so the comparison has to
  *  be a day boundary - comparing it to `now` would call a task due today
@@ -96,7 +113,7 @@ const getAllTasks = async (
     const where: Prisma.TaskWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
-        ...visibilityScope(user),
+        ...(await visibilityScope(user)),
         ...(filters.mine ? { assignee_id: user.userId } : {}),
         // Not "tasks assigned to me" but "tasks inside work I brought in" -
         // a salesperson watching their own client without touching it.
@@ -221,7 +238,7 @@ const updateTask = async (id: string, payload: IUpdateTaskPayload, user: IReques
                 id,
                 organization_id: user.organizationId,
                 deleted_at: null,
-                ...visibilityScope(user),
+                ...(await visibilityScope(user)),
             },
             // The category comes with it, because that is what decides
             // whether completed_at moves.
@@ -330,7 +347,7 @@ const getReport = async (user: IRequestUser, options: ListOptions = {}) => {
     const where: Prisma.TaskWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
-        ...visibilityScope(user),
+        ...(await visibilityScope(user)),
         ...dateRangeWhere(options, "created_at"),
     };
 

@@ -2789,7 +2789,9 @@ check(
 
 const permClient = `Perm Co ${stamp}`;
 r = await call("POST", "/clients", { name: permClient });
-const permClientId = r.json.data?.id;
+// The client is created for the check below to have something to reach for;
+// its id is never needed, only that the call succeeds.
+void r.json.data?.id;
 check(
   "and an empty list still reaches everything the role allows",
   r.status === 201,
@@ -3048,7 +3050,7 @@ check(
   JSON.stringify(r.json.meta?.retention_days)
 );
 
-const ownEmails = new Set((r.json.data ?? []).map((row) => row.email));
+// The check below asserts on the rows themselves, not on a set of addresses.
 check(
   "a successful sign-in is recorded against the person",
   (r.json.data ?? []).some((row) => row.success && row.user?.full_name),

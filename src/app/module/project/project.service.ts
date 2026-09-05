@@ -1,8 +1,9 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { InvoiceStatus, Role, WorkflowKind } from "../../../generated/prisma/enums.js";
+import { InvoiceStatus, WorkflowKind } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
+import { resolveScope } from "../../shared/resolveScope.js";
 import { assertProjectAvailable } from "../../middleware/checkSubscription.js";
 import { prisma } from "../../lib/prisma.js";
 import { assertOwnService } from "../../shared/assertOwnService.js";
@@ -24,11 +25,34 @@ import {
  *
  * Membership, not assignment - a person on the team of a project should see
  * the project even on a week they have no task open on it.
+ *
+ * Read from the permission rows now rather than from `role === operations`.
+ * The behaviour is identical for every stock agency, because that is exactly
+ * what the seed says; what changed is that an agency can now say something
+ * else. What it can NEVER say is another agency: organization_id sits above
+ * this in the same where clause and no scope removes it.
  */
-const visibilityScope = (user: IRequestUser): Prisma.ProjectWhereInput =>
-    user.role === Role.operations
-        ? { members: { some: { user_id: user.userId } } }
-        : {};
+const visibilityScope = async (user: IRequestUser): Promise<Prisma.ProjectWhereInput> => {
+    const scope = await resolveScope(user, "projects", "view");
+
+    switch (scope) {
+        case "all":
+            return {};
+        // A project has no owner, so "own" and "assigned" are the same reach
+        // here: the people on it. Mapped rather than left to fall through, so
+        // an agency that picks "own" gets the sensible answer instead of
+        // nothing.
+        case "assigned":
+        case "own":
+            return { members: { some: { user_id: user.userId } } };
+        case "none":
+        default:
+            // Matches no row, and the by-id read below therefore 404s. "None"
+            // has to mean none on BOTH paths - a list that hides a project
+            // while its id still answers is not a scope, it is a slower search.
+            return { id: { in: [] } };
+    }
+};
 
 const getAllProjects = async (
     user: IRequestUser,
@@ -38,7 +62,7 @@ const getAllProjects = async (
     const where: Prisma.ProjectWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
-        ...visibilityScope(user),
+        ...(await visibilityScope(user)),
         // Matched on NAME, case-insensitively, because a sidebar href is a
         // static string: a status id differs per agency so it cannot appear in
         // one, and category cannot tell Active from Review - both are
@@ -102,7 +126,7 @@ const getSingleProject = async (id: string, user: IRequestUser) => {
             id,
             organization_id: user.organizationId,
             deleted_at: null,
-            ...visibilityScope(user),
+            ...(await visibilityScope(user)),
         },
         include: {
             status: { select: { id: true, name: true, category: true, sort_order: true } },

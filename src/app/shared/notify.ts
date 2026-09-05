@@ -1,7 +1,6 @@
 import { Prisma } from "../../generated/prisma/client.js";
 import { NotificationEvent, Role, UserStatus } from "../../generated/prisma/enums.js";
 import { IRequestUser } from "../interfaces/requestUser.interface.js";
-import { prisma } from "../lib/prisma.js";
 
 /**
  * Telling one person something happened.

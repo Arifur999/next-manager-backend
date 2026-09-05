@@ -1,9 +1,9 @@
 import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { Role } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { resolveScope } from "../../shared/resolveScope.js";
 import {
     ICreateProjectLinkPayload,
     IUpdateProjectLinkPayload,
@@ -29,11 +29,38 @@ const SELECT = {
     project: { select: { id: true, name: true, code: true } },
 } as const;
 
-/** Operations sees only the projects it is actually on. Everybody else, all. */
-const visibilityScope = (user: IRequestUser): Prisma.ProjectWhereInput =>
-    user.role === Role.operations
-        ? { members: { some: { user_id: user.userId } } }
-        : {};
+/**
+ * How far this person's reach goes over projects, and therefore over the links
+ * hanging off them.
+ *
+ * Read from the permission rows now rather than from `role === operations`, and
+ * read from the PROJECTS module rather than a module of its own: a link is not
+ * a thing somebody is given separate access to, it is a pointer that belongs to
+ * a project. Two settings for one answer would be two things to keep in step.
+ */
+const visibilityScope = async (user: IRequestUser): Promise<Prisma.ProjectWhereInput> => {
+    const scope = await resolveScope(user, "projects", "view");
+
+    switch (scope) {
+        case "all":
+            return {};
+        case "assigned":
+        case "own":
+            return { members: { some: { user_id: user.userId } } };
+        case "none":
+        default:
+            return { id: { in: [] } };
+    }
+};
+
+/** The same reach, expressed against the link rows themselves. */
+const linkScope = async (user: IRequestUser): Promise<Prisma.ProjectLinkWhereInput> => {
+    const project = await visibilityScope(user);
+    // An empty clause means "everything", so it must NOT be nested — wrapping
+    // {} in { project: {} } would still be everything, but the "none" case
+    // wrapped the same way would silently match every link instead of none.
+    return Object.keys(project).length === 0 ? {} : { project };
+};
 
 /**
  * The project, if this person may see it at all.
@@ -48,7 +75,7 @@ const assertProject = async (projectId: string, user: IRequestUser) => {
             id: projectId,
             organization_id: user.organizationId,
             deleted_at: null,
-            ...visibilityScope(user),
+            ...(await visibilityScope(user)),
         },
         select: { id: true },
     });
@@ -63,12 +90,10 @@ const getAll = async (user: IRequestUser, filters: { projectId?: string }) => {
         organization_id: user.organizationId,
         deleted_at: null,
         ...(filters.projectId ? { project_id: filters.projectId } : {}),
-        // Without a project filter, operations would otherwise see every link in
-        // the company - the scope has to be on the query, not on the caller
-        // remembering to pass a filter.
-        ...(user.role === Role.operations
-            ? { project: { members: { some: { user_id: user.userId } } } }
-            : {}),
+        // Without a project filter, a narrowed person would otherwise see every
+        // link in the company - the scope has to be on the query, not on the
+        // caller remembering to pass a filter.
+        ...(await linkScope(user)),
     };
 
     return prisma.projectLink.findMany({
@@ -100,9 +125,7 @@ const findOwned = async (id: string, user: IRequestUser) => {
             id,
             organization_id: user.organizationId,
             deleted_at: null,
-            ...(user.role === Role.operations
-                ? { project: { members: { some: { user_id: user.userId } } } }
-                : {}),
+            ...(await linkScope(user)),
         },
         select: { id: true, label: true },
     });

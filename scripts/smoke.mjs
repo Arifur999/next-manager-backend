@@ -4971,12 +4971,12 @@ r = await call("GET", "/permissions");
 check("the grid reads", r.status === 200, `${r.status} ${r.json.message}`);
 check(
   "carrying the catalogue",
-  (r.json.data?.catalogue?.modules ?? []).length === 12,
+  (r.json.data?.catalogue?.modules ?? []).length === 14,
   `${(r.json.data?.catalogue?.modules ?? []).length} modules`
 );
 check(
   "and a row for every square",
-  (r.json.data?.role_permissions ?? []).length === 168,
+  (r.json.data?.role_permissions ?? []).length === 200,
   `${(r.json.data?.role_permissions ?? []).length}`
 );
 // An empty list and "nobody asked" are different answers, so one of them is

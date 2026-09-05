@@ -31,10 +31,18 @@ import { Role } from "../../generated/prisma/enums.js";
  * operations to their own rows today. Leaving them out would mean the data
  * could never replace the code in those four, which is the whole point — so
  * they are here.
+ *
+ * Leads and invoices joined them when the old flat permission list retired.
+ * Both had a name on that list, and neither could be folded into a module
+ * that already existed: invoices are not the accounts module (sales bills a
+ * client but never opens the ledger), and leads are not the clients module
+ * (turning off client editing would silently stop the pipeline).
  */
 
 export const MODULES = [
     "clients",
+    "leads",
+    "invoices",
     "services",
     "projects",
     "tasks",
@@ -77,6 +85,8 @@ export const isScope = (value: string): value is PermissionScope =>
  */
 export const MODULE_ACTIONS: Record<PermissionModule, readonly PermissionAction[]> = {
     clients: ["view", "create", "edit", "delete"],
+    leads: ["view", "create", "edit", "delete"],
+    invoices: ["view", "create", "edit", "delete"],
     services: ["view", "create", "edit", "delete"],
     projects: ["view", "create", "edit", "delete", "assign"],
     tasks: ["view", "create", "edit", "delete", "assign"],
@@ -109,6 +119,8 @@ const ADMIN: RoleDefaults = {
     // cased, so the screen shows a real row for every square and an agency can
     // see what it is changing.
     clients: { view: "all", create: "all", edit: "all", delete: "all" },
+    leads: { view: "all", create: "all", edit: "all", delete: "all" },
+    invoices: { view: "all", create: "all", edit: "all", delete: "all" },
     services: { view: "all", create: "all", edit: "all", delete: "all" },
     projects: { view: "all", create: "all", edit: "all", delete: "all", assign: "all" },
     tasks: { view: "all", create: "all", edit: "all", delete: "all", assign: "all" },
@@ -124,6 +136,10 @@ const ADMIN: RoleDefaults = {
 
 const SALES: RoleDefaults = {
     clients: { view: "all", create: "all", edit: "all", delete: "none" },
+    // The pipeline is theirs, but throwing a lead away is not: deleting either
+    // is an admin route today and stays one.
+    leads: { view: "all", create: "all", edit: "all", delete: "none" },
+    invoices: { view: "all", create: "all", edit: "all", delete: "none" },
     services: { view: "all", create: "all", edit: "all", delete: "none" },
     // Sales opens a project and hands it over; running it is somebody else's.
     projects: { view: "all", create: "all", edit: "none", delete: "none", assign: "none" },
@@ -141,6 +157,9 @@ const SALES: RoleDefaults = {
 
 const PROJECT_MANAGER: RoleDefaults = {
     clients: { view: "all", create: "none", edit: "none", delete: "none" },
+    // Neither the pipeline nor the billing reaches delivery today.
+    leads: { view: "none", create: "none", edit: "none", delete: "none" },
+    invoices: { view: "none", create: "none", edit: "none", delete: "none" },
     // Read, not shaped: they pick what a project delivers, the seller decides
     // what is on offer.
     services: { view: "all", create: "none", edit: "none", delete: "none" },
@@ -160,6 +179,8 @@ const PROJECT_MANAGER: RoleDefaults = {
 const OPERATIONS: RoleDefaults = {
     // Only the clients whose projects they are on.
     clients: { view: "assigned", create: "none", edit: "none", delete: "none" },
+    leads: { view: "none", create: "none", edit: "none", delete: "none" },
+    invoices: { view: "none", create: "none", edit: "none", delete: "none" },
     services: { view: "all", create: "none", edit: "none", delete: "none" },
     projects: { view: "assigned", create: "none", edit: "none", delete: "none", assign: "none" },
     // Their own tasks, and only the status and description on them.

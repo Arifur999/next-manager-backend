@@ -16,6 +16,44 @@ npm run dev                 # http://localhost:5000
 `ACCESS_TOKEN_SECRET` must match the frontend's `JWT_ACCESS_SECRET` — the
 Next.js proxy verifies the access token locally before letting a route render.
 
+## Running the whole thing in Docker
+
+Four containers behind one port: nginx terminates TLS and is the only thing
+published, and Next, this API and Postgres talk over a private network.
+
+It builds the web app from `../naxified`, so the two repositories have to sit
+side by side — which is how they are cloned.
+
+```bash
+cp .env.docker.example .env.docker      # then fill it in
+
+# nginx will not start without a certificate. For a local run:
+mkdir -p docker/nginx/certs
+openssl req -x509 -newkey rsa:2048 -nodes -days 365   -keyout docker/nginx/certs/privkey.pem   -out    docker/nginx/certs/fullchain.pem   -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost"
+
+docker compose --env-file .env.docker up -d --build
+```
+
+**`--env-file` is not optional.** Without it compose substitutes from `.env`,
+which is the development environment — its `DATABASE_URL` points at localhost,
+and inside a container that is the container.
+
+**TLS is not optional either.** This API sets its auth cookies with
+`secure: isProduction`, and a browser discards a Secure cookie over plain
+http — so a production build served on http answers 200 to a login and then
+bounces every page back to it, which reads like a broken login form rather than
+a missing certificate.
+
+Migrations run at container start, before the server accepts a connection, so a
+deploy needs no separate migration step. The runner takes a Postgres advisory
+lock first, so several replicas starting together is safe.
+
+| | |
+|---|---|
+| logs | `docker compose --env-file .env.docker logs -f api` |
+| stop | `docker compose --env-file .env.docker down` |
+| stop and wipe the database | `… down -v` |
+
 ## Layout
 
 ```

@@ -4,3 +4,9 @@ dist
 .env.local
 src/generated
 .admin-password.txt
+
+# The filled-in compose environment. .env.docker.example is the template.
+.env.docker
+
+# Private keys. Never.
+docker/nginx/certs/

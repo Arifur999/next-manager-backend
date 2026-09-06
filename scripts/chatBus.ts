@@ -12,7 +12,7 @@
  * Run:  npm run test:chat-bus   (with the usual server up on 5000)
  */
 
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { WebSocket } from "ws";
 
 const PRIMARY = "http://localhost:5000";
@@ -87,9 +87,40 @@ second.stderr?.on("data", (chunk: Buffer) => {
     secondLog += chunk.toString();
 });
 
+/**
+ * Kill the second instance, and mean it.
+ *
+ * `shell: true` puts a cmd.exe between this process and node on Windows, and
+ * child.kill() kills only that wrapper - so the server kept listening on 5099
+ * after every run, and the NEXT run died on EADDRINUSE. The failure looked
+ * like the chat bus was broken; it was this line.
+ *
+ * taskkill /T takes the tree, which is the wrapper and the node under it.
+ */
 const stop = () => {
-    if (!second.killed) second.kill();
+    if (second.killed || second.exitCode !== null) return;
+
+    if (process.platform === "win32" && second.pid) {
+        try {
+            execFileSync("taskkill", ["/PID", String(second.pid), "/T", "/F"], {
+                stdio: "ignore",
+            });
+            return;
+        } catch {
+            // Already gone, or taskkill is unavailable - fall through to the
+            // portable path rather than leaving it running.
+        }
+    }
+
+    second.kill();
 };
+
+// However this script ends, including Ctrl-C, the child goes with it.
+process.on("exit", stop);
+process.on("SIGINT", () => {
+    stop();
+    process.exit(130);
+});
 
 // Wait for it to be both listening AND on the bus. Listening alone is not
 // enough: a socket served by a process that cannot hear the bus yet would be a

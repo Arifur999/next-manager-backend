@@ -24,16 +24,28 @@ const login = catchAsync(async (req: Request, res: Response) => {
         userAgent: req.get("user-agent"),
     });
 
-    // The tokens go into httpOnly cookies AND the body: the browser client
-    // relies on the cookies, while a non-browser caller (mobile, scripts) reads
-    // them from the response.
+    // Cookies ONLY. The tokens used to be in the body as well, so that a
+    // non-browser caller could read them - but a body is readable by script
+    // and an httpOnly cookie is not, and that difference is the entire point
+    // of the flag. With them in the body, one XSS could call /auth/refresh and
+    // walk off with a seven-day refresh token that httpOnly was supposed to
+    // put out of reach.
+    //
+    // Making it opt-in would not have helped: an opt-in is part of the
+    // request, and script that can make a request can set it. The only version
+    // of this that holds is unconditional.
+    //
+    // Nothing is lost. A non-browser client reads Set-Cookie from this same
+    // response - curl, mobile HTTP stacks and scripts all can - so the tokens
+    // are exactly as available as they were, to everyone except script running
+    // in somebody else's page.
     cookieUtils.setAuthCookies(res, accessToken, refreshToken);
 
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
         message: "Logged in successfully",
-        data: { accessToken, refreshToken, user },
+        data: { user },
     });
 });
 
@@ -43,11 +55,15 @@ const refreshToken = catchAsync(async (req: Request, res: Response) => {
 
     cookieUtils.setAuthCookies(res, result.accessToken, result.refreshToken);
 
+    // Cookies only, for the reason in login above - and this endpoint is the
+    // one that made it urgent. It mints a fresh refresh token from a cookie
+    // the caller never has to read, so returning it in the body handed script
+    // a credential it could not otherwise reach.
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
         message: "Token refreshed successfully",
-        data: result,
+        data: null,
     });
 });
 

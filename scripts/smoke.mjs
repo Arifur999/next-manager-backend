@@ -4972,6 +4972,29 @@ check(
 cookie = adminCookie;
 
 
+
+console.log("");
+console.log("--- tokens stay out of the body ---");
+//
+// httpOnly means script cannot read the cookie. Returning the same token in
+// the response body hands it straight back, and /auth/refresh is the sharp
+// end: it mints a seven-day credential from a cookie the caller never reads,
+// so a body copy is a credential an XSS could walk off with.
+
+r = await call("POST", "/auth/login", { email, password: "Passw0rd123" });
+check("login still works", r.status === 200, `${r.status} ${r.json.message}`);
+check("and still sets cookies", cookie.includes("accessToken"), cookie.slice(0, 30));
+check("but hands back no access token", !("accessToken" in (r.json.data ?? {})));
+check("and no refresh token", !("refreshToken" in (r.json.data ?? {})));
+check("the user is still there to render with", Boolean(r.json.data?.user?.email));
+
+r = await call("POST", "/auth/refresh-token");
+check("refresh still works", r.status === 200, `${r.status} ${r.json.message}`);
+check("and rotates the cookies", cookie.includes("accessToken"));
+check("with nothing in the body at all", r.json.data === null, JSON.stringify(r.json.data));
+
+cookie = adminCookie;
+
 console.log("\n--- the permission grid ---");
 //
 // The screen behind this is a table, so the read hands back the whole table at

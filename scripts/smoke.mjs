@@ -19,7 +19,11 @@ const call = async (method, path, body) => {
   }
 
   const json = await res.json().catch(() => ({}));
-  return { status: res.status, json };
+  // setCookie as well: "did this response issue cookies" is a different
+  // question from "is the value different now", and only the first one is
+  // answerable. Two tokens signed in the same second share an iat and come
+  // out byte-identical.
+  return { status: res.status, json, setCookie };
 };
 
 const check = (label, condition, detail = "") => {
@@ -4981,16 +4985,31 @@ console.log("--- tokens stay out of the body ---");
 // end: it mints a seven-day credential from a cookie the caller never reads,
 // so a body copy is a credential an XSS could walk off with.
 
+// Asserted on the RESPONSE, not on the module-level `cookie`. That variable
+// already holds the admin session, and `call` only overwrites it when a
+// response carries Set-Cookie - so includes("accessToken") on it passed
+// whether or not login set anything, a check that cannot fail and therefore
+// cannot catch the outage this section exists to prevent.
 r = await call("POST", "/auth/login", { email, password: "Passw0rd123" });
 check("login still works", r.status === 200, `${r.status} ${r.json.message}`);
-check("and still sets cookies", cookie.includes("accessToken"), cookie.slice(0, 30));
+check(
+  "and issues both session cookies",
+  r.setCookie.filter((c) => /^(access|refresh)Token=/.test(c)).length === 2,
+  `${r.setCookie.length} Set-Cookie header(s)`
+);
 check("but hands back no access token", !("accessToken" in (r.json.data ?? {})));
 check("and no refresh token", !("refreshToken" in (r.json.data ?? {})));
 check("the user is still there to render with", Boolean(r.json.data?.user?.email));
 
 r = await call("POST", "/auth/refresh-token");
 check("refresh still works", r.status === 200, `${r.status} ${r.json.message}`);
-check("and rotates the cookies", cookie.includes("accessToken"));
+check(
+  // The frontend has nothing else to go on: its server action reads these
+  // headers and re-issues them to the browser. No headers, no session.
+  "and re-issues both cookies",
+  r.setCookie.filter((c) => /^(access|refresh)Token=/.test(c)).length === 2,
+  `${r.setCookie.length} Set-Cookie header(s)`
+);
 check("with nothing in the body at all", r.json.data === null, JSON.stringify(r.json.data));
 
 cookie = adminCookie;

@@ -9,6 +9,7 @@ import { assertAccount, reverseLedgerEntries, writeLedgerEntry } from "../../sha
 import { dateRangeWhere, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateTeamPayoutPayload, IUpdateTeamPayoutPayload } from "./teamPayout.validation.js";
 import { toDateOnly } from "../../shared/dates.js";
+import { assertOwnMember, assertOwnProject } from "../../shared/ownership.js";
 
 /**
  * What the agency pays its own people, in BDT.
@@ -24,21 +25,8 @@ const assertReferences = async (
     payload: { user_id?: string; project_id?: string | null },
     user: IRequestUser
 ) => {
-    if (payload.user_id) {
-        const member = await tx.user.findFirst({
-            where: { id: payload.user_id, organization_id: user.organizationId, deleted_at: null },
-            select: { id: true },
-        });
-        if (!member) throw new AppError(status.NOT_FOUND, "Team member not found");
-    }
-
-    if (payload.project_id) {
-        const project = await tx.project.findFirst({
-            where: { id: payload.project_id, organization_id: user.organizationId, deleted_at: null },
-            select: { id: true },
-        });
-        if (!project) throw new AppError(status.NOT_FOUND, "Project not found");
-    }
+    await assertOwnMember(tx, payload.user_id, user.organizationId);
+    await assertOwnProject(tx, payload.project_id, user.organizationId);
 };
 
 const getAllPayouts = async (

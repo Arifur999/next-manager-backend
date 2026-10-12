@@ -6,8 +6,7 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { resolveScope } from "../../shared/resolveScope.js";
 import { assertProjectAvailable } from "../../shared/planLimits.js";
 import { prisma } from "../../lib/prisma.js";
-import { assertOwnService } from "../../shared/assertOwnService.js";
-import { assertOwnStatus, defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
+import { defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
 import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import {
@@ -16,6 +15,7 @@ import {
     IUpdateProjectPayload,
 } from "./project.validation.js";
 import { toDateOnly } from "../../shared/dates.js";
+import { assertOwnService, assertOwnStatus } from "../../shared/ownership.js";
 
 /**
  * Projects the caller may see.
@@ -241,7 +241,7 @@ const createProject = async (payload: ICreateProjectPayload, user: IRequestUser)
             throw new AppError(status.CONFLICT, "A project with this code already exists");
         }
 
-        await assertOwnService(tx, payload.service_id, user);
+        await assertOwnService(tx, payload.service_id, user.organizationId);
 
         if (payload.status_id) {
             await assertOwnStatus(tx, payload.status_id, user.organizationId, WorkflowKind.project);
@@ -303,7 +303,7 @@ const updateProject = async (id: string, payload: IUpdateProjectPayload, user: I
         if (!client) throw new AppError(status.NOT_FOUND, "Client not found");
     }
 
-    await assertOwnService(prisma, payload.service_id, user);
+    await assertOwnService(prisma, payload.service_id, user.organizationId);
 
     if (payload.status_id) {
         await assertOwnStatus(prisma, payload.status_id, user.organizationId, WorkflowKind.project);

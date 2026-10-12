@@ -8,6 +8,7 @@ import { prisma } from "../../lib/prisma.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { decryptSecret, encryptSecret, maskSecret } from "../../utils/crypto.js";
 import { ICreateCredentialPayload, IUpdateCredentialPayload } from "./vault.validation.js";
+import { assertOwnClient, assertOwnProject } from "../../shared/ownership.js";
 
 /**
  * Client credentials.
@@ -217,21 +218,8 @@ const assertReferences = async (
     payload: { client_id?: string | null; project_id?: string | null },
     user: IRequestUser
 ) => {
-    if (payload.client_id) {
-        const client = await tx.client.findFirst({
-            where: { id: payload.client_id, organization_id: user.organizationId, deleted_at: null },
-            select: { id: true },
-        });
-        if (!client) throw new AppError(status.NOT_FOUND, "Client not found");
-    }
-
-    if (payload.project_id) {
-        const project = await tx.project.findFirst({
-            where: { id: payload.project_id, organization_id: user.organizationId, deleted_at: null },
-            select: { id: true },
-        });
-        if (!project) throw new AppError(status.NOT_FOUND, "Project not found");
-    }
+    await assertOwnClient(tx, payload.client_id, user.organizationId);
+    await assertOwnProject(tx, payload.project_id, user.organizationId);
 };
 
 const createCredential = async (

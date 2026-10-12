@@ -10,6 +10,7 @@ import {
     PERCENTAGE_METRICS,
 } from "./kpiTarget.validation.js";
 import { toDateOnly } from "../../shared/dates.js";
+import { assertOwnMember } from "../../shared/ownership.js";
 
 /**
  * The numbers somebody committed to.
@@ -64,17 +65,6 @@ const assertValue = (metric: KpiMetric, value: number) => {
     }
 };
 
-const assertUserInOrg = async (userId: string, user: IRequestUser) => {
-    const member = await prisma.user.findFirst({
-        where: { id: userId, organization_id: user.organizationId, deleted_at: null },
-        select: { id: true },
-    });
-
-    if (!member) {
-        throw new AppError(status.NOT_FOUND, "User not found");
-    }
-};
-
 const getAllTargets = async (
     user: IRequestUser,
     filters: { userId?: string; metric?: KpiMetric; period?: KpiPeriod }
@@ -102,9 +92,7 @@ const createTarget = async (payload: ICreateKpiTargetPayload, user: IRequestUser
     assertPeriodStart(payload.period, periodStart);
     assertValue(payload.metric, payload.target_value);
 
-    if (payload.user_id) {
-        await assertUserInOrg(payload.user_id, user);
-    }
+    await assertOwnMember(prisma, payload.user_id, user.organizationId, "User not found");
 
     // Postgres treats NULLs as distinct, so the unique index does NOT catch a
     // second agency-wide target for the same metric and period. Checked here

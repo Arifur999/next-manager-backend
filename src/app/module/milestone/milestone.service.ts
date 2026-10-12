@@ -11,6 +11,7 @@ import {
     IUpdateMilestonePayload,
 } from "./milestone.validation.js";
 import { toDateOnly } from "../../shared/dates.js";
+import { assertOwnProject } from "../../shared/ownership.js";
 
 /**
  * Dated promises inside a project.
@@ -45,17 +46,6 @@ const findOwned = async (id: string, user: IRequestUser) => {
     }
 
     return milestone;
-};
-
-const assertProject = async (projectId: string, user: IRequestUser) => {
-    const project = await prisma.project.findFirst({
-        where: { id: projectId, organization_id: user.organizationId, deleted_at: null },
-        select: { id: true },
-    });
-
-    if (!project) {
-        throw new AppError(status.NOT_FOUND, "Project not found");
-    }
 };
 
 const getAllMilestones = async (
@@ -99,7 +89,7 @@ const getAllMilestones = async (
 };
 
 const createMilestone = async (payload: ICreateMilestonePayload, user: IRequestUser) => {
-    await assertProject(payload.project_id, user);
+    await assertOwnProject(prisma, payload.project_id, user.organizationId);
 
     return prisma.projectMilestone.create({
         data: {

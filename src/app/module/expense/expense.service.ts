@@ -9,6 +9,7 @@ import { assertAccount, reverseLedgerEntries, writeLedgerEntry } from "../../sha
 import { dateRangeWhere, escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateExpensePayload, IUpdateExpensePayload } from "./expense.validation.js";
 import { toDateOnly } from "../../shared/dates.js";
+import { assertOwnProject } from "../../shared/ownership.js";
 
 /**
  * Money out, always BDT - that is the currency the agency actually spends in.
@@ -31,13 +32,7 @@ const assertReferences = async (
         if (!category) throw new AppError(status.NOT_FOUND, "Expense category not found");
     }
 
-    if (payload.project_id) {
-        const project = await tx.project.findFirst({
-            where: { id: payload.project_id, organization_id: user.organizationId, deleted_at: null },
-            select: { id: true },
-        });
-        if (!project) throw new AppError(status.NOT_FOUND, "Project not found");
-    }
+    await assertOwnProject(tx, payload.project_id, user.organizationId);
 };
 
 const getAllExpenses = async (user: IRequestUser, options: ListOptions = {}) => {

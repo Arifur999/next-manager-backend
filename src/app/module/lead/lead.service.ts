@@ -7,6 +7,7 @@ import { prisma } from "../../lib/prisma.js";
 import { OPEN_LEAD_STAGES, recordStageMove } from "../../shared/leadStage.js";
 import { escapeLikeTerm, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateLeadPayload, IUpdateLeadPayload } from "./lead.validation.js";
+import { assertOwnMember } from "../../shared/ownership.js";
 
 /**
  * The sales pipeline.
@@ -95,32 +96,10 @@ const assertSource = async (
     }
 };
 
-/**
- * An owner has to be somebody on this team.
- *
- * The foreign key proves the user row exists, never that it is ours.
- */
-const assertOwner = async (
-    tx: Prisma.TransactionClient,
-    ownerId: string | null | undefined,
-    user: IRequestUser
-) => {
-    if (!ownerId) return;
-
-    const member = await tx.user.findFirst({
-        where: { id: ownerId, organization_id: user.organizationId, deleted_at: null },
-        select: { id: true },
-    });
-
-    if (!member) {
-        throw new AppError(status.NOT_FOUND, "That person is not on your team");
-    }
-};
-
 const createLead = async (payload: ICreateLeadPayload, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
         await assertSource(tx, payload.source_id, user);
-        await assertOwner(tx, payload.owner_id, user);
+        await assertOwnMember(tx, payload.owner_id, user.organizationId, "That person is not on your team");
 
         const lead = await tx.lead.create({
             data: {
@@ -163,7 +142,7 @@ const updateLead = async (id: string, payload: IUpdateLeadPayload, user: IReques
         }
 
         await assertSource(tx, payload.source_id, user);
-        await assertOwner(tx, payload.owner_id, user);
+        await assertOwnMember(tx, payload.owner_id, user.organizationId, "That person is not on your team");
 
         const updated = await tx.lead.update({ where: { id }, data: payload });
 

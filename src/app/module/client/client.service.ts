@@ -8,6 +8,7 @@ import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateClientPayload, IUpdateClientPayload } from "./client.validation.js";
+import { assertOwnMember } from "../../shared/ownership.js";
 
 /**
  * Clients the caller may see.
@@ -25,29 +26,6 @@ import { ICreateClientPayload, IUpdateClientPayload } from "./client.validation.
  * now say something else. It can never say another agency: organization_id sits
  * above this in the same where clause and no scope removes it.
  */
-/**
- * An owner has to be somebody on this team.
- *
- * The foreign key proves the user row exists, never that it is ours - so
- * without this an admin could file a client under another agency's employee.
- */
-const assertOwn = async (
-    tx: Prisma.TransactionClient | typeof prisma,
-    ownerId: string | null | undefined,
-    user: IRequestUser
-) => {
-    if (!ownerId) return;
-
-    const member = await tx.user.findFirst({
-        where: { id: ownerId, organization_id: user.organizationId, deleted_at: null },
-        select: { id: true },
-    });
-
-    if (!member) {
-        throw new AppError(status.NOT_FOUND, "That person is not on your team");
-    }
-};
-
 const visibilityScope = async (user: IRequestUser): Promise<Prisma.ClientWhereInput> => {
     const scope = await resolveScope(user, "clients", "view");
 
@@ -210,7 +188,7 @@ const getClientFinancials = async (id: string, user: IRequestUser) => {
 // create - the row on its own would not need one.
 const createClient = async (payload: ICreateClientPayload, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
-        await assertOwn(tx, payload.owner_id, user);
+        await assertOwnMember(tx, payload.owner_id, user.organizationId, "That person is not on your team");
 
         const client = await tx.client.create({
             data: {
@@ -251,7 +229,7 @@ const updateClient = async (id: string, payload: IUpdateClientPayload, user: IRe
 
     // Reassigning is how a client moves between salespeople, and how the
     // ones that predate this column get an owner at all.
-    await assertOwn(prisma, payload.owner_id, user);
+    await assertOwnMember(prisma, payload.owner_id, user.organizationId, "That person is not on your team");
 
     return prisma.client.update({ where: { id }, data: payload });
 };

@@ -10,7 +10,7 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { resolveScope } from "../../shared/resolveScope.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
-import { assertOwnStatus, defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
+import { defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
 import { notify } from "../../shared/notify.js";
 import {
     dateRangeWhere,
@@ -20,6 +20,7 @@ import {
 } from "../../shared/listQuery.js";
 import { ICreateTaskPayload, IUpdateTaskPayload } from "./task.validation.js";
 import { toDateOnly } from "../../shared/dates.js";
+import { assertOwnMember, assertOwnProject, assertOwnStatus } from "../../shared/ownership.js";
 
 
 const INCLUDE = {
@@ -36,21 +37,8 @@ const assertReferences = async (
     payload: { project_id?: string; assignee_id?: string | null },
     user: IRequestUser
 ) => {
-    if (payload.project_id) {
-        const project = await tx.project.findFirst({
-            where: { id: payload.project_id, organization_id: user.organizationId, deleted_at: null },
-            select: { id: true },
-        });
-        if (!project) throw new AppError(status.NOT_FOUND, "Project not found");
-    }
-
-    if (payload.assignee_id) {
-        const assignee = await tx.user.findFirst({
-            where: { id: payload.assignee_id, organization_id: user.organizationId, deleted_at: null },
-            select: { id: true },
-        });
-        if (!assignee) throw new AppError(status.NOT_FOUND, "Assignee not found");
-    }
+    await assertOwnProject(tx, payload.project_id, user.organizationId);
+    await assertOwnMember(tx, payload.assignee_id, user.organizationId, "Assignee not found");
 };
 
 /**

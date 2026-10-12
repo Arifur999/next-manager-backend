@@ -8,6 +8,8 @@ interface IResponseData<T> {
         page: number;
         limit: number;
         total: number;
+        totalPages: number;
+        /** @deprecated Same value as totalPages; removed once the web app has moved over. */
         totalPage: number;
         /**
          * Sums that belong to the whole filtered list rather than the page of

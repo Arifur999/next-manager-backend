@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import { SubscriptionStatus } from "../../../generated/prisma/enums.js";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { PlatformService } from "./platform.service.js";
+import { idOf, paramsOf, organizationIdParams } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const getPlans = catchAsync(async (_req: Request, res: Response) => {
     const result = await PlatformService.getPlans();
@@ -17,7 +18,7 @@ const getPlans = catchAsync(async (_req: Request, res: Response) => {
 });
 
 const createPlan = catchAsync(async (req: Request, res: Response) => {
-    const result = await PlatformService.createPlan(req.body, req.user as IRequestUser);
+    const result = await PlatformService.createPlan(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -28,9 +29,9 @@ const createPlan = catchAsync(async (req: Request, res: Response) => {
 
 const updatePlan = catchAsync(async (req: Request, res: Response) => {
     const result = await PlatformService.updatePlan(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -61,9 +62,9 @@ const getCompanies = catchAsync(async (req: Request, res: Response) => {
 
 const setSubscription = catchAsync(async (req: Request, res: Response) => {
     const result = await PlatformService.setSubscription(
-        req.params.organizationId as string,
+        paramsOf(req, organizationIdParams).organizationId,
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -74,7 +75,7 @@ const setSubscription = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getMySubscription = catchAsync(async (req: Request, res: Response) => {
-    const result = await PlatformService.getMySubscription(req.user as IRequestUser);
+    const result = await PlatformService.getMySubscription(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -84,7 +85,7 @@ const getMySubscription = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createCompany = catchAsync(async (req: Request, res: Response) => {
-    const result = await PlatformService.createCompany(req.body, req.user as IRequestUser);
+    const result = await PlatformService.createCompany(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -132,9 +133,9 @@ const getAdmins = catchAsync(async (_req: Request, res: Response) => {
 
 const setPermissions = catchAsync(async (req: Request, res: Response) => {
     const result = await PlatformService.setPermissions(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,

@@ -26,6 +26,7 @@ import {
     updatePlatformSettingsZodSchema,
     updatePlatformExpenseZodSchema,
 } from "./platform.validation.js";
+import { idParams, tokenParams, organizationIdParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -55,7 +56,7 @@ router.patch(
     "/plans/:id",
     checkAuth(Role.super_admin),
     requirePermission("platform.plans.manage"),
-    validateRequest(updatePlanZodSchema),
+    validateRequest({ params: idParams, body: updatePlanZodSchema }),
     PlatformController.updatePlan
 );
 
@@ -99,7 +100,7 @@ router.patch(
     "/companies/:organizationId/subscription",
     checkAuth(Role.super_admin),
     requirePermission("platform.companies.manage"),
-    validateRequest(setSubscriptionZodSchema),
+    validateRequest({ params: organizationIdParams, body: setSubscriptionZodSchema }),
     PlatformController.setSubscription
 );
 
@@ -115,7 +116,7 @@ router.patch(
     "/admins/:id/permissions",
     checkAuth(Role.super_admin),
     requirePermission("platform.admins.manage"),
-    validateRequest(setPlatformPermissionsZodSchema),
+    validateRequest({ params: idParams, body: setPlatformPermissionsZodSchema }),
     PlatformController.setPermissions
 );
 
@@ -138,6 +139,7 @@ router.delete(
     "/invites/:id",
     checkAuth(Role.super_admin),
     requirePermission("platform.admins.manage"),
+    validateRequest({ params: idParams }),
     PlatformInviteController.revokeInvite
 );
 
@@ -145,12 +147,14 @@ router.post(
     "/admins/:id/approve",
     checkAuth(Role.super_admin),
     requirePermission("platform.admins.manage"),
+    validateRequest({ params: idParams }),
     PlatformInviteController.approveAdmin
 );
 router.delete(
     "/admins/:id",
     checkAuth(Role.super_admin),
     requirePermission("platform.admins.manage"),
+    validateRequest({ params: idParams }),
     PlatformInviteController.removeAdmin
 );
 
@@ -186,13 +190,14 @@ router.patch(
     "/expenses/:id",
     checkAuth(Role.super_admin),
     requirePermission("platform.expenses.manage"),
-    validateRequest(updatePlatformExpenseZodSchema),
+    validateRequest({ params: idParams, body: updatePlatformExpenseZodSchema }),
     PlatformFinanceController.updateExpense
 );
 router.delete(
     "/expenses/:id",
     checkAuth(Role.super_admin),
     requirePermission("platform.expenses.manage"),
+    validateRequest({ params: idParams }),
     PlatformFinanceController.deleteExpense
 );
 
@@ -219,7 +224,7 @@ router.patch(
     "/announcements/:id",
     checkAuth(Role.super_admin),
     requirePermission("platform.campaigns.send"),
-    validateRequest(updateAnnouncementZodSchema),
+    validateRequest({ params: idParams, body: updateAnnouncementZodSchema }),
     AnnouncementController.updateAnnouncement
 );
 // Its own endpoint rather than a flag on the edit: this is the one that cannot
@@ -228,12 +233,14 @@ router.post(
     "/announcements/:id/publish",
     checkAuth(Role.super_admin),
     requirePermission("platform.campaigns.send"),
+    validateRequest({ params: idParams }),
     AnnouncementController.publishAnnouncement
 );
 router.delete(
     "/announcements/:id",
     checkAuth(Role.super_admin),
     requirePermission("platform.campaigns.send"),
+    validateRequest({ params: idParams }),
     AnnouncementController.deleteAnnouncement
 );
 
@@ -282,6 +289,7 @@ router.delete(
     "/agency-invites/:id",
     checkAuth(Role.super_admin),
     requirePermission("platform.companies.manage"),
+    validateRequest({ params: idParams }),
     AgencyInviteController.revokeInvite
 );
 
@@ -302,7 +310,7 @@ notificationRouter.get("/", checkAuth(), AnnouncementController.getMyAnnouncemen
 // would pull every body text across the wire to render one number.
 notificationRouter.get("/unread-count", checkAuth(), AnnouncementController.getUnreadCount);
 notificationRouter.post("/read-all", checkAuth(), AnnouncementController.markAllRead);
-notificationRouter.post("/:id/read", checkAuth(), AnnouncementController.markRead);
+notificationRouter.post("/:id/read", checkAuth(), validateRequest({ params: idParams }), AnnouncementController.markRead);
 
 export const NotificationRoutes = notificationRouter;
 
@@ -314,11 +322,11 @@ export const NotificationRoutes = notificationRouter;
 // mix, and a token for one can never be mistaken for the other.
 const publicRouter = Router();
 
-publicRouter.get("/:token", inviteTokenRateLimit, PlatformInviteController.getInviteByToken);
+publicRouter.get("/:token", inviteTokenRateLimit, validateRequest({ params: tokenParams }), PlatformInviteController.getInviteByToken);
 publicRouter.post(
     "/:token/accept",
     inviteTokenRateLimit,
-    validateRequest(acceptPlatformInviteZodSchema),
+    validateRequest({ params: tokenParams, body: acceptPlatformInviteZodSchema }),
     PlatformInviteController.acceptInvite
 );
 
@@ -333,11 +341,11 @@ export const PublicPlatformInviteRoutes = publicRouter;
 // different accounts.
 const agencyRouter = Router();
 
-agencyRouter.get("/:token", inviteTokenRateLimit, AgencyInviteController.getInviteByToken);
+agencyRouter.get("/:token", inviteTokenRateLimit, validateRequest({ params: tokenParams }), AgencyInviteController.getInviteByToken);
 agencyRouter.post(
     "/:token/accept",
     inviteTokenRateLimit,
-    validateRequest(acceptAgencyInviteZodSchema),
+    validateRequest({ params: tokenParams, body: acceptAgencyInviteZodSchema }),
     AgencyInviteController.acceptInvite
 );
 

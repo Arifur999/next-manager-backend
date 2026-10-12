@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { PlatformFinanceService } from "./platformFinance.service.js";
+import { idOf } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const range = (query: Record<string, unknown>) => ({
     from: typeof query.from === "string" ? query.from : undefined,
@@ -33,7 +34,7 @@ const getExpenses = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createExpense = catchAsync(async (req: Request, res: Response) => {
-    const result = await PlatformFinanceService.createExpense(req.body, req.user as IRequestUser);
+    const result = await PlatformFinanceService.createExpense(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -44,9 +45,9 @@ const createExpense = catchAsync(async (req: Request, res: Response) => {
 
 const updateExpense = catchAsync(async (req: Request, res: Response) => {
     const result = await PlatformFinanceService.updateExpense(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -58,8 +59,8 @@ const updateExpense = catchAsync(async (req: Request, res: Response) => {
 
 const deleteExpense = catchAsync(async (req: Request, res: Response) => {
     const result = await PlatformFinanceService.deleteExpense(
-        req.params.id as string,
-        req.user as IRequestUser
+        idOf(req),
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,

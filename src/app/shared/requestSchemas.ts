@@ -4,6 +4,8 @@ import z from "zod";
 /** `/:id` on every route that takes one. */
 export const idParams = z.object({ id: z.uuid("Invalid id") });
 
+export const organizationIdParams = z.object({ organizationId: z.uuid("Invalid company id") });
+
 export const projectIdParams = z.object({ projectId: z.uuid("Invalid project id") });
 
 export const userIdParams = z.object({ userId: z.uuid("Invalid user id") });

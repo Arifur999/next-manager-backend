@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { PlatformInviteService } from "./platformInvite.service.js";
+import { idOf, paramsOf, tokenParams } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const createInvite = catchAsync(async (req: Request, res: Response) => {
-    const result = await PlatformInviteService.createInvite(req.body, req.user as IRequestUser);
+    const result = await PlatformInviteService.createInvite(req.body, requireUser(req));
 
     // Says which actually happened. "Send them the link" when the mail went out
     // makes the operator do a job already done; "emailed" when it did not makes
@@ -33,8 +34,8 @@ const getInvites = catchAsync(async (_req: Request, res: Response) => {
 
 const revokeInvite = catchAsync(async (req: Request, res: Response) => {
     const result = await PlatformInviteService.revokeInvite(
-        req.params.id as string,
-        req.user as IRequestUser
+        idOf(req),
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -45,7 +46,7 @@ const revokeInvite = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getInviteByToken = catchAsync(async (req: Request, res: Response) => {
-    const result = await PlatformInviteService.getInviteByToken(req.params.token as string);
+    const result = await PlatformInviteService.getInviteByToken(paramsOf(req, tokenParams).token);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -55,7 +56,7 @@ const getInviteByToken = catchAsync(async (req: Request, res: Response) => {
 });
 
 const acceptInvite = catchAsync(async (req: Request, res: Response) => {
-    const result = await PlatformInviteService.acceptInvite(req.params.token as string, req.body);
+    const result = await PlatformInviteService.acceptInvite(paramsOf(req, tokenParams).token, req.body);
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -66,8 +67,8 @@ const acceptInvite = catchAsync(async (req: Request, res: Response) => {
 
 const approveAdmin = catchAsync(async (req: Request, res: Response) => {
     const result = await PlatformInviteService.approveAdmin(
-        req.params.id as string,
-        req.user as IRequestUser
+        idOf(req),
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -79,8 +80,8 @@ const approveAdmin = catchAsync(async (req: Request, res: Response) => {
 
 const removeAdmin = catchAsync(async (req: Request, res: Response) => {
     const result = await PlatformInviteService.removeAdmin(
-        req.params.id as string,
-        req.user as IRequestUser
+        idOf(req),
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,

@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { AgencyInviteService } from "./agencyInvite.service.js";
+import { idOf, paramsOf, tokenParams } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const createInvite = catchAsync(async (req: Request, res: Response) => {
-    const result = await AgencyInviteService.createInvite(req.body, req.user as IRequestUser);
+    const result = await AgencyInviteService.createInvite(req.body, requireUser(req));
 
     sendResponse(res, {
         success: true,
@@ -30,8 +31,8 @@ const getInvites = catchAsync(async (_req: Request, res: Response) => {
 
 const revokeInvite = catchAsync(async (req: Request, res: Response) => {
     const result = await AgencyInviteService.revokeInvite(
-        req.params.id as string,
-        req.user as IRequestUser
+        idOf(req),
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -43,7 +44,7 @@ const revokeInvite = catchAsync(async (req: Request, res: Response) => {
 
 // Public. Whoever opens the link has no account yet.
 const getInviteByToken = catchAsync(async (req: Request, res: Response) => {
-    const result = await AgencyInviteService.getInviteByToken(req.params.token as string);
+    const result = await AgencyInviteService.getInviteByToken(paramsOf(req, tokenParams).token);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -53,7 +54,7 @@ const getInviteByToken = catchAsync(async (req: Request, res: Response) => {
 });
 
 const acceptInvite = catchAsync(async (req: Request, res: Response) => {
-    const result = await AgencyInviteService.acceptInvite(req.params.token as string, req.body);
+    const result = await AgencyInviteService.acceptInvite(paramsOf(req, tokenParams).token, req.body);
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,

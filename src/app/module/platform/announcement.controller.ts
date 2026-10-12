@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { AnnouncementService } from "./announcement.service.js";
+import { idOf } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const getAnnouncements = catchAsync(async (_req: Request, res: Response) => {
     const result = await AnnouncementService.getAnnouncements();
@@ -16,7 +17,7 @@ const getAnnouncements = catchAsync(async (_req: Request, res: Response) => {
 });
 
 const createAnnouncement = catchAsync(async (req: Request, res: Response) => {
-    const result = await AnnouncementService.createAnnouncement(req.user as IRequestUser, req.body);
+    const result = await AnnouncementService.createAnnouncement(requireUser(req), req.body);
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -27,8 +28,8 @@ const createAnnouncement = catchAsync(async (req: Request, res: Response) => {
 
 const updateAnnouncement = catchAsync(async (req: Request, res: Response) => {
     const result = await AnnouncementService.updateAnnouncement(
-        req.user as IRequestUser,
-        req.params.id as string,
+        requireUser(req),
+        idOf(req),
         req.body
     );
     sendResponse(res, {
@@ -45,7 +46,7 @@ const updateAnnouncement = catchAsync(async (req: Request, res: Response) => {
  * mailed has been misled by their own tool.
  */
 const publishAnnouncement = catchAsync(async (req: Request, res: Response) => {
-    const result = await AnnouncementService.publishAnnouncement(req.user as IRequestUser, req.params.id as string);
+    const result = await AnnouncementService.publishAnnouncement(requireUser(req), idOf(req));
 
     const message = !result.email
         ? "Published successfully"
@@ -57,7 +58,7 @@ const publishAnnouncement = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteAnnouncement = catchAsync(async (req: Request, res: Response) => {
-    const result = await AnnouncementService.deleteAnnouncement(req.user as IRequestUser, req.params.id as string);
+    const result = await AnnouncementService.deleteAnnouncement(requireUser(req), idOf(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -69,7 +70,7 @@ const deleteAnnouncement = catchAsync(async (req: Request, res: Response) => {
 // ---------------------------------------------------------------- customer
 
 const getMyAnnouncements = catchAsync(async (req: Request, res: Response) => {
-    const result = await AnnouncementService.getMyAnnouncements(req.user as IRequestUser);
+    const result = await AnnouncementService.getMyAnnouncements(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -79,7 +80,7 @@ const getMyAnnouncements = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getUnreadCount = catchAsync(async (req: Request, res: Response) => {
-    const result = await AnnouncementService.getUnreadCount(req.user as IRequestUser);
+    const result = await AnnouncementService.getUnreadCount(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -89,7 +90,7 @@ const getUnreadCount = catchAsync(async (req: Request, res: Response) => {
 });
 
 const markRead = catchAsync(async (req: Request, res: Response) => {
-    const result = await AnnouncementService.markRead(req.user as IRequestUser, req.params.id as string);
+    const result = await AnnouncementService.markRead(requireUser(req), idOf(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -99,7 +100,7 @@ const markRead = catchAsync(async (req: Request, res: Response) => {
 });
 
 const markAllRead = catchAsync(async (req: Request, res: Response) => {
-    const result = await AnnouncementService.markAllRead(req.user as IRequestUser);
+    const result = await AnnouncementService.markAllRead(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

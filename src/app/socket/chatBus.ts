@@ -1,6 +1,7 @@
 import pg from "pg";
 import { env } from "../../config/env.js";
 import { logger } from "../lib/logger.js";
+import { prisma } from "../lib/prisma.js";
 
 /**
  * How one instance tells the others that something happened.
@@ -124,11 +125,12 @@ export const startChatBus = (onEvent: Handler) => {
  * next open it instead of a second sooner.
  */
 export const publishChatEvent = async (
-    query: (sql: string, values: unknown[]) => Promise<unknown>,
-    event: ChatEvent
+    event: ChatEvent,
+    notify: (channel: string, payload: string) => Promise<unknown> = (channel, payload) =>
+        prisma.$executeRaw`SELECT pg_notify(${channel}, ${payload})`
 ) => {
     try {
-        await query(`SELECT pg_notify($1, $2)`, [CHANNEL, JSON.stringify(event)]);
+        await notify(CHANNEL, JSON.stringify(event));
     } catch (error) {
         logger.error("Chat bus could not publish", { error });
     }

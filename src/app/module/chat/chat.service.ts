@@ -361,10 +361,7 @@ const sendMessage = async (
     //
     // The sender is included on purpose: they may have this conversation open
     // in another tab, and that tab should update like anybody else's.
-    await publishChatEvent(
-        (sql, values) => prisma.$queryRawUnsafe(sql, ...values),
-        { recipients, conversationId }
-    );
+    await publishChatEvent({ recipients, conversationId });
 
     return message;
 };

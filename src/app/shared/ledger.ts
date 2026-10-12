@@ -131,6 +131,16 @@ export const reverseLedgerEntries = async (
     return positions.length;
 };
 
+/** One account's balance, read through the caller's transaction (lock it first). */
+export const getAccountBalance = async (tx: Tx, accountId: string): Promise<number> => {
+    const [account, movement] = await Promise.all([
+        tx.account.findUniqueOrThrow({ where: { id: accountId }, select: { opening_balance: true } }),
+        tx.accountTransaction.aggregate({ where: { account_id: accountId }, _sum: { amount: true } }),
+    ]);
+
+    return account.opening_balance.plus(movement._sum.amount ?? 0).toNumber();
+};
+
 export interface AccountBalance {
     accountId: string;
     name: string;

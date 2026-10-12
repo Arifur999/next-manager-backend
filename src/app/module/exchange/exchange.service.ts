@@ -5,7 +5,8 @@ import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity, money } from "../../shared/activity.js";
-import { assertAccount, getAccountBalances, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
+import { assertAccount, getAccountBalance, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
+import { lockRow } from "../../utils/rowLock.js";
 import { dateRangeWhere, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateExchangePayload } from "./exchange.validation.js";
 
@@ -75,8 +76,9 @@ const createExchange = async (payload: ICreateExchangePayload, user: IRequestUse
         // rather than in the UI because the UI can be stale by the time it
         // submits, and an overdrawn wallet is a real accounting error rather
         // than a display bug.
-        const balances = await getAccountBalances(user);
-        const fromBalance = balances.find((entry) => entry.accountId === fromAccount.id)?.balance ?? 0;
+        // Locked first, so two exchanges at once cannot both spend the same balance.
+        await lockRow(tx, { kind: "account", id: fromAccount.id, organizationId: user.organizationId });
+        const fromBalance = await getAccountBalance(tx, fromAccount.id);
 
         if (payload.amount_usd > fromBalance) {
             throw new AppError(

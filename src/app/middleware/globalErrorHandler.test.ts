@@ -1,12 +1,11 @@
 import "../testing/testEnv.js";
 import assert from "node:assert/strict";
-import { once } from "node:events";
-import { Server } from "node:http";
 import { after, afterEach, before, describe, it } from "node:test";
 import express, { NextFunction, Request, Response } from "express";
 import z from "zod";
 import { env } from "../../config/env.js";
 import AppError from "../errorHelpers/AppError.js";
+import { startTestServer, TestServer } from "../testing/testServer.js";
 import { globalErrorHandler } from "./globalErrorHandler.js";
 import { requestLogger } from "./requestLogger.js";
 
@@ -30,14 +29,9 @@ app.get("/zod", (_req: Request, _res: Response, next: NextFunction) => {
 });
 app.use(globalErrorHandler);
 
-let server: Server;
-let base = "";
+let server: TestServer;
 before(async () => {
-    server = app.listen(0);
-    await once(server, "listening");
-    const address = server.address();
-    if (address === null || typeof address === "string") throw new Error("expected a TCP address");
-    base = `http://127.0.0.1:${address.port}`;
+    server = await startTestServer(app);
 });
 after(() => {
     server.close();
@@ -49,7 +43,7 @@ afterEach(() => {
 });
 
 const call = async (path: string, init?: RequestInit) => {
-    const response = await fetch(`${base}${path}`, init);
+    const response = await fetch(`${server.base}${path}`, init);
     return { status: response.status, requestIdHeader: response.headers.get("x-request-id"), body: await response.json() };
 };
 

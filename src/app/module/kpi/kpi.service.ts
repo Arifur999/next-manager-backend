@@ -12,6 +12,7 @@ import { prisma } from "../../lib/prisma.js";
 import { loadCapacityRows } from "../../shared/capacity.js";
 import { OPEN_LEAD_STAGES } from "../../shared/leadStage.js";
 import { type ListOptions } from "../../shared/listQuery.js";
+import { DAY_MS, type Range, resolveRange } from "./kpi.range.js";
 import {
     annualise,
     attainment,
@@ -48,35 +49,6 @@ import {
  * computed in USD, because that is what the agency bills in. Neither figure
  * quietly borrows a number from the other currency.
  */
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-type Range = { from: Date; to: Date; days: number };
-
-/**
- * The window every metric is computed over.
- *
- * Defaults to the last 30 days rather than all time: "utilization since the
- * company was founded" is not a number anybody acts on.
- */
-const resolveRange = (options: ListOptions): Range => {
-    const to = options.to
-        ? new Date(`${options.to}T23:59:59.999Z`)
-        : new Date();
-
-    const from = options.from
-        ? new Date(`${options.from}T00:00:00.000Z`)
-        : new Date(to.getTime() - 29 * DAY_MS);
-
-    if (from.getTime() > to.getTime()) {
-        throw new AppError(status.BAD_REQUEST, "The start of the range is after its end");
-    }
-
-    // Inclusive of both ends, so a single day is one day and not zero.
-    const days = Math.max(1, Math.round((to.getTime() - from.getTime()) / DAY_MS) + 1);
-
-    return { from, to, days };
-};
 
 const dateColumn = (range: Range) => ({ gte: range.from, lte: range.to });
 

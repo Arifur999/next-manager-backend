@@ -5,6 +5,7 @@ import { startChatBus, stopChatBus } from "./app/socket/chatBus.js";
 import { attachChatSocket, deliverLocally } from "./app/socket/chatSocket.js";
 import { env } from "./config/env.js";
 import { logger } from "./app/lib/logger.js";
+import { prisma } from "./app/lib/prisma.js";
 
 let server: Server;
 
@@ -57,67 +58,40 @@ const bootstrap = async () => {
 let shuttingDown = false;
 
 /**
- * Stop serving, finish what is in flight, and exit 0.
- *
- * Two bugs lived here. The exit was SYNCHRONOUS after `server.close()`, so
- * the callback it was given never ran: nothing drained, the chat bus
- * connection was dropped mid-flight, and "Server closed gracefully." was a
- * line that could never print. And the code was 1, so every deliberate
- * `docker stop` looked like a crash - compose would restart a container the
- * operator had just stopped, and an orchestrator would record a rollout as a
- * CrashLoopBackOff.
+ * Stop serving, let in-flight requests finish, close the chat bus and Prisma,
+ * then exit: 0 for a requested stop, 1 for a crash.
  */
-const shutdown = (signal: string) => {
-    // A second SIGTERM while draining must not start a second drain.
+const shutdown = (reason: string, exitCode: 0 | 1, error?: unknown) => {
+    // A second signal or a crash while draining must not start a second drain.
     if (shuttingDown) return;
     shuttingDown = true;
 
-    logger.info("Shutting down server", { signal });
+    logger[exitCode === 0 ? "info" : "error"]("Shutting down server", { reason, ...(error ? { error } : {}) });
 
-    // Nothing may hang the stop forever. Docker sends SIGKILL when its grace
-    // period runs out anyway; exiting first means the logs say why.
+    // Nothing may hang the stop forever; exiting first means the logs say why.
     const giveUp = setTimeout(() => {
         logger.error("Shutdown timed out with connections still open. Exiting.");
         process.exit(1);
     }, 10_000);
 
     const finish = async () => {
-        // Its own connection, so it does not close with the HTTP server.
         await stopChatBus().catch(() => {});
+        await prisma.$disconnect().catch(() => {});
         clearTimeout(giveUp);
-        logger.info("Server closed gracefully.");
-        process.exit(0);
+        logger.info("Server closed.");
+        process.exit(exitCode);
     };
 
     if (server) {
         server.close(() => void finish());
     } else {
-        // Signalled before listen() ever returned - there is nothing to drain.
         void finish();
     }
 };
 
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
-
-process.on("uncaughtException", (error) => {
-    logger.error("Uncaught exception, shutting down", { error });
-    if (server) {
-        server.close(() => {
-            process.exit(1);
-        });
-    }
-    process.exit(1);
-});
-
-process.on("unhandledRejection", (error) => {
-    logger.error("Unhandled rejection, shutting down", { error });
-    if (server) {
-        server.close(() => {
-            process.exit(1);
-        });
-    }
-    process.exit(1);
-});
+process.on("SIGTERM", () => shutdown("SIGTERM", 0));
+process.on("SIGINT", () => shutdown("SIGINT", 0));
+process.on("uncaughtException", (error) => shutdown("uncaughtException", 1, error));
+process.on("unhandledRejection", (error) => shutdown("unhandledRejection", 1, error));
 
 bootstrap();

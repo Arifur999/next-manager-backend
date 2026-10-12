@@ -74,6 +74,18 @@ export const summarise = (loan: LoanWithInstalments) => {
 };
 
 /**
+ * The same day of the month, `months` later, or that month's last day when it
+ * is shorter. setUTCMonth alone rolls 31 January into 3 March, which skips
+ * February's instalment and puts two in March.
+ */
+export const addMonthsClamped = (start: Date, months: number): Date => {
+    const year = start.getUTCFullYear();
+    const month = start.getUTCMonth() + months;
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(year, month, Math.min(start.getUTCDate(), lastDay)));
+};
+
+/**
  * An equal-principal schedule, as a starting point.
  *
  * Not an EMI formula. A bank's own table rarely matches one exactly, and a
@@ -91,8 +103,7 @@ export const generateSchedule = (payload: ICreateLoanPayload) => {
     const rows = [];
 
     for (let index = 0; index < months; index += 1) {
-        const due = new Date(start);
-        due.setUTCMonth(due.getUTCMonth() + index + 1);
+        const due = addMonthsClamped(start, index + 1);
 
         const isLast = index === months - 1;
         rows.push({

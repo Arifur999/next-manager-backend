@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Prisma } from "../../../generated/prisma/client.js";
 import { LoanStatus } from "../../../generated/prisma/enums.js";
-import { generateSchedule, LoanWithInstalments, summarise } from "./loan.schedule.js";
+import { addMonthsClamped, generateSchedule, LoanWithInstalments, summarise } from "./loan.schedule.js";
 
 const day = (value: string) => new Date(`${value}T00:00:00.000Z`);
 const isoDay = (value: Date) => value.toISOString().slice(0, 10);
@@ -71,6 +71,23 @@ describe("generateSchedule", () => {
         const rows = generateSchedule({ lender: "City Bank", principal_bdt: 400, started_on: "2026-11-10", term_months: 4 });
 
         assert.deepEqual(rows.map((row) => isoDay(row.due_date)), ["2026-12-10", "2027-01-10", "2027-02-10", "2027-03-10"]);
+    });
+});
+
+describe("month-end start dates", () => {
+    it("keeps 31 January's instalments at the end of each shorter month", () => {
+        const rows = generateSchedule({ lender: "City Bank", principal_bdt: 400, started_on: "2025-12-31", term_months: 4 });
+
+        assert.deepEqual(rows.map((row) => isoDay(row.due_date)), ["2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30"]);
+    });
+
+    it("lands on 29 February in a leap year", () => {
+        assert.equal(isoDay(addMonthsClamped(day("2028-01-31"), 1)), "2028-02-29");
+        assert.equal(isoDay(addMonthsClamped(day("2026-01-31"), 1)), "2026-02-28");
+    });
+
+    it("leaves an ordinary day of the month alone, across a year end", () => {
+        assert.equal(isoDay(addMonthsClamped(day("2026-11-15"), 3)), "2027-02-15");
     });
 });
 

@@ -12,6 +12,7 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity, money } from "../../shared/activity.js";
 import { assertAccount, writeLedgerEntry } from "../../shared/ledger.js";
+import { lockRow } from "../../utils/rowLock.js";
 import {
     ICompletePayrollPayload,
     ICreatePayrollRunPayload,
@@ -141,32 +142,28 @@ const createRun = async (payload: ICreatePayrollRunPayload, user: IRequestUser) 
  * them, and the ledger is the half that people are paid from.
  */
 const setItems = async (id: string, payload: ISetPayrollItemsPayload, user: IRequestUser) => {
-    const run = await prisma.payrollRun.findFirst({
-        where: { id, organization_id: user.organizationId },
-        select: { id: true, status: true },
-    });
-
-    if (!run) {
-        throw new AppError(status.NOT_FOUND, "Payroll run not found");
-    }
-
-    if (run.status === PayrollStatus.completed) {
-        throw new AppError(
-            status.CONFLICT,
-            "That run has been paid. Record an adjustment as a payout rather than editing history."
-        );
-    }
-
-    // Every line belongs to this run. Checked as a set - one borrowed id in a
-    // list of twenty is exactly what a per-row check invites somebody to skip.
-    const ids = payload.items.map((item) => item.id);
-    const mine = await prisma.payrollItem.count({ where: { id: { in: ids }, run_id: id } });
-
-    if (mine !== new Set(ids).size) {
-        throw new AppError(status.NOT_FOUND, "One of those lines is not on this run");
-    }
-
     return prisma.$transaction(async (tx) => {
+        // Locked so a run being paid cannot have its lines rewritten underneath it.
+        await lockRow(tx, { kind: "payrollRun", id, organizationId: user.organizationId });
+
+        const run = await tx.payrollRun.findUniqueOrThrow({ where: { id }, select: { status: true } });
+
+        if (run.status === PayrollStatus.completed) {
+            throw new AppError(
+                status.CONFLICT,
+                "That run has been paid. Record an adjustment as a payout rather than editing history."
+            );
+        }
+
+        // Every line belongs to this run. Checked as a set - one borrowed id in a
+        // list of twenty is exactly what a per-row check invites somebody to skip.
+        const ids = payload.items.map((item) => item.id);
+        const mine = await tx.payrollItem.count({ where: { id: { in: ids }, run_id: id } });
+
+        if (mine !== new Set(ids).size) {
+            throw new AppError(status.NOT_FOUND, "One of those lines is not on this run");
+        }
+
         for (const item of payload.items) {
             const gross = new Prisma.Decimal(item.gross_bdt ?? 0);
             const deductions = new Prisma.Decimal(item.deductions_bdt ?? 0);
@@ -209,6 +206,9 @@ const setItems = async (id: string, payload: ISetPayrollItemsPayload, user: IReq
  */
 const complete = async (id: string, payload: ICompletePayrollPayload, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
+        // Locked first: two clicks on "pay" must not both see a draft.
+        await lockRow(tx, { kind: "payrollRun", id, organizationId: user.organizationId });
+
         const run = await tx.payrollRun.findFirst({
             where: { id, organization_id: user.organizationId },
             select: {

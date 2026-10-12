@@ -355,13 +355,6 @@ const payInstalment = async (
             throw new AppError(status.NOT_FOUND, "Instalment not found");
         }
 
-        if (instalment.paid_at) {
-            throw new AppError(
-                status.CONFLICT,
-                "That instalment is already paid. Reverse it if it was recorded by mistake."
-            );
-        }
-
         await assertAccount(tx, payload.account_id, user, Currency.BDT);
 
         const date = payload.date ? toDate(payload.date) : new Date();
@@ -369,10 +362,19 @@ const payInstalment = async (
         const interest = instalment.interest_bdt.toNumber();
         const total = principal + interest;
 
-        await tx.loanInstalment.update({
-            where: { id: instalmentId },
+        // A conditional claim rather than a check then a write, so a double
+        // click cannot pay the same instalment twice.
+        const claim = await tx.loanInstalment.updateMany({
+            where: { id: instalmentId, organization_id: user.organizationId, paid_at: null },
             data: { paid_at: date, paid_from_account_id: payload.account_id },
         });
+
+        if (claim.count === 0) {
+            throw new AppError(
+                status.CONFLICT,
+                "That instalment is already paid. Reverse it if it was recorded by mistake."
+            );
+        }
 
         await writeLedgerEntry(
             tx,
@@ -422,7 +424,13 @@ const reverseInstalment = async (instalmentId: string, user: IRequestUser) => {
             throw new AppError(status.NOT_FOUND, "Instalment not found");
         }
 
-        if (!instalment.paid_at) {
+        // Claimed before the ledger is touched, so two reversals cannot both run.
+        const claim = await tx.loanInstalment.updateMany({
+            where: { id: instalmentId, organization_id: user.organizationId, paid_at: { not: null } },
+            data: { paid_at: null, paid_from_account_id: null },
+        });
+
+        if (claim.count === 0) {
             throw new AppError(status.BAD_REQUEST, "That instalment has not been paid");
         }
 
@@ -435,11 +443,6 @@ const reverseInstalment = async (instalmentId: string, user: IRequestUser) => {
             user,
             "Instalment reversed"
         );
-
-        await tx.loanInstalment.update({
-            where: { id: instalmentId },
-            data: { paid_at: null, paid_from_account_id: null },
-        });
 
         // It is owed again, so a settled loan goes back to active.
         await tx.loan.update({

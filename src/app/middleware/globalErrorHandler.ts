@@ -91,17 +91,18 @@ export const globalErrorHandler = async (err: any, req: Request, res: Response, 
     // 5xx is always logged, so a production failure leaves a trace. 4xx is
     // routine and only logged while developing. Path only: a query string can
     // carry a search term or a token.
-    const fields = { method: req.method, path: req.path, status: statusCode, error: err };
+    const fields = { requestId: req.id, method: req.method, path: req.path, status: statusCode, error: err };
     if (statusCode >= 500) {
         logger.error("Request failed", fields);
     } else if (env.NODE_ENV === "development") {
-        logger.warn("Request rejected", { method: req.method, path: req.path, status: statusCode, reason: message });
+        logger.warn("Request rejected", { requestId: req.id, method: req.method, path: req.path, status: statusCode, reason: message });
     }
 
     const errorResponse: IErrorResponse = {
         success: false,
         message,
         errorSource,
+        requestId: req.id,
         error: env.NODE_ENV === "development" ? err : undefined,
         stack: env.NODE_ENV === "development" ? stack : undefined,
     };

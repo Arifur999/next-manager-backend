@@ -13,6 +13,7 @@ export interface IErrorResponse {
     success: false;
     message: string;
     errorSource: IError[];
+    requestId?: string;
     error?: unknown;
     stack?: string;
 }

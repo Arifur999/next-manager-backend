@@ -16,6 +16,7 @@ import { sendResponse } from "./app/shared/sendResponse.js";
 import { chatBusReady } from "./app/socket/chatBus.js";
 import { socketStats } from "./app/socket/chatSocket.js";
 import { logger } from "./app/lib/logger.js";
+import { requestLogger } from "./app/middleware/requestLogger.js";
 
 const app: Application = express();
 
@@ -98,6 +99,8 @@ cron.schedule("15 2 * * *", async () => {
 // 1 = trust exactly one proxy hop.
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
+
+app.use(requestLogger);
 
 app.use(cors({
     origin(origin, callback) {

@@ -13,6 +13,7 @@ import {
     updateServiceTemplateZodSchema,
     updateServiceZodSchema,
 } from "./service.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -34,10 +35,10 @@ router.patch(
     "/categories/:id",
     checkAuth(...seller),
     requireScope("services", "edit"),
-    validateRequest(updateServiceCategoryZodSchema),
+    validateRequest({ params: idParams, body: updateServiceCategoryZodSchema }),
     ServiceController.updateCategory
 );
-router.delete("/categories/:id", checkAuth(Role.admin), ServiceController.deleteCategory);
+router.delete("/categories/:id", checkAuth(Role.admin), validateRequest({ params: idParams }), ServiceController.deleteCategory);
 
 router.get("/templates", checkAuth(), requireCompany, ServiceController.getTemplates);
 router.post(
@@ -51,10 +52,10 @@ router.patch(
     "/templates/:id",
     checkAuth(...seller),
     requireScope("services", "edit"),
-    validateRequest(updateServiceTemplateZodSchema),
+    validateRequest({ params: idParams, body: updateServiceTemplateZodSchema }),
     ServiceController.updateTemplate
 );
-router.delete("/templates/:id", checkAuth(Role.admin), ServiceController.deleteTemplate);
+router.delete("/templates/:id", checkAuth(Role.admin), validateRequest({ params: idParams }), ServiceController.deleteTemplate);
 
 // What each service has been billed. Money, so admin alone.
 router.get("/revenue", checkAuth(Role.admin), requireCompany, ServiceController.getRevenue);
@@ -62,7 +63,7 @@ router.get("/revenue", checkAuth(Role.admin), requireCompany, ServiceController.
 router.get("/", checkAuth(), requireCompany, ServiceController.getServices);
 // Declared after the literal paths above so /categories, /templates and
 // /revenue are not swallowed by the parameter route.
-router.get("/:id", checkAuth(), requireCompany, ServiceController.getService);
+router.get("/:id", checkAuth(), requireCompany, validateRequest({ params: idParams }), ServiceController.getService);
 router.post(
     "/",
     checkAuth(...seller),
@@ -74,11 +75,11 @@ router.patch(
     "/:id",
     checkAuth(...seller),
     requireScope("services", "edit"),
-    validateRequest(updateServiceZodSchema),
+    validateRequest({ params: idParams, body: updateServiceZodSchema }),
     ServiceController.updateService
 );
 // Deleting is refused once anything has been billed against it, so this only
 // ever removes a catalogue entry nobody used. Admin-only regardless.
-router.delete("/:id", checkAuth(Role.admin), ServiceController.deleteService);
+router.delete("/:id", checkAuth(Role.admin), validateRequest({ params: idParams }), ServiceController.deleteService);
 
 export const ServiceRoutes = router;

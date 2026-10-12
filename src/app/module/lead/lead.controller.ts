@@ -1,15 +1,16 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { LeadService } from "./lead.service.js";
+import { requireUser } from "../../shared/requireUser.js";
+import { idOf } from "../../shared/requestSchemas.js";
 
 const getPipeline = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
     const options = parseListOptions(query);
-    const result = await LeadService.getPipeline(req.user as IRequestUser, options, {
+    const result = await LeadService.getPipeline(requireUser(req), options, {
         mine: query.mine === "true",
     });
     sendResponse(res, {
@@ -21,7 +22,7 @@ const getPipeline = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createLead = catchAsync(async (req: Request, res: Response) => {
-    const result = await LeadService.createLead(req.body, req.user as IRequestUser);
+    const result = await LeadService.createLead(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -31,7 +32,7 @@ const createLead = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateLead = catchAsync(async (req: Request, res: Response) => {
-    const result = await LeadService.updateLead(req.params.id as string, req.body, req.user as IRequestUser);
+    const result = await LeadService.updateLead(idOf(req), req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -41,7 +42,7 @@ const updateLead = catchAsync(async (req: Request, res: Response) => {
 });
 
 const convertToClient = catchAsync(async (req: Request, res: Response) => {
-    const result = await LeadService.convertToClient(req.params.id as string, req.user as IRequestUser);
+    const result = await LeadService.convertToClient(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -51,7 +52,7 @@ const convertToClient = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getStageEvents = catchAsync(async (req: Request, res: Response) => {
-    const result = await LeadService.getStageEvents(req.params.id as string, req.user as IRequestUser);
+    const result = await LeadService.getStageEvents(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -61,7 +62,7 @@ const getStageEvents = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteLead = catchAsync(async (req: Request, res: Response) => {
-    const result = await LeadService.deleteLead(req.params.id as string, req.user as IRequestUser);
+    const result = await LeadService.deleteLead(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

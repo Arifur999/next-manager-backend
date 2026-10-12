@@ -4,6 +4,7 @@ import { checkAuth } from "../../middleware/checkAuth.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { ExchangeController } from "./exchange.controller.js";
 import { createExchangeZodSchema } from "./exchange.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -13,6 +14,6 @@ const router = Router();
 // entry - which is exactly delete-then-create.
 router.get("/", checkAuth(Role.admin), ExchangeController.getAllExchanges);
 router.post("/", checkAuth(Role.admin), validateRequest(createExchangeZodSchema), ExchangeController.createExchange);
-router.delete("/:id", checkAuth(Role.admin), ExchangeController.deleteExchange);
+router.delete("/:id", checkAuth(Role.admin), validateRequest({ params: idParams }), ExchangeController.deleteExchange);
 
 export const ExchangeRoutes = router;

@@ -1,14 +1,15 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ExpenseService } from "./expense.service.js";
+import { requireUser } from "../../shared/requireUser.js";
+import { idOf } from "../../shared/requestSchemas.js";
 
 const getAllExpenses = catchAsync(async (req: Request, res: Response) => {
     const options = parseListOptions(req.query as Record<string, unknown>);
-    const { rows, total } = await ExpenseService.getAllExpenses(req.user as IRequestUser, options);
+    const { rows, total } = await ExpenseService.getAllExpenses(requireUser(req), options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -20,7 +21,7 @@ const getAllExpenses = catchAsync(async (req: Request, res: Response) => {
 
 const getCategoryBreakdown = catchAsync(async (req: Request, res: Response) => {
     const options = parseListOptions(req.query as Record<string, unknown>);
-    const result = await ExpenseService.getCategoryBreakdown(req.user as IRequestUser, options);
+    const result = await ExpenseService.getCategoryBreakdown(requireUser(req), options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -30,7 +31,7 @@ const getCategoryBreakdown = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createExpense = catchAsync(async (req: Request, res: Response) => {
-    const result = await ExpenseService.createExpense(req.body, req.user as IRequestUser);
+    const result = await ExpenseService.createExpense(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -40,7 +41,7 @@ const createExpense = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateExpense = catchAsync(async (req: Request, res: Response) => {
-    const result = await ExpenseService.updateExpense(req.params.id as string, req.body, req.user as IRequestUser);
+    const result = await ExpenseService.updateExpense(idOf(req), req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -50,7 +51,7 @@ const updateExpense = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteExpense = catchAsync(async (req: Request, res: Response) => {
-    const result = await ExpenseService.deleteExpense(req.params.id as string, req.user as IRequestUser);
+    const result = await ExpenseService.deleteExpense(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

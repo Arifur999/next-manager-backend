@@ -1,15 +1,16 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { TeamPayoutService } from "./teamPayout.service.js";
+import { requireUser } from "../../shared/requireUser.js";
+import { idOf } from "../../shared/requestSchemas.js";
 
 const getAllPayouts = catchAsync(async (req: Request, res: Response) => {
     const options = parseListOptions(req.query as Record<string, unknown>);
     const query = req.query as Record<string, unknown>;
-    const { rows, total } = await TeamPayoutService.getAllPayouts(req.user as IRequestUser, options, {
+    const { rows, total } = await TeamPayoutService.getAllPayouts(requireUser(req), options, {
         departmentId: typeof query.department_id === "string" ? query.department_id : undefined,
     });
     sendResponse(res, {
@@ -22,7 +23,7 @@ const getAllPayouts = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createPayout = catchAsync(async (req: Request, res: Response) => {
-    const result = await TeamPayoutService.createPayout(req.body, req.user as IRequestUser);
+    const result = await TeamPayoutService.createPayout(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -32,7 +33,7 @@ const createPayout = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updatePayout = catchAsync(async (req: Request, res: Response) => {
-    const result = await TeamPayoutService.updatePayout(req.params.id as string, req.body, req.user as IRequestUser);
+    const result = await TeamPayoutService.updatePayout(idOf(req), req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -42,7 +43,7 @@ const updatePayout = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deletePayout = catchAsync(async (req: Request, res: Response) => {
-    const result = await TeamPayoutService.deletePayout(req.params.id as string, req.user as IRequestUser);
+    const result = await TeamPayoutService.deletePayout(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

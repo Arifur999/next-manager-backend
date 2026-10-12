@@ -1,13 +1,14 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ClientLinkService } from "./clientLink.service.js";
+import { requireUser } from "../../shared/requireUser.js";
+import { idOf } from "../../shared/requestSchemas.js";
 
 const getAll = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
-    const result = await ClientLinkService.getAll(req.user as IRequestUser, {
+    const result = await ClientLinkService.getAll(requireUser(req), {
         clientId: typeof query.client_id === "string" ? query.client_id : undefined,
     });
     sendResponse(res, {
@@ -19,7 +20,7 @@ const getAll = catchAsync(async (req: Request, res: Response) => {
 });
 
 const create = catchAsync(async (req: Request, res: Response) => {
-    const result = await ClientLinkService.create(req.body, req.user as IRequestUser);
+    const result = await ClientLinkService.create(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -30,9 +31,9 @@ const create = catchAsync(async (req: Request, res: Response) => {
 
 const update = catchAsync(async (req: Request, res: Response) => {
     const result = await ClientLinkService.update(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -44,8 +45,8 @@ const update = catchAsync(async (req: Request, res: Response) => {
 
 const remove = catchAsync(async (req: Request, res: Response) => {
     const result = await ClientLinkService.remove(
-        req.params.id as string,
-        req.user as IRequestUser
+        idOf(req),
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,

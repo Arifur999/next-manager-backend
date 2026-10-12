@@ -5,6 +5,7 @@ import { requireScope } from "../../middleware/requireScope.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { LeadController } from "./lead.controller.js";
 import { createLeadZodSchema, updateLeadZodSchema } from "./lead.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -16,15 +17,15 @@ router.post("/", checkAuth(Role.admin, Role.sales), requireScope("leads", "creat
 
 // Dragging a card between columns is a PATCH of `stage`, so the board needs no
 // endpoint of its own.
-router.patch("/:id", checkAuth(Role.admin, Role.sales), requireScope("leads", "edit"), validateRequest(updateLeadZodSchema), LeadController.updateLead);
+router.patch("/:id", checkAuth(Role.admin, Role.sales), requireScope("leads", "edit"), validateRequest({ params: idParams, body: updateLeadZodSchema }), LeadController.updateLead);
 
 // The history behind a deal. Admin can read it too - sales-cycle length is a
 // company-health number, not just a sales one.
-router.get("/:id/stage-events", checkAuth(Role.admin, Role.sales), LeadController.getStageEvents);
+router.get("/:id/stage-events", checkAuth(Role.admin, Role.sales), validateRequest({ params: idParams }), LeadController.getStageEvents);
 
 // Converting creates a client, which is squarely sales' job.
-router.post("/:id/convert", checkAuth(Role.admin, Role.sales), requireScope("leads", "edit"), LeadController.convertToClient);
+router.post("/:id/convert", checkAuth(Role.admin, Role.sales), requireScope("leads", "edit"), validateRequest({ params: idParams }), LeadController.convertToClient);
 
-router.delete("/:id", checkAuth(Role.admin), LeadController.deleteLead);
+router.delete("/:id", checkAuth(Role.admin), validateRequest({ params: idParams }), LeadController.deleteLead);
 
 export const LeadRoutes = router;

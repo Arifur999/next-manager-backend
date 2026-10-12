@@ -1,14 +1,15 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { PaymentService } from "./payment.service.js";
+import { requireUser } from "../../shared/requireUser.js";
+import { idOf } from "../../shared/requestSchemas.js";
 
 const getAllPayments = catchAsync(async (req: Request, res: Response) => {
     const options = parseListOptions(req.query as Record<string, unknown>);
-    const { rows, total } = await PaymentService.getAllPayments(req.user as IRequestUser, options);
+    const { rows, total } = await PaymentService.getAllPayments(requireUser(req), options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -19,7 +20,7 @@ const getAllPayments = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createPayment = catchAsync(async (req: Request, res: Response) => {
-    const result = await PaymentService.createPayment(req.body, req.user as IRequestUser);
+    const result = await PaymentService.createPayment(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -29,7 +30,7 @@ const createPayment = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updatePayment = catchAsync(async (req: Request, res: Response) => {
-    const result = await PaymentService.updatePayment(req.params.id as string, req.body, req.user as IRequestUser);
+    const result = await PaymentService.updatePayment(idOf(req), req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -39,7 +40,7 @@ const updatePayment = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deletePayment = catchAsync(async (req: Request, res: Response) => {
-    const result = await PaymentService.deletePayment(req.params.id as string, req.user as IRequestUser);
+    const result = await PaymentService.deletePayment(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

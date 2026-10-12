@@ -4,6 +4,7 @@ import { checkAuth } from "../../middleware/checkAuth.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { PaymentController } from "./payment.controller.js";
 import { createPaymentZodSchema, updatePaymentZodSchema } from "./payment.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -11,7 +12,7 @@ const router = Router();
 // but what actually landed in a wallet is a finance question.
 router.get("/", checkAuth(Role.admin), PaymentController.getAllPayments);
 router.post("/", checkAuth(Role.admin), validateRequest(createPaymentZodSchema), PaymentController.createPayment);
-router.patch("/:id", checkAuth(Role.admin), validateRequest(updatePaymentZodSchema), PaymentController.updatePayment);
-router.delete("/:id", checkAuth(Role.admin), PaymentController.deletePayment);
+router.patch("/:id", checkAuth(Role.admin), validateRequest({ params: idParams, body: updatePaymentZodSchema }), PaymentController.updatePayment);
+router.delete("/:id", checkAuth(Role.admin), validateRequest({ params: idParams }), PaymentController.deletePayment);
 
 export const PaymentRoutes = router;

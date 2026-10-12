@@ -1,16 +1,17 @@
 import { Request, Response } from "express";
 import { ClientStatus } from "../../../generated/prisma/enums.js";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ClientService } from "./client.service.js";
+import { requireUser } from "../../shared/requireUser.js";
+import { idOf } from "../../shared/requestSchemas.js";
 
 const getAllClients = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
     const options = parseListOptions(query);
-    const { rows, total } = await ClientService.getAllClients(req.user as IRequestUser, options, {
+    const { rows, total } = await ClientService.getAllClients(requireUser(req), options, {
         status:
             typeof query.status === "string" && query.status in ClientStatus
                 ? (query.status as ClientStatus)
@@ -27,7 +28,7 @@ const getAllClients = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getSingleClient = catchAsync(async (req: Request, res: Response) => {
-    const result = await ClientService.getSingleClient(req.params.id as string, req.user as IRequestUser);
+    const result = await ClientService.getSingleClient(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -37,7 +38,7 @@ const getSingleClient = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getClientFinancials = catchAsync(async (req: Request, res: Response) => {
-    const result = await ClientService.getClientFinancials(req.params.id as string, req.user as IRequestUser);
+    const result = await ClientService.getClientFinancials(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -47,7 +48,7 @@ const getClientFinancials = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createClient = catchAsync(async (req: Request, res: Response) => {
-    const result = await ClientService.createClient(req.body, req.user as IRequestUser);
+    const result = await ClientService.createClient(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -57,7 +58,7 @@ const createClient = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateClient = catchAsync(async (req: Request, res: Response) => {
-    const result = await ClientService.updateClient(req.params.id as string, req.body, req.user as IRequestUser);
+    const result = await ClientService.updateClient(idOf(req), req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -67,7 +68,7 @@ const updateClient = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteClient = catchAsync(async (req: Request, res: Response) => {
-    const result = await ClientService.deleteClient(req.params.id as string, req.user as IRequestUser);
+    const result = await ClientService.deleteClient(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

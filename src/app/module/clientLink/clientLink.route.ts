@@ -8,6 +8,7 @@ import {
     createClientLinkZodSchema,
     updateClientLinkZodSchema,
 } from "./clientLink.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -27,12 +28,13 @@ router.post(
 router.patch(
     "/:id",
     checkAuth(Role.admin, Role.sales, Role.project_manager),
-    validateRequest(updateClientLinkZodSchema),
+    validateRequest({ params: idParams, body: updateClientLinkZodSchema }),
     ClientLinkController.update
 );
 router.delete(
     "/:id",
     checkAuth(Role.admin, Role.sales, Role.project_manager),
+    validateRequest({ params: idParams }),
     ClientLinkController.remove
 );
 

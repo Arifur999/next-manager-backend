@@ -1,14 +1,15 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { InvoiceService } from "./invoice.service.js";
+import { requireUser } from "../../shared/requireUser.js";
+import { idOf } from "../../shared/requestSchemas.js";
 
 const getAllInvoices = catchAsync(async (req: Request, res: Response) => {
     const options = parseListOptions(req.query as Record<string, unknown>);
-    const { rows, total } = await InvoiceService.getAllInvoices(req.user as IRequestUser, options);
+    const { rows, total } = await InvoiceService.getAllInvoices(requireUser(req), options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -19,7 +20,7 @@ const getAllInvoices = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getSingleInvoice = catchAsync(async (req: Request, res: Response) => {
-    const result = await InvoiceService.getSingleInvoice(req.params.id as string, req.user as IRequestUser);
+    const result = await InvoiceService.getSingleInvoice(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -29,7 +30,7 @@ const getSingleInvoice = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createInvoice = catchAsync(async (req: Request, res: Response) => {
-    const result = await InvoiceService.createInvoice(req.body, req.user as IRequestUser);
+    const result = await InvoiceService.createInvoice(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -39,7 +40,7 @@ const createInvoice = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateInvoice = catchAsync(async (req: Request, res: Response) => {
-    const result = await InvoiceService.updateInvoice(req.params.id as string, req.body, req.user as IRequestUser);
+    const result = await InvoiceService.updateInvoice(idOf(req), req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -49,7 +50,7 @@ const updateInvoice = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteInvoice = catchAsync(async (req: Request, res: Response) => {
-    const result = await InvoiceService.deleteInvoice(req.params.id as string, req.user as IRequestUser);
+    const result = await InvoiceService.deleteInvoice(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

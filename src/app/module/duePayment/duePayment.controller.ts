@@ -1,14 +1,15 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { DuePaymentService } from "./duePayment.service.js";
+import { requireUser } from "../../shared/requireUser.js";
+import { idOf } from "../../shared/requestSchemas.js";
 
 const getAllPeople = catchAsync(async (req: Request, res: Response) => {
     const options = parseListOptions(req.query as Record<string, unknown>);
-    const { rows } = await DuePaymentService.getAllPeople(req.user as IRequestUser, options);
+    const { rows } = await DuePaymentService.getAllPeople(requireUser(req), options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -18,7 +19,7 @@ const getAllPeople = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createPerson = catchAsync(async (req: Request, res: Response) => {
-    const result = await DuePaymentService.createPerson(req.body, req.user as IRequestUser);
+    const result = await DuePaymentService.createPerson(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -28,7 +29,7 @@ const createPerson = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updatePerson = catchAsync(async (req: Request, res: Response) => {
-    const result = await DuePaymentService.updatePerson(req.params.id as string, req.body, req.user as IRequestUser);
+    const result = await DuePaymentService.updatePerson(idOf(req), req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -38,7 +39,7 @@ const updatePerson = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deletePerson = catchAsync(async (req: Request, res: Response) => {
-    const result = await DuePaymentService.deletePerson(req.params.id as string, req.user as IRequestUser);
+    const result = await DuePaymentService.deletePerson(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -51,7 +52,7 @@ const getTransactions = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
     const options = parseListOptions(query);
     const personId = typeof query.person_id === "string" ? query.person_id : undefined;
-    const { rows, total } = await DuePaymentService.getTransactions(req.user as IRequestUser, personId, options);
+    const { rows, total } = await DuePaymentService.getTransactions(requireUser(req), personId, options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -62,7 +63,7 @@ const getTransactions = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createTransaction = catchAsync(async (req: Request, res: Response) => {
-    const result = await DuePaymentService.createTransaction(req.body, req.user as IRequestUser);
+    const result = await DuePaymentService.createTransaction(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -72,7 +73,7 @@ const createTransaction = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteTransaction = catchAsync(async (req: Request, res: Response) => {
-    const result = await DuePaymentService.deleteTransaction(req.params.id as string, req.user as IRequestUser);
+    const result = await DuePaymentService.deleteTransaction(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

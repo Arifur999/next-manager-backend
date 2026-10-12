@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { AccountService } from "./account.service.js";
+import { requireUser } from "../../shared/requireUser.js";
+import { idOf } from "../../shared/requestSchemas.js";
 
 const getAllAccounts = catchAsync(async (req: Request, res: Response) => {
-    const result = await AccountService.getAllAccounts(req.user as IRequestUser);
+    const result = await AccountService.getAllAccounts(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -16,7 +17,7 @@ const getAllAccounts = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getBalanceSummary = catchAsync(async (req: Request, res: Response) => {
-    const result = await AccountService.getBalanceSummary(req.user as IRequestUser);
+    const result = await AccountService.getBalanceSummary(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -26,7 +27,7 @@ const getBalanceSummary = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createAccount = catchAsync(async (req: Request, res: Response) => {
-    const result = await AccountService.createAccount(req.body, req.user as IRequestUser);
+    const result = await AccountService.createAccount(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -36,7 +37,7 @@ const createAccount = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateAccount = catchAsync(async (req: Request, res: Response) => {
-    const result = await AccountService.updateAccount(req.params.id as string, req.body, req.user as IRequestUser);
+    const result = await AccountService.updateAccount(idOf(req), req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -46,7 +47,7 @@ const updateAccount = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteAccount = catchAsync(async (req: Request, res: Response) => {
-    const result = await AccountService.deleteAccount(req.params.id as string, req.user as IRequestUser);
+    const result = await AccountService.deleteAccount(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

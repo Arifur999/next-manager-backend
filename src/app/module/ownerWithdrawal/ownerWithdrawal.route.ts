@@ -4,6 +4,7 @@ import { checkAuth } from "../../middleware/checkAuth.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { OwnerWithdrawalController } from "./ownerWithdrawal.controller.js";
 import { createOwnerWithdrawalZodSchema, updateOwnerWithdrawalZodSchema } from "./ownerWithdrawal.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -13,7 +14,7 @@ const router = Router();
 // that.
 router.get("/", checkAuth(Role.admin), OwnerWithdrawalController.getAllWithdrawals);
 router.post("/", checkAuth(Role.admin), validateRequest(createOwnerWithdrawalZodSchema), OwnerWithdrawalController.createWithdrawal);
-router.patch("/:id", checkAuth(Role.admin), validateRequest(updateOwnerWithdrawalZodSchema), OwnerWithdrawalController.updateWithdrawal);
-router.delete("/:id", checkAuth(Role.admin), OwnerWithdrawalController.deleteWithdrawal);
+router.patch("/:id", checkAuth(Role.admin), validateRequest({ params: idParams, body: updateOwnerWithdrawalZodSchema }), OwnerWithdrawalController.updateWithdrawal);
+router.delete("/:id", checkAuth(Role.admin), validateRequest({ params: idParams }), OwnerWithdrawalController.deleteWithdrawal);
 
 export const OwnerWithdrawalRoutes = router;

@@ -1,14 +1,15 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { OwnerWithdrawalService } from "./ownerWithdrawal.service.js";
+import { requireUser } from "../../shared/requireUser.js";
+import { idOf } from "../../shared/requestSchemas.js";
 
 const getAllWithdrawals = catchAsync(async (req: Request, res: Response) => {
     const options = parseListOptions(req.query as Record<string, unknown>);
-    const { rows, total } = await OwnerWithdrawalService.getAllWithdrawals(req.user as IRequestUser, options);
+    const { rows, total } = await OwnerWithdrawalService.getAllWithdrawals(requireUser(req), options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -19,7 +20,7 @@ const getAllWithdrawals = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createWithdrawal = catchAsync(async (req: Request, res: Response) => {
-    const result = await OwnerWithdrawalService.createWithdrawal(req.body, req.user as IRequestUser);
+    const result = await OwnerWithdrawalService.createWithdrawal(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -29,7 +30,7 @@ const createWithdrawal = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateWithdrawal = catchAsync(async (req: Request, res: Response) => {
-    const result = await OwnerWithdrawalService.updateWithdrawal(req.params.id as string, req.body, req.user as IRequestUser);
+    const result = await OwnerWithdrawalService.updateWithdrawal(idOf(req), req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -39,7 +40,7 @@ const updateWithdrawal = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteWithdrawal = catchAsync(async (req: Request, res: Response) => {
-    const result = await OwnerWithdrawalService.deleteWithdrawal(req.params.id as string, req.user as IRequestUser);
+    const result = await OwnerWithdrawalService.deleteWithdrawal(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

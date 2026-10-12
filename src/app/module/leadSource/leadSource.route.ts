@@ -7,6 +7,7 @@ import {
     createLeadSourceZodSchema,
     updateLeadSourceZodSchema,
 } from "./leadSource.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -22,12 +23,12 @@ router.post(
 router.patch(
     "/:id",
     checkAuth(Role.admin, Role.sales),
-    validateRequest(updateLeadSourceZodSchema),
+    validateRequest({ params: idParams, body: updateLeadSourceZodSchema }),
     LeadSourceController.update
 );
 
 // Deleting one is refused once leads point at it, so this only ever removes a
 // list entry nobody used. Admin-only anyway: it is a reporting dimension.
-router.delete("/:id", checkAuth(Role.admin), LeadSourceController.remove);
+router.delete("/:id", checkAuth(Role.admin), validateRequest({ params: idParams }), LeadSourceController.remove);
 
 export const LeadSourceRoutes = router;

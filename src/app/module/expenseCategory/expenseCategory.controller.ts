@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ExpenseCategoryService } from "./expenseCategory.service.js";
+import { requireUser } from "../../shared/requireUser.js";
+import { idOf } from "../../shared/requestSchemas.js";
 
 const getAllCategories = catchAsync(async (req: Request, res: Response) => {
-    const result = await ExpenseCategoryService.getAllCategories(req.user as IRequestUser);
+    const result = await ExpenseCategoryService.getAllCategories(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -16,7 +17,7 @@ const getAllCategories = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createCategory = catchAsync(async (req: Request, res: Response) => {
-    const result = await ExpenseCategoryService.createCategory(req.body, req.user as IRequestUser);
+    const result = await ExpenseCategoryService.createCategory(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -26,7 +27,7 @@ const createCategory = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateCategory = catchAsync(async (req: Request, res: Response) => {
-    const result = await ExpenseCategoryService.updateCategory(req.params.id as string, req.body, req.user as IRequestUser);
+    const result = await ExpenseCategoryService.updateCategory(idOf(req), req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -36,7 +37,7 @@ const updateCategory = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteCategory = catchAsync(async (req: Request, res: Response) => {
-    const result = await ExpenseCategoryService.deleteCategory(req.params.id as string, req.user as IRequestUser);
+    const result = await ExpenseCategoryService.deleteCategory(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

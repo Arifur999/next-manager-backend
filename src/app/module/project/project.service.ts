@@ -282,6 +282,9 @@ const createProject = async (payload: ICreateProjectPayload, user: IRequestUser)
     });
 };
 
+const toOptionalDate = (value: string | null | undefined) =>
+    value === undefined || value === null ? value : new Date(`${value}T00:00:00.000Z`);
+
 const updateProject = async (id: string, payload: IUpdateProjectPayload, user: IRequestUser) => {
     const existing = await prisma.project.findFirst({
         where: { id, organization_id: user.organizationId, deleted_at: null },
@@ -309,8 +312,9 @@ const updateProject = async (id: string, payload: IUpdateProjectPayload, user: I
         where: { id },
         data: {
             ...payload,
-            start_date: payload.start_date ? new Date(`${payload.start_date}T00:00:00.000Z`) : undefined,
-            end_date: payload.end_date ? new Date(`${payload.end_date}T00:00:00.000Z`) : undefined,
+            // undefined leaves a date alone, null clears it, a string sets it.
+            start_date: toOptionalDate(payload.start_date),
+            end_date: toOptionalDate(payload.end_date),
         },
         include: {
             client: { select: { id: true, name: true } },

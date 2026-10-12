@@ -94,6 +94,7 @@ cron.schedule("15 2 * * *", async () => {
 // users in one rate-limit bucket and let a single attacker lock out everybody.
 // 1 = trust exactly one proxy hop.
 app.set("trust proxy", 1);
+app.disable("x-powered-by");
 
 app.use(cors({
     origin(origin, callback) {

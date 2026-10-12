@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
-import { authRateLimit } from "../../middleware/rateLimit.js";
+import { inviteTokenRateLimit } from "../../middleware/rateLimit.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { InviteController } from "./invite.controller.js";
 import { acceptInviteZodSchema, createInviteZodSchema, rejectMemberZodSchema } from "./invite.validation.js";
@@ -12,13 +12,13 @@ const router = Router();
 // Public. Signed out by definition - the person has no account yet.
 // ---------------------------------------------------------------------------
 //
-// Both are behind the strict auth rate limit rather than the general one: an
+// Both are behind the strict invite-token rate limit rather than the general one: an
 // unthrottled token lookup is somewhere to guess tokens, and the response
 // tells you whether one was right.
-router.get("/:token", authRateLimit, InviteController.getInviteByToken);
+router.get("/:token", inviteTokenRateLimit, InviteController.getInviteByToken);
 router.post(
     "/:token/accept",
-    authRateLimit,
+    inviteTokenRateLimit,
     validateRequest(acceptInviteZodSchema),
     InviteController.acceptInvite
 );

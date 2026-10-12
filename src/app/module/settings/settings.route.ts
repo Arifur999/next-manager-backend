@@ -2,7 +2,7 @@ import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
-import { authRateLimit } from "../../middleware/rateLimit.js";
+import { sensitiveActionRateLimit } from "../../middleware/rateLimit.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { SettingsController } from "./settings.controller.js";
 import { setDefaultRateZodSchema, updateOrganizationZodSchema } from "./settings.validation.js";
@@ -19,6 +19,6 @@ router.patch("/exchange-rates/default", checkAuth(Role.admin), validateRequest(s
 
 // Calls out to a third-party API, so it carries the tight limit - a button
 // somebody can hold down should not turn into a request flood at the provider.
-router.post("/exchange-rates/refresh", checkAuth(Role.admin), authRateLimit, SettingsController.refreshRate);
+router.post("/exchange-rates/refresh", checkAuth(Role.admin), sensitiveActionRateLimit, SettingsController.refreshRate);
 
 export const SettingsRoutes = router;

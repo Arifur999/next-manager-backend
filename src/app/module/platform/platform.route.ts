@@ -3,7 +3,7 @@ import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
-import { authRateLimit } from "../../middleware/rateLimit.js";
+import { inviteTokenRateLimit } from "../../middleware/rateLimit.js";
 import { AgencyInviteController } from "./agencyInvite.controller.js";
 import { AnnouncementController } from "./announcement.controller.js";
 import { PlatformController } from "./platform.controller.js";
@@ -314,10 +314,10 @@ export const NotificationRoutes = notificationRouter;
 // mix, and a token for one can never be mistaken for the other.
 const publicRouter = Router();
 
-publicRouter.get("/:token", authRateLimit, PlatformInviteController.getInviteByToken);
+publicRouter.get("/:token", inviteTokenRateLimit, PlatformInviteController.getInviteByToken);
 publicRouter.post(
     "/:token/accept",
-    authRateLimit,
+    inviteTokenRateLimit,
     validateRequest(acceptPlatformInviteZodSchema),
     PlatformInviteController.acceptInvite
 );
@@ -333,10 +333,10 @@ export const PublicPlatformInviteRoutes = publicRouter;
 // different accounts.
 const agencyRouter = Router();
 
-agencyRouter.get("/:token", authRateLimit, AgencyInviteController.getInviteByToken);
+agencyRouter.get("/:token", inviteTokenRateLimit, AgencyInviteController.getInviteByToken);
 agencyRouter.post(
     "/:token/accept",
-    authRateLimit,
+    inviteTokenRateLimit,
     validateRequest(acceptAgencyInviteZodSchema),
     AgencyInviteController.acceptInvite
 );

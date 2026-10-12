@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { checkAuth } from "../../middleware/checkAuth.js";
-import { authRateLimit } from "../../middleware/rateLimit.js";
+import { authRateLimit, refreshRateLimit } from "../../middleware/rateLimit.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { AuthController } from "./auth.controller.js";
 import {
@@ -16,7 +16,7 @@ const router = Router();
 
 router.post("/register", authRateLimit, validateRequest(registerZodSchema), AuthController.register);
 router.post("/login", authRateLimit, validateRequest(loginZodSchema), AuthController.login);
-router.post("/refresh-token", AuthController.refreshToken);
+router.post("/refresh-token", refreshRateLimit, AuthController.refreshToken);
 router.post("/logout", AuthController.logout);
 router.get("/me", checkAuth(), AuthController.getMe);
 // Behind authRateLimit like sign-in, and for the same reason: repeated

@@ -346,7 +346,7 @@ const approveMember = async (id: string, user: IRequestUser) => {
     const member = await findPendingMember(id, user);
 
     return prisma.$transaction(async (tx) => {
-        await assertSeatAvailable(tx, user.organizationId);
+        await assertSeatAvailable(tx, user.organizationId, { excludingUserId: member.id });
 
         const approved = await tx.user.update({
             where: { id },

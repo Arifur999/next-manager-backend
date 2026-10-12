@@ -2273,6 +2273,49 @@ cookie = gateAdminCookie;
 r = await call("POST", `/team-invites/members/${joinedUserId}/approve`);
 check("approving an already-approved member is refused", r.status === 404, `${r.status}`);
 
+// Approving into the last free seat. The pending person already has a row, so
+// the seat count must leave them out or the last seat can never be used.
+if (superEmail && superPassword) {
+  const gateMe = (await call("GET", "/auth/me")).json.data;
+  const gateSeatsUsed = (await call("GET", "/users")).json.data?.length ?? 0;
+
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+  const gateCompany = (await call("GET", "/platform/companies")).json.data?.find((row) => row.id === gateMe?.organization_id);
+  r = await call("POST", "/platform/plans", { code: `lastseat${stamp}`, name: "Last Seat", max_seats: gateSeatsUsed + 1 });
+  const lastSeatPlanId = r.json.data?.id;
+  await call("PATCH", `/platform/companies/${gateMe?.organization_id}/subscription`, { plan_id: lastSeatPlanId, status: "active" });
+
+  const joinPending = async (label) => {
+    cookie = gateAdminCookie;
+    const invite = await call("POST", "/team-invites", { email: `${label}${stamp}@agencio.test` });
+    const token = invite.json.data?.join_url?.split("/join/")[1];
+    cookie = "";
+    const joined = await call("POST", `/join/${token}/accept`, { full_name: label, password: "Passw0rd123" });
+    return joined.json.data?.id;
+  };
+
+  const lastSeatId = await joinPending("lastseat");
+  cookie = gateAdminCookie;
+  r = await call("POST", `/team-invites/members/${lastSeatId}/approve`);
+  check("a pending member can be approved into the last free seat", r.status === 200, `${r.status} ${r.json.message}`);
+
+  const overSeatId = await joinPending("overseat");
+  cookie = gateAdminCookie;
+  r = await call("POST", `/team-invites/members/${overSeatId}/approve`);
+  check("and the next one is refused once the plan is full", r.status === 402, `${r.status} ${r.json.message}`);
+
+  // Put Gate Co back where it was, so later checks are not run against a full plan.
+  cookie = "";
+  await call("POST", "/auth/login", { email: superEmail, password: superPassword });
+  const unlimitedPlanId = (await call("GET", "/platform/plans")).json.data?.find((plan) => plan.max_seats === null)?.id;
+  await call("PATCH", `/platform/companies/${gateMe?.organization_id}/subscription`, {
+    plan_id: gateCompany?.subscription?.plan?.id ?? unlimitedPlanId,
+    status: gateCompany?.subscription?.status ?? "active",
+  });
+  cookie = gateAdminCookie;
+}
+
 // Turning somebody down.
 const rejectEmail = `reject${stamp}@agencio.test`;
 r = await call("POST", "/team-invites", { email: rejectEmail });

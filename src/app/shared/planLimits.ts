@@ -10,7 +10,12 @@ type Tx = Prisma.TransactionClient;
  * adds the row, after locking the subscription, so two admins cannot both take
  * the last free seat.
  */
-export const assertSeatAvailable = async (tx: Tx, organizationId: string): Promise<void> => {
+export const assertSeatAvailable = async (
+    tx: Tx,
+    organizationId: string,
+    // A pending member being approved already has a row; it must not count against itself.
+    { excludingUserId }: { excludingUserId?: string } = {}
+): Promise<void> => {
     await lockRow(tx, { kind: "subscription", organizationId });
 
     const subscription = await tx.subscription.findUnique({
@@ -24,7 +29,11 @@ export const assertSeatAvailable = async (tx: Tx, organizationId: string): Promi
     }
 
     const used = await tx.user.count({
-        where: { organization_id: organizationId, deleted_at: null },
+        where: {
+            organization_id: organizationId,
+            deleted_at: null,
+            ...(excludingUserId ? { id: { not: excludingUserId } } : {}),
+        },
     });
 
     if (used >= subscription.plan.max_seats) {

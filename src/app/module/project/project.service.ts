@@ -7,7 +7,7 @@ import { resolveScope } from "../../shared/resolveScope.js";
 import { assertProjectAvailable } from "../../middleware/checkSubscription.js";
 import { prisma } from "../../lib/prisma.js";
 import { assertOwnService } from "../../shared/assertOwnService.js";
-import { defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
+import { assertOwnStatus, defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
 import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import {
@@ -244,6 +244,10 @@ const createProject = async (payload: ICreateProjectPayload, user: IRequestUser)
     // - they are seeded with the organization - so a missing one means every
     // status was switched off, and saying that is more use than a foreign key
     // error.
+    if (payload.status_id) {
+        await assertOwnStatus(prisma, payload.status_id, user.organizationId, WorkflowKind.project);
+    }
+
     const statusId =
         payload.status_id ?? (await defaultStatusId(prisma, user.organizationId, WorkflowKind.project));
 
@@ -293,6 +297,10 @@ const updateProject = async (id: string, payload: IUpdateProjectPayload, user: I
     }
 
     await assertOwnService(prisma, payload.service_id, user);
+
+    if (payload.status_id) {
+        await assertOwnStatus(prisma, payload.status_id, user.organizationId, WorkflowKind.project);
+    }
 
     return prisma.project.update({
         where: { id },

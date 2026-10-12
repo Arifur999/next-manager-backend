@@ -1,5 +1,7 @@
+import status from "http-status";
 import { Prisma } from "../../generated/prisma/client.js";
 import { StatusCategory, WorkflowKind } from "../../generated/prisma/enums.js";
+import AppError from "../errorHelpers/AppError.js";
 
 /**
  * The boards a new agency starts with.
@@ -68,11 +70,30 @@ export const defaultStatusId = async (
     organizationId: string,
     kind: WorkflowKind
 ) => {
-    const status = await tx.workflowStatus.findFirst({
+    const row = await tx.workflowStatus.findFirst({
         where: { organization_id: organizationId, kind, is_active: true },
         orderBy: [{ is_default: "desc" }, { sort_order: "asc" }],
         select: { id: true },
     });
 
-    return status?.id ?? null;
+    return row?.id ?? null;
+};
+
+/** A status id sent by a client must be this company's, and on the right board. */
+export const assertOwnStatus = async (
+    tx: Prisma.TransactionClient,
+    id: string,
+    organizationId: string,
+    kind: WorkflowKind
+) => {
+    const row = await tx.workflowStatus.findFirst({
+        where: { id, organization_id: organizationId, kind },
+        select: { id: true, category: true },
+    });
+
+    if (!row) {
+        throw new AppError(status.NOT_FOUND, "That status does not exist on this board");
+    }
+
+    return row;
 };

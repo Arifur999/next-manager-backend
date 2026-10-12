@@ -10,7 +10,7 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { resolveScope } from "../../shared/resolveScope.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
-import { defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
+import { assertOwnStatus, defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
 import { notify } from "../../shared/notify.js";
 import {
     dateRangeWhere,
@@ -189,6 +189,10 @@ const createTask = async (payload: ICreateTaskPayload, user: IRequestUser) => {
         // statuses - they are seeded with the organization - so a missing one
         // means somebody switched every single status off, and saying that is
         // more use than a foreign key error.
+        if (payload.status_id) {
+            await assertOwnStatus(tx, payload.status_id, user.organizationId, WorkflowKind.task);
+        }
+
         const statusId =
             payload.status_id ?? (await defaultStatusId(tx, user.organizationId, WorkflowKind.task));
 
@@ -260,19 +264,8 @@ const updateTask = async (id: string, payload: IUpdateTaskPayload, user: IReques
         // to "Shipped" or adds "Client approved" alongside it keeps a working
         // completion date; comparing names would silently stop the clock.
         const nextStatus = payload.status_id
-            ? await tx.workflowStatus.findFirst({
-                  where: {
-                      id: payload.status_id,
-                      organization_id: user.organizationId,
-                      kind: WorkflowKind.task,
-                  },
-                  select: { id: true, category: true },
-              })
+            ? await assertOwnStatus(tx, payload.status_id, user.organizationId, WorkflowKind.task)
             : null;
-
-        if (payload.status_id && !nextStatus) {
-            throw new AppError(status.NOT_FOUND, "That status does not exist on this board");
-        }
 
         const wasDone = existing.status.category === StatusCategory.done;
         const isDone = nextStatus ? nextStatus.category === StatusCategory.done : wasDone;

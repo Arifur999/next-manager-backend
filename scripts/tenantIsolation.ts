@@ -797,6 +797,39 @@ ok(
     JSON.stringify((vaultList.json.data as { label: string }[])?.map((row) => row.label))
 );
 
+console.log("\n--- A tries to use B's workflow statuses ---");
+const bProjectStatuses = (await call("GET", "/workflow-statuses?kind=project", undefined, b.cookie)).json.data as { id: string }[];
+const bTaskStatuses = (await call("GET", "/workflow-statuses?kind=task", undefined, b.cookie)).json.data as { id: string }[];
+const aTaskStatuses = (await call("GET", "/workflow-statuses?kind=task", undefined, a.cookie)).json.data as { id: string }[];
+ok("B's statuses are readable by B", Boolean(bProjectStatuses?.[0]?.id && bTaskStatuses?.[0]?.id));
+
+refused(
+    "project created on B's status",
+    await call("POST", "/projects", {
+        client_id: a.client.id,
+        name: "Foreign status",
+        code: `FS-${stamp}`,
+        status_id: bProjectStatuses[0].id,
+    }, a.cookie)
+);
+refused(
+    "project moved onto B's status",
+    await call("PATCH", `/projects/${a.project.id}`, { status_id: bProjectStatuses[0].id }, a.cookie)
+);
+refused(
+    "task created on B's status",
+    await call("POST", "/tasks", { project_id: a.project.id, title: "Foreign status", status_id: bTaskStatuses[0].id }, a.cookie)
+);
+refused(
+    "project created on a task status",
+    await call("POST", "/projects", {
+        client_id: a.client.id,
+        name: "Wrong board",
+        code: `WB-${stamp}`,
+        status_id: aTaskStatuses[0].id,
+    }, a.cookie)
+);
+
 console.log("\n--- A tries to MODIFY B's records ---");
 refused("edit B's client", await call("PATCH", `/clients/${b.client.id}`, { name: "Owned" }, a.cookie));
 refused("edit B's project", await call("PATCH", `/projects/${b.project.id}`, { name: "Owned" }, a.cookie));

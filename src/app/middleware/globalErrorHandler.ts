@@ -95,10 +95,11 @@ export const globalErrorHandler = async (err: any, req: Request, res: Response, 
         message = err.status === status.REQUEST_ENTITY_TOO_LARGE ? "Request body is too large" : "Request body is not valid JSON";
         errorSource = [{ path: "body", message }];
     } else if (err instanceof Error) {
+        // An unexpected error's text can describe internals; production gets the fixed sentence.
         statusCode = status.INTERNAL_SERVER_ERROR;
-        message = err.message;
+        message = env.NODE_ENV === "production" ? "Internal Server Error" : err.message;
         stack = err.stack;
-        errorSource = [{ path: "", message: err.message }];
+        errorSource = [{ path: "", message }];
     }
 
     const errorResponse: IErrorResponse = {

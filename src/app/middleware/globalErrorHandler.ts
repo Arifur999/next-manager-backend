@@ -21,6 +21,19 @@ import { IError, IErrorResponse } from "../interfaces/error.interfaces.js";
 const isExpectedAuthError = (err: any) =>
     err instanceof AppError && (err.statusCode === status.UNAUTHORIZED || err.statusCode === status.FORBIDDEN);
 
+// express.json() rejects with a 4xx `status` and a string `type` such as
+// entity.parse.failed or entity.too.large.
+const isBodyParserError = (err: unknown): err is Error & { status: number; type: string } => {
+    if (!(err instanceof Error)) return false;
+    const candidate = err as Error & { status?: unknown; type?: unknown };
+    return (
+        typeof candidate.status === "number" &&
+        candidate.status >= 400 &&
+        candidate.status < 500 &&
+        typeof candidate.type === "string"
+    );
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
 export const globalErrorHandler = async (err: any, req: Request, res: Response, next: NextFunction) => {
     if (env.NODE_ENV === "development") {
@@ -77,6 +90,10 @@ export const globalErrorHandler = async (err: any, req: Request, res: Response, 
         message = err.message;
         stack = err.stack;
         errorSource = [{ path: "", message: err.message }];
+    } else if (isBodyParserError(err)) {
+        statusCode = err.status;
+        message = err.status === status.REQUEST_ENTITY_TOO_LARGE ? "Request body is too large" : "Request body is not valid JSON";
+        errorSource = [{ path: "body", message }];
     } else if (err instanceof Error) {
         statusCode = status.INTERNAL_SERVER_ERROR;
         message = err.message;

@@ -28,9 +28,37 @@ const runValidation = (zodSchema: z.ZodType, req: Request, next: NextFunction) =
     next();
 };
 
-export const validateRequest = (zodSchema: z.ZodType) =>
-    (req: Request, _res: Response, next: NextFunction) =>
-        runValidation(zodSchema, req, next);
+type RequestSchemas = { body?: z.ZodType; query?: z.ZodType; params?: z.ZodType };
+
+/**
+ * Validates the body (a schema on its own) or any of body, query and params.
+ * Parsed params replace req.params; parsed query lands in res.locals.query,
+ * because req.query is a read-only getter in Express 5.
+ */
+export const validateRequest = (schemas: z.ZodType | RequestSchemas) =>
+    (req: Request, res: Response, next: NextFunction) => {
+        if (schemas instanceof z.ZodType) {
+            return runValidation(schemas, req, next);
+        }
+
+        if (schemas.params) {
+            const params = schemas.params.safeParse(req.params);
+            if (!params.success) return next(params.error);
+            req.params = params.data as Request["params"];
+        }
+
+        if (schemas.query) {
+            const query = schemas.query.safeParse(req.query);
+            if (!query.success) return next(query.error);
+            res.locals.query = query.data;
+        }
+
+        if (schemas.body) {
+            return runValidation(schemas.body, req, next);
+        }
+
+        next();
+    };
 
 /**
  * The same validation, with the schema chosen by who is asking.

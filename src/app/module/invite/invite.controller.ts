@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { InviteService } from "./invite.service.js";
+import { idOf, paramsOf, tokenParams } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const createInvite = catchAsync(async (req: Request, res: Response) => {
-    const result = await InviteService.createInvite(req.body, req.user as IRequestUser);
+    const result = await InviteService.createInvite(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -21,7 +22,7 @@ const createInvite = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getInvites = catchAsync(async (req: Request, res: Response) => {
-    const result = await InviteService.getInvites(req.user as IRequestUser);
+    const result = await InviteService.getInvites(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -32,8 +33,8 @@ const getInvites = catchAsync(async (req: Request, res: Response) => {
 
 const revokeInvite = catchAsync(async (req: Request, res: Response) => {
     const result = await InviteService.revokeInvite(
-        req.params.id as string,
-        req.user as IRequestUser
+        idOf(req),
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -44,7 +45,7 @@ const revokeInvite = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getInviteByToken = catchAsync(async (req: Request, res: Response) => {
-    const result = await InviteService.getInviteByToken(req.params.token as string);
+    const result = await InviteService.getInviteByToken(paramsOf(req, tokenParams).token);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -54,7 +55,7 @@ const getInviteByToken = catchAsync(async (req: Request, res: Response) => {
 });
 
 const acceptInvite = catchAsync(async (req: Request, res: Response) => {
-    const result = await InviteService.acceptInvite(req.params.token as string, req.body);
+    const result = await InviteService.acceptInvite(paramsOf(req, tokenParams).token, req.body);
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -65,8 +66,8 @@ const acceptInvite = catchAsync(async (req: Request, res: Response) => {
 
 const approveMember = catchAsync(async (req: Request, res: Response) => {
     const result = await InviteService.approveMember(
-        req.params.id as string,
-        req.user as IRequestUser
+        idOf(req),
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -78,9 +79,9 @@ const approveMember = catchAsync(async (req: Request, res: Response) => {
 
 const rejectMember = catchAsync(async (req: Request, res: Response) => {
     const result = await InviteService.rejectMember(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,

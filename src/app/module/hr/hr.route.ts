@@ -14,6 +14,7 @@ import {
     setPayrollItemsZodSchema,
     updateLeaveTypeZodSchema,
 } from "./hr.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -52,7 +53,7 @@ router.post(
 router.patch(
     "/leave-types/:id",
     checkAuth(Role.admin),
-    validateRequest(updateLeaveTypeZodSchema),
+    validateRequest({ params: idParams, body: updateLeaveTypeZodSchema }),
     HrController.updateLeaveType
 );
 
@@ -67,11 +68,11 @@ router.post(
     validateRequest(requestLeaveZodSchema),
     HrController.requestLeave
 );
-router.post("/leave/:id/cancel", checkAuth(), requireCompany, HrController.cancelLeave);
+router.post("/leave/:id/cancel", checkAuth(), requireCompany, validateRequest({ params: idParams }), HrController.cancelLeave);
 router.post(
     "/leave/:id/decide",
     checkAuth(...approver),
-    validateRequest(decideLeaveZodSchema),
+    validateRequest({ params: idParams, body: decideLeaveZodSchema }),
     HrController.decideLeave
 );
 
@@ -90,15 +91,15 @@ router.post(
 router.patch(
     "/payroll/:id/items",
     checkAuth(Role.admin),
-    validateRequest(setPayrollItemsZodSchema),
+    validateRequest({ params: idParams, body: setPayrollItemsZodSchema }),
     HrController.setPayrollItems
 );
 router.post(
     "/payroll/:id/complete",
     checkAuth(Role.admin),
-    validateRequest(completePayrollZodSchema),
+    validateRequest({ params: idParams, body: completePayrollZodSchema }),
     HrController.completePayroll
 );
-router.delete("/payroll/:id", checkAuth(Role.admin), HrController.deletePayrollRun);
+router.delete("/payroll/:id", checkAuth(Role.admin), validateRequest({ params: idParams }), HrController.deletePayrollRun);
 
 export const HrRoutes = router;

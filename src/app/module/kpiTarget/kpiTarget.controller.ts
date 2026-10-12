@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import { KpiMetric, KpiPeriod } from "../../../generated/prisma/enums.js";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { KpiTargetService } from "./kpiTarget.service.js";
+import { idOf } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 // An unknown metric in the query string widens the view rather than erroring:
 // a stale bookmark should still show something.
@@ -23,7 +24,7 @@ const parseFilters = (query: Record<string, unknown>) => ({
 const getAllTargets = catchAsync(async (req: Request, res: Response) => {
     // Not paginated: a company has a handful of targets, not a feed of them.
     const { rows } = await KpiTargetService.getAllTargets(
-        req.user as IRequestUser,
+        requireUser(req),
         parseFilters(req.query as Record<string, unknown>)
     );
     sendResponse(res, {
@@ -35,7 +36,7 @@ const getAllTargets = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createTarget = catchAsync(async (req: Request, res: Response) => {
-    const result = await KpiTargetService.createTarget(req.body, req.user as IRequestUser);
+    const result = await KpiTargetService.createTarget(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -46,9 +47,9 @@ const createTarget = catchAsync(async (req: Request, res: Response) => {
 
 const updateTarget = catchAsync(async (req: Request, res: Response) => {
     const result = await KpiTargetService.updateTarget(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -60,8 +61,8 @@ const updateTarget = catchAsync(async (req: Request, res: Response) => {
 
 const deleteTarget = catchAsync(async (req: Request, res: Response) => {
     const result = await KpiTargetService.deleteTarget(
-        req.params.id as string,
-        req.user as IRequestUser
+        idOf(req),
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,

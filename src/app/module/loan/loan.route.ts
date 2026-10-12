@@ -13,6 +13,7 @@ import {
     updateLoanZodSchema,
     updateShareholderZodSchema,
 } from "./loan.validation.js";
+import { instalmentIdParams, idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -35,22 +36,22 @@ router.post("/", ...admin, validateRequest(createLoanZodSchema), LoanController.
 router.patch(
     "/instalments/:instalmentId/pay",
     ...admin,
-    validateRequest(payInstalmentZodSchema),
+    validateRequest({ params: instalmentIdParams, body: payInstalmentZodSchema }),
     LoanController.payInstalment
 );
 // Undoing a repayment recorded by mistake. Writes an opposite ledger row rather
 // than deleting one, so the history stays true.
-router.patch("/instalments/:instalmentId/reverse", ...admin, LoanController.reverseInstalment);
+router.patch("/instalments/:instalmentId/reverse", ...admin, validateRequest({ params: instalmentIdParams }), LoanController.reverseInstalment);
 
-router.get("/:id", ...admin, LoanController.getLoan);
-router.patch("/:id", ...admin, validateRequest(updateLoanZodSchema), LoanController.updateLoan);
+router.get("/:id", ...admin, validateRequest({ params: idParams }), LoanController.getLoan);
+router.patch("/:id", ...admin, validateRequest({ params: idParams, body: updateLoanZodSchema }), LoanController.updateLoan);
 router.patch(
     "/:id/instalments",
     ...admin,
-    validateRequest(setInstalmentsZodSchema),
+    validateRequest({ params: idParams, body: setInstalmentsZodSchema }),
     LoanController.setInstalments
 );
-router.delete("/:id", ...admin, LoanController.deleteLoan);
+router.delete("/:id", ...admin, validateRequest({ params: idParams }), LoanController.deleteLoan);
 
 export const LoanRoutes = router;
 
@@ -65,7 +66,7 @@ shareholderRouter.post(
     validateRequest(createDistributionZodSchema),
     LoanController.createDistribution
 );
-shareholderRouter.delete("/distributions/:id", ...admin, LoanController.deleteDistribution);
+shareholderRouter.delete("/distributions/:id", ...admin, validateRequest({ params: idParams }), LoanController.deleteDistribution);
 
 shareholderRouter.get("/", ...admin, LoanController.getAllShareholders);
 shareholderRouter.post(
@@ -77,9 +78,9 @@ shareholderRouter.post(
 shareholderRouter.patch(
     "/:id",
     ...admin,
-    validateRequest(updateShareholderZodSchema),
+    validateRequest({ params: idParams, body: updateShareholderZodSchema }),
     LoanController.updateShareholder
 );
-shareholderRouter.delete("/:id", ...admin, LoanController.deleteShareholder);
+shareholderRouter.delete("/:id", ...admin, validateRequest({ params: idParams }), LoanController.deleteShareholder);
 
 export const ShareholderRoutes = shareholderRouter;

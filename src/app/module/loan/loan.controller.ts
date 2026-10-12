@@ -1,19 +1,20 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import { LoanStatus } from "../../../generated/prisma/enums.js";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { LoanService } from "./loan.service.js";
 import { ShareholderService } from "./shareholder.service.js";
+import { idOf, paramsOf, instalmentIdParams } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 // ---------------------------------------------------------------- loans
 
 const getAllLoans = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
     const options = parseListOptions(query);
-    const { rows, total } = await LoanService.getAll(req.user as IRequestUser, options, {
+    const { rows, total } = await LoanService.getAll(requireUser(req), options, {
         status:
             typeof query.status === "string" && query.status in LoanStatus
                 ? (query.status as LoanStatus)
@@ -29,7 +30,7 @@ const getAllLoans = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getLoan = catchAsync(async (req: Request, res: Response) => {
-    const result = await LoanService.getOne(req.params.id as string, req.user as IRequestUser);
+    const result = await LoanService.getOne(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -39,7 +40,7 @@ const getLoan = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getLoanSummary = catchAsync(async (req: Request, res: Response) => {
-    const result = await LoanService.getSummary(req.user as IRequestUser);
+    const result = await LoanService.getSummary(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -49,7 +50,7 @@ const getLoanSummary = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createLoan = catchAsync(async (req: Request, res: Response) => {
-    const result = await LoanService.create(req.body, req.user as IRequestUser);
+    const result = await LoanService.create(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -59,7 +60,7 @@ const createLoan = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateLoan = catchAsync(async (req: Request, res: Response) => {
-    const result = await LoanService.update(req.params.id as string, req.body, req.user as IRequestUser);
+    const result = await LoanService.update(idOf(req), req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -70,9 +71,9 @@ const updateLoan = catchAsync(async (req: Request, res: Response) => {
 
 const setInstalments = catchAsync(async (req: Request, res: Response) => {
     const result = await LoanService.setInstalments(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -84,9 +85,9 @@ const setInstalments = catchAsync(async (req: Request, res: Response) => {
 
 const payInstalment = catchAsync(async (req: Request, res: Response) => {
     const result = await LoanService.payInstalment(
-        req.params.instalmentId as string,
+        paramsOf(req, instalmentIdParams).instalmentId,
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -100,8 +101,8 @@ const payInstalment = catchAsync(async (req: Request, res: Response) => {
 
 const reverseInstalment = catchAsync(async (req: Request, res: Response) => {
     const result = await LoanService.reverseInstalment(
-        req.params.instalmentId as string,
-        req.user as IRequestUser
+        paramsOf(req, instalmentIdParams).instalmentId,
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -112,7 +113,7 @@ const reverseInstalment = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteLoan = catchAsync(async (req: Request, res: Response) => {
-    const result = await LoanService.remove(req.params.id as string, req.user as IRequestUser);
+    const result = await LoanService.remove(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -124,7 +125,7 @@ const deleteLoan = catchAsync(async (req: Request, res: Response) => {
 // ---------------------------------------------------------------- shareholders
 
 const getAllShareholders = catchAsync(async (req: Request, res: Response) => {
-    const result = await ShareholderService.getAll(req.user as IRequestUser);
+    const result = await ShareholderService.getAll(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -139,7 +140,7 @@ const getAllShareholders = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createShareholder = catchAsync(async (req: Request, res: Response) => {
-    const result = await ShareholderService.create(req.body, req.user as IRequestUser);
+    const result = await ShareholderService.create(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -150,9 +151,9 @@ const createShareholder = catchAsync(async (req: Request, res: Response) => {
 
 const updateShareholder = catchAsync(async (req: Request, res: Response) => {
     const result = await ShareholderService.update(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -163,7 +164,7 @@ const updateShareholder = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteShareholder = catchAsync(async (req: Request, res: Response) => {
-    const result = await ShareholderService.remove(req.params.id as string, req.user as IRequestUser);
+    const result = await ShareholderService.remove(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -176,7 +177,7 @@ const getDistributions = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
     const options = parseListOptions(query);
     const { rows, total } = await ShareholderService.getDistributions(
-        req.user as IRequestUser,
+        requireUser(req),
         typeof query.shareholder_id === "string" ? query.shareholder_id : undefined,
         options
     );
@@ -190,7 +191,7 @@ const getDistributions = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createDistribution = catchAsync(async (req: Request, res: Response) => {
-    const result = await ShareholderService.createDistribution(req.body, req.user as IRequestUser);
+    const result = await ShareholderService.createDistribution(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -201,8 +202,8 @@ const createDistribution = catchAsync(async (req: Request, res: Response) => {
 
 const deleteDistribution = catchAsync(async (req: Request, res: Response) => {
     const result = await ShareholderService.deleteDistribution(
-        req.params.id as string,
-        req.user as IRequestUser
+        idOf(req),
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,

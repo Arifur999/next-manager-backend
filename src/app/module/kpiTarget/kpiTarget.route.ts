@@ -5,6 +5,7 @@ import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { KpiTargetController } from "./kpiTarget.controller.js";
 import { createKpiTargetZodSchema, updateKpiTargetZodSchema } from "./kpiTarget.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -23,9 +24,9 @@ router.post(
 router.patch(
     "/:id",
     checkAuth(Role.admin),
-    validateRequest(updateKpiTargetZodSchema),
+    validateRequest({ params: idParams, body: updateKpiTargetZodSchema }),
     KpiTargetController.updateTarget
 );
-router.delete("/:id", checkAuth(Role.admin), KpiTargetController.deleteTarget);
+router.delete("/:id", checkAuth(Role.admin), validateRequest({ params: idParams }), KpiTargetController.deleteTarget);
 
 export const KpiTargetRoutes = router;

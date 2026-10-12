@@ -8,6 +8,7 @@ import {
     createWorkflowStatusZodSchema,
     updateWorkflowStatusZodSchema,
 } from "./workflowStatus.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -31,9 +32,9 @@ router.post(
 router.patch(
     "/:id",
     checkAuth(...boardOwner),
-    validateRequest(updateWorkflowStatusZodSchema),
+    validateRequest({ params: idParams, body: updateWorkflowStatusZodSchema }),
     WorkflowStatusController.update
 );
-router.delete("/:id", checkAuth(...boardOwner), WorkflowStatusController.remove);
+router.delete("/:id", checkAuth(...boardOwner), validateRequest({ params: idParams }), WorkflowStatusController.remove);
 
 export const WorkflowStatusRoutes = router;

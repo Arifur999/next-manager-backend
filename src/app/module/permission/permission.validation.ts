@@ -21,3 +21,9 @@ export const setUserPermissionZodSchema = z.object(square);
 
 export type ISetRolePermissionPayload = z.infer<typeof setRolePermissionZodSchema>;
 export type ISetUserPermissionPayload = z.infer<typeof setUserPermissionZodSchema>;
+
+export const userPermissionParams = z.object({
+    userId: z.uuid("Invalid user id"),
+    module: z.enum(MODULES, "Unknown module"),
+    action: z.enum(ACTIONS, "Unknown action"),
+});

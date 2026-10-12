@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { TimeEntryService } from "./timeEntry.service.js";
+import { idOf, paramsOf, userIdParams } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 // Anything unparseable is ignored rather than rejected: a stale bookmark should
 // widen the view, not produce an error page.
@@ -19,7 +20,7 @@ const getAllEntries = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
     const options = parseListOptions(query);
     const { rows, total } = await TimeEntryService.getAllEntries(
-        req.user as IRequestUser,
+        requireUser(req),
         parseFilters(query),
         options
     );
@@ -36,7 +37,7 @@ const getSummary = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
     const options = parseListOptions(query);
     const result = await TimeEntryService.getSummary(
-        req.user as IRequestUser,
+        requireUser(req),
         { userId: typeof query.user_id === "string" ? query.user_id : undefined },
         options
     );
@@ -49,7 +50,7 @@ const getSummary = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createEntry = catchAsync(async (req: Request, res: Response) => {
-    const result = await TimeEntryService.createEntry(req.body, req.user as IRequestUser);
+    const result = await TimeEntryService.createEntry(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -60,9 +61,9 @@ const createEntry = catchAsync(async (req: Request, res: Response) => {
 
 const updateEntry = catchAsync(async (req: Request, res: Response) => {
     const result = await TimeEntryService.updateEntry(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -74,9 +75,9 @@ const updateEntry = catchAsync(async (req: Request, res: Response) => {
 
 const approveEntry = catchAsync(async (req: Request, res: Response) => {
     const result = await TimeEntryService.setApproval(
-        req.params.id as string,
+        idOf(req),
         true,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -88,9 +89,9 @@ const approveEntry = catchAsync(async (req: Request, res: Response) => {
 
 const unapproveEntry = catchAsync(async (req: Request, res: Response) => {
     const result = await TimeEntryService.setApproval(
-        req.params.id as string,
+        idOf(req),
         false,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -101,7 +102,7 @@ const unapproveEntry = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteEntry = catchAsync(async (req: Request, res: Response) => {
-    const result = await TimeEntryService.deleteEntry(req.params.id as string, req.user as IRequestUser);
+    const result = await TimeEntryService.deleteEntry(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -111,7 +112,7 @@ const deleteEntry = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getCapacities = catchAsync(async (req: Request, res: Response) => {
-    const result = await TimeEntryService.getCapacities(req.user as IRequestUser);
+    const result = await TimeEntryService.getCapacities(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -122,7 +123,7 @@ const getCapacities = catchAsync(async (req: Request, res: Response) => {
 
 const getWorkload = catchAsync(async (req: Request, res: Response) => {
     const options = parseListOptions(req.query as Record<string, unknown>);
-    const result = await TimeEntryService.getWorkload(req.user as IRequestUser, options);
+    const result = await TimeEntryService.getWorkload(requireUser(req), options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -133,9 +134,9 @@ const getWorkload = catchAsync(async (req: Request, res: Response) => {
 
 const setCapacity = catchAsync(async (req: Request, res: Response) => {
     const result = await TimeEntryService.setCapacity(
-        req.params.userId as string,
+        paramsOf(req, userIdParams).userId,
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,

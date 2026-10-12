@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { MilestoneService } from "./milestone.service.js";
+import { idOf } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const parseFilters = (query: Record<string, unknown>) => ({
     projectId: typeof query.project_id === "string" ? query.project_id : undefined,
@@ -16,7 +17,7 @@ const getAllMilestones = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
     const options = parseListOptions(query);
     const { rows, total } = await MilestoneService.getAllMilestones(
-        req.user as IRequestUser,
+        requireUser(req),
         parseFilters(query),
         options
     );
@@ -30,7 +31,7 @@ const getAllMilestones = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createMilestone = catchAsync(async (req: Request, res: Response) => {
-    const result = await MilestoneService.createMilestone(req.body, req.user as IRequestUser);
+    const result = await MilestoneService.createMilestone(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -41,9 +42,9 @@ const createMilestone = catchAsync(async (req: Request, res: Response) => {
 
 const updateMilestone = catchAsync(async (req: Request, res: Response) => {
     const result = await MilestoneService.updateMilestone(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -55,9 +56,9 @@ const updateMilestone = catchAsync(async (req: Request, res: Response) => {
 
 const submitMilestone = catchAsync(async (req: Request, res: Response) => {
     const result = await MilestoneService.submitMilestone(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -69,9 +70,9 @@ const submitMilestone = catchAsync(async (req: Request, res: Response) => {
 
 const acceptMilestone = catchAsync(async (req: Request, res: Response) => {
     const result = await MilestoneService.acceptMilestone(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -83,8 +84,8 @@ const acceptMilestone = catchAsync(async (req: Request, res: Response) => {
 
 const reopenMilestone = catchAsync(async (req: Request, res: Response) => {
     const result = await MilestoneService.reopenMilestone(
-        req.params.id as string,
-        req.user as IRequestUser
+        idOf(req),
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -96,8 +97,8 @@ const reopenMilestone = catchAsync(async (req: Request, res: Response) => {
 
 const deleteMilestone = catchAsync(async (req: Request, res: Response) => {
     const result = await MilestoneService.deleteMilestone(
-        req.params.id as string,
-        req.user as IRequestUser
+        idOf(req),
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,

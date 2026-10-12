@@ -8,6 +8,7 @@ import {
     createProjectLinkZodSchema,
     updateProjectLinkZodSchema,
 } from "./projectLink.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -30,9 +31,9 @@ router.post(
 router.patch(
     "/:id",
     checkAuth(...curator),
-    validateRequest(updateProjectLinkZodSchema),
+    validateRequest({ params: idParams, body: updateProjectLinkZodSchema }),
     ProjectLinkController.update
 );
-router.delete("/:id", checkAuth(...curator), ProjectLinkController.remove);
+router.delete("/:id", checkAuth(...curator), validateRequest({ params: idParams }), ProjectLinkController.remove);
 
 export const ProjectLinkRoutes = router;

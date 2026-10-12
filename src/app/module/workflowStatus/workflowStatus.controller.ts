@@ -1,16 +1,17 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import { WorkflowKind } from "../../../generated/prisma/enums.js";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { WorkflowStatusService } from "./workflowStatus.service.js";
+import { idOf } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const getAll = catchAsync(async (req: Request, res: Response) => {
     const kind = (req.query as Record<string, unknown>).kind;
 
     const result = await WorkflowStatusService.getAll(
-        req.user as IRequestUser,
+        requireUser(req),
         typeof kind === "string" && kind in WorkflowKind ? (kind as WorkflowKind) : undefined
     );
 
@@ -23,7 +24,7 @@ const getAll = catchAsync(async (req: Request, res: Response) => {
 });
 
 const create = catchAsync(async (req: Request, res: Response) => {
-    const result = await WorkflowStatusService.create(req.body, req.user as IRequestUser);
+    const result = await WorkflowStatusService.create(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -34,9 +35,9 @@ const create = catchAsync(async (req: Request, res: Response) => {
 
 const update = catchAsync(async (req: Request, res: Response) => {
     const result = await WorkflowStatusService.update(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -48,8 +49,8 @@ const update = catchAsync(async (req: Request, res: Response) => {
 
 const remove = catchAsync(async (req: Request, res: Response) => {
     const result = await WorkflowStatusService.remove(
-        req.params.id as string,
-        req.user as IRequestUser
+        idOf(req),
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,

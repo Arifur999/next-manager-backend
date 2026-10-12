@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ProjectMemberService } from "./projectMember.service.js";
+import { idOf, paramsOf, projectIdParams } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const getAssignmentOverview = catchAsync(async (req: Request, res: Response) => {
-    const result = await ProjectMemberService.getAssignmentOverview(req.user as IRequestUser);
+    const result = await ProjectMemberService.getAssignmentOverview(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -17,8 +18,8 @@ const getAssignmentOverview = catchAsync(async (req: Request, res: Response) => 
 
 const getProjectMembers = catchAsync(async (req: Request, res: Response) => {
     const result = await ProjectMemberService.getProjectMembers(
-        req.params.projectId as string,
-        req.user as IRequestUser
+        paramsOf(req, projectIdParams).projectId,
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -29,7 +30,7 @@ const getProjectMembers = catchAsync(async (req: Request, res: Response) => {
 });
 
 const assignMember = catchAsync(async (req: Request, res: Response) => {
-    const result = await ProjectMemberService.assignMember(req.body, req.user as IRequestUser);
+    const result = await ProjectMemberService.assignMember(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -40,8 +41,8 @@ const assignMember = catchAsync(async (req: Request, res: Response) => {
 
 const removeMember = catchAsync(async (req: Request, res: Response) => {
     const result = await ProjectMemberService.removeMember(
-        req.params.id as string,
-        req.user as IRequestUser
+        idOf(req),
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,

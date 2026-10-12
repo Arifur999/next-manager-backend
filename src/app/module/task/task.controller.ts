@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { TaskService } from "./task.service.js";
+import { idOf } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 // Anything unrecognised is ignored rather than rejected: a stale bookmark with
 // an old status value should show the unfiltered board, not an error page.
@@ -32,7 +33,7 @@ const getAllTasks = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
     const options = parseListOptions(query);
     const { rows, total } = await TaskService.getAllTasks(
-        req.user as IRequestUser,
+        requireUser(req),
         parseFilters(query),
         options
     );
@@ -46,7 +47,7 @@ const getAllTasks = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createTask = catchAsync(async (req: Request, res: Response) => {
-    const result = await TaskService.createTask(req.body, req.user as IRequestUser);
+    const result = await TaskService.createTask(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -56,7 +57,7 @@ const createTask = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateTask = catchAsync(async (req: Request, res: Response) => {
-    const result = await TaskService.updateTask(req.params.id as string, req.body, req.user as IRequestUser);
+    const result = await TaskService.updateTask(idOf(req), req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -66,7 +67,7 @@ const updateTask = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteTask = catchAsync(async (req: Request, res: Response) => {
-    const result = await TaskService.deleteTask(req.params.id as string, req.user as IRequestUser);
+    const result = await TaskService.deleteTask(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -77,7 +78,7 @@ const deleteTask = catchAsync(async (req: Request, res: Response) => {
 
 const getReport = catchAsync(async (req: Request, res: Response) => {
     const options = parseListOptions(req.query as Record<string, unknown>);
-    const result = await TaskService.getReport(req.user as IRequestUser, options);
+    const result = await TaskService.getReport(requireUser(req), options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

@@ -6,6 +6,7 @@ import { requireScope } from "../../middleware/requireScope.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { ProjectMemberController } from "./projectMember.controller.js";
 import { assignMemberZodSchema } from "./projectMember.validation.js";
+import { idParams, projectIdParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -13,9 +14,9 @@ const router = Router();
 // around them - so the reads are open to everyone signed in.
 // /overview before /:projectId so the literal path is not swallowed.
 router.get("/overview", checkAuth(), requireCompany, ProjectMemberController.getAssignmentOverview);
-router.get("/:projectId", checkAuth(), requireCompany, ProjectMemberController.getProjectMembers);
+router.get("/:projectId", checkAuth(), requireCompany, validateRequest({ params: projectIdParams }), ProjectMemberController.getProjectMembers);
 
 router.post("/", checkAuth(Role.admin, Role.project_manager), requireScope("projects", "assign"), validateRequest(assignMemberZodSchema), ProjectMemberController.assignMember);
-router.delete("/:id", checkAuth(Role.admin, Role.project_manager), requireScope("projects", "assign"), ProjectMemberController.removeMember);
+router.delete("/:id", checkAuth(Role.admin, Role.project_manager), requireScope("projects", "assign"), validateRequest({ params: idParams }), ProjectMemberController.removeMember);
 
 export const ProjectMemberRoutes = router;

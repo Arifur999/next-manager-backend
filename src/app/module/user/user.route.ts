@@ -7,6 +7,7 @@ import {
     createUserZodSchema,
     updateUserZodSchema,
 } from "./user.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -21,10 +22,10 @@ router.get(
     checkAuth(Role.admin, Role.project_manager, Role.sales, Role.operations),
     UserController.getAllUsers
 );
-router.get("/:id", checkAuth(Role.admin, Role.project_manager), UserController.getSingleUser);
+router.get("/:id", checkAuth(Role.admin, Role.project_manager), validateRequest({ params: idParams }), UserController.getSingleUser);
 router.post("/", checkAuth(Role.admin), validateRequest(createUserZodSchema), UserController.createUser);
-router.patch("/:id", checkAuth(Role.admin), validateRequest(updateUserZodSchema), UserController.updateUser);
-router.delete("/:id", checkAuth(Role.admin), UserController.deleteUser);
+router.patch("/:id", checkAuth(Role.admin), validateRequest({ params: idParams, body: updateUserZodSchema }), UserController.updateUser);
+router.delete("/:id", checkAuth(Role.admin), validateRequest({ params: idParams }), UserController.deleteUser);
 
 
 export const UserRoutes = router;

@@ -845,16 +845,9 @@ const SCOPE_ROLES: Record<KpiScope, Role[] | null> = {
     me: null,
 };
 
-const getScope = async (scope: string, user: IRequestUser, options: ListOptions = {}) => {
-    if (!(KPI_SCOPES as readonly string[]).includes(scope)) {
-        throw new AppError(
-            status.BAD_REQUEST,
-            `Unknown scope. Use one of: ${KPI_SCOPES.join(", ")}`
-        );
-    }
-
-    const typed = scope as KpiScope;
-    const allowed = SCOPE_ROLES[typed];
+// The route validates `scope` against KPI_SCOPES.
+const getScope = async (scope: KpiScope, user: IRequestUser, options: ListOptions = {}) => {
+    const allowed = SCOPE_ROLES[scope];
 
     if (allowed && !allowed.includes(user.role as Role)) {
         throw new AppError(status.FORBIDDEN, "You do not have access to this scope");
@@ -862,13 +855,13 @@ const getScope = async (scope: string, user: IRequestUser, options: ListOptions 
 
     const range = resolveRange(options);
     const meta = {
-        scope: typed,
+        scope,
         from: range.from.toISOString().slice(0, 10),
         to: range.to.toISOString().slice(0, 10),
         days: range.days,
     };
 
-    switch (typed) {
+    switch (scope) {
         case "agency":
             return { ...meta, ...(await agencyScope(user, range)) };
         case "sales":

@@ -6,6 +6,7 @@ import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest, validateRequestBy } from "../../middleware/validateRequest.js";
 import { TaskController } from "./task.controller.js";
 import { createTaskZodSchema, taskUpdateSchemaFor } from "./task.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -36,10 +37,11 @@ router.patch(
     requireCompany,
     requireScope("tasks", "edit"),
     validateRequestBy(taskUpdateSchemaFor),
+    validateRequest({ params: idParams }),
     TaskController.updateTask
 );
 
 router.post("/", checkAuth(Role.admin, Role.project_manager), requireScope("tasks", "create"), validateRequest(createTaskZodSchema), TaskController.createTask);
-router.delete("/:id", checkAuth(Role.admin, Role.project_manager), requireScope("tasks", "delete"), TaskController.deleteTask);
+router.delete("/:id", checkAuth(Role.admin, Role.project_manager), requireScope("tasks", "delete"), validateRequest({ params: idParams }), TaskController.deleteTask);
 
 export const TaskRoutes = router;

@@ -8,6 +8,7 @@ import {
     createDepartmentZodSchema,
     updateDepartmentZodSchema,
 } from "./department.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -26,9 +27,9 @@ router.post(
 router.patch(
     "/:id",
     checkAuth(Role.admin),
-    validateRequest(updateDepartmentZodSchema),
+    validateRequest({ params: idParams, body: updateDepartmentZodSchema }),
     DepartmentController.update
 );
-router.delete("/:id", checkAuth(Role.admin), DepartmentController.remove);
+router.delete("/:id", checkAuth(Role.admin), validateRequest({ params: idParams }), DepartmentController.remove);
 
 export const DepartmentRoutes = router;

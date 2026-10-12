@@ -1,11 +1,12 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import { UserStatus } from "../../../generated/prisma/enums.js";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { UserService } from "./user.service.js";
+import { idOf } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const parseFilters = (query: Record<string, unknown>) => ({
     status:
@@ -19,7 +20,7 @@ const getAllUsers = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
     const options = parseListOptions(query);
     const { rows, total } = await UserService.getAllUsers(
-        req.user as IRequestUser,
+        requireUser(req),
         parseFilters(query),
         options
     );
@@ -35,7 +36,7 @@ const getAllUsers = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getSingleUser = catchAsync(async (req: Request, res: Response) => {
-    const result = await UserService.getSingleUser(req.params.id as string, req.user as IRequestUser);
+    const result = await UserService.getSingleUser(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -45,7 +46,7 @@ const getSingleUser = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createUser = catchAsync(async (req: Request, res: Response) => {
-    const result = await UserService.createUser(req.body, req.user as IRequestUser);
+    const result = await UserService.createUser(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -55,7 +56,7 @@ const createUser = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateUser = catchAsync(async (req: Request, res: Response) => {
-    const result = await UserService.updateUser(req.params.id as string, req.body, req.user as IRequestUser);
+    const result = await UserService.updateUser(idOf(req), req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -65,7 +66,7 @@ const updateUser = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteUser = catchAsync(async (req: Request, res: Response) => {
-    const result = await UserService.deleteUser(req.params.id as string, req.user as IRequestUser);
+    const result = await UserService.deleteUser(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

@@ -7,7 +7,9 @@ import { PermissionController } from "./permission.controller.js";
 import {
     setRolePermissionZodSchema,
     setUserPermissionZodSchema,
+    userPermissionParams,
 } from "./permission.validation.js";
+import { userIdParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -28,13 +30,18 @@ router.patch(
 router.patch(
     "/users/:userId",
     ...admin,
-    validateRequest(setUserPermissionZodSchema),
+    validateRequest({ params: userIdParams, body: setUserPermissionZodSchema }),
     PermissionController.setUserPermission
 );
 
 // Removing an override, so they inherit their role again. A delete rather than
 // a write, because "inherits" is a different fact from "is set to the same
 // thing the role happens to say today".
-router.delete("/users/:userId/:module/:action", ...admin, PermissionController.clearUserPermission);
+router.delete(
+    "/users/:userId/:module/:action",
+    ...admin,
+    validateRequest({ params: userPermissionParams }),
+    PermissionController.clearUserPermission
+);
 
 export const PermissionRoutes = router;

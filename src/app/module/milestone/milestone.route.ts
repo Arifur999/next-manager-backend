@@ -10,6 +10,7 @@ import {
     submitMilestoneZodSchema,
     updateMilestoneZodSchema,
 } from "./milestone.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -27,7 +28,7 @@ router.post(
 router.patch(
     "/:id",
     checkAuth(Role.admin, Role.project_manager),
-    validateRequest(updateMilestoneZodSchema),
+    validateRequest({ params: idParams, body: updateMilestoneZodSchema }),
     MilestoneController.updateMilestone
 );
 
@@ -36,7 +37,7 @@ router.patch(
 router.post(
     "/:id/submit",
     checkAuth(), requireCompany,
-    validateRequest(submitMilestoneZodSchema),
+    validateRequest({ params: idParams, body: submitMilestoneZodSchema }),
     MilestoneController.submitMilestone
 );
 
@@ -45,17 +46,18 @@ router.post(
 router.post(
     "/:id/accept",
     checkAuth(Role.admin, Role.project_manager),
-    validateRequest(acceptMilestoneZodSchema),
+    validateRequest({ params: idParams, body: acceptMilestoneZodSchema }),
     MilestoneController.acceptMilestone
 );
 router.post(
     "/:id/reopen",
     checkAuth(Role.admin, Role.project_manager),
+    validateRequest({ params: idParams }),
     MilestoneController.reopenMilestone
 );
 
 // Deleting a missed milestone quietly improves the on-time rate, so it stays
 // with the people who own the schedule and answer for it.
-router.delete("/:id", checkAuth(Role.admin, Role.project_manager), MilestoneController.deleteMilestone);
+router.delete("/:id", checkAuth(Role.admin, Role.project_manager), validateRequest({ params: idParams }), MilestoneController.deleteMilestone);
 
 export const MilestoneRoutes = router;

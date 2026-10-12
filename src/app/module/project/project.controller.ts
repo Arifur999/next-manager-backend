@@ -1,15 +1,16 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ProjectService } from "./project.service.js";
+import { idOf } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const getAllProjects = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
     const options = parseListOptions(query);
-    const { rows, total } = await ProjectService.getAllProjects(req.user as IRequestUser, options, {
+    const { rows, total } = await ProjectService.getAllProjects(requireUser(req), options, {
         statusName: typeof query.status === "string" ? query.status : undefined,
         mine: query.mine === "true",
     });
@@ -23,7 +24,7 @@ const getAllProjects = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getSingleProject = catchAsync(async (req: Request, res: Response) => {
-    const result = await ProjectService.getSingleProject(req.params.id as string, req.user as IRequestUser);
+    const result = await ProjectService.getSingleProject(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -33,7 +34,7 @@ const getSingleProject = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getProjectFinancials = catchAsync(async (req: Request, res: Response) => {
-    const result = await ProjectService.getProjectFinancials(req.params.id as string, req.user as IRequestUser);
+    const result = await ProjectService.getProjectFinancials(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -43,7 +44,7 @@ const getProjectFinancials = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createProject = catchAsync(async (req: Request, res: Response) => {
-    const result = await ProjectService.createProject(req.body, req.user as IRequestUser);
+    const result = await ProjectService.createProject(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -53,7 +54,7 @@ const createProject = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateProject = catchAsync(async (req: Request, res: Response) => {
-    const result = await ProjectService.updateProject(req.params.id as string, req.body, req.user as IRequestUser);
+    const result = await ProjectService.updateProject(idOf(req), req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -64,9 +65,9 @@ const updateProject = catchAsync(async (req: Request, res: Response) => {
 
 const setBaseline = catchAsync(async (req: Request, res: Response) => {
     const result = await ProjectService.setBaseline(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -77,7 +78,7 @@ const setBaseline = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteProject = catchAsync(async (req: Request, res: Response) => {
-    const result = await ProjectService.deleteProject(req.params.id as string, req.user as IRequestUser);
+    const result = await ProjectService.deleteProject(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

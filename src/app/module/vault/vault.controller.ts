@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { VaultService } from "./vault.service.js";
+import { idOf } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 // Who and from where, for the access log. Behind a proxy the real client
 // address is in X-Forwarded-For, which app.set("trust proxy", 1) makes req.ip
@@ -17,7 +18,7 @@ const accessContext = (req: Request) => ({
 const getAllCredentials = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
     const options = parseListOptions(query);
-    const { rows, total } = await VaultService.getAllCredentials(req.user as IRequestUser, options, {
+    const { rows, total } = await VaultService.getAllCredentials(requireUser(req), options, {
         clientId: typeof query.client_id === "string" ? query.client_id : undefined,
         projectId: typeof query.project_id === "string" ? query.project_id : undefined,
     });
@@ -32,8 +33,8 @@ const getAllCredentials = catchAsync(async (req: Request, res: Response) => {
 
 const revealCredential = catchAsync(async (req: Request, res: Response) => {
     const result = await VaultService.revealCredential(
-        req.params.id as string,
-        req.user as IRequestUser,
+        idOf(req),
+        requireUser(req),
         accessContext(req)
     );
     sendResponse(res, {
@@ -45,7 +46,7 @@ const revealCredential = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getAccessLog = catchAsync(async (req: Request, res: Response) => {
-    const result = await VaultService.getAccessLog(req.params.id as string, req.user as IRequestUser);
+    const result = await VaultService.getAccessLog(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -55,7 +56,7 @@ const getAccessLog = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createCredential = catchAsync(async (req: Request, res: Response) => {
-    const result = await VaultService.createCredential(req.body, req.user as IRequestUser, accessContext(req));
+    const result = await VaultService.createCredential(req.body, requireUser(req), accessContext(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -66,9 +67,9 @@ const createCredential = catchAsync(async (req: Request, res: Response) => {
 
 const updateCredential = catchAsync(async (req: Request, res: Response) => {
     const result = await VaultService.updateCredential(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser,
+        requireUser(req),
         accessContext(req)
     );
     sendResponse(res, {
@@ -81,8 +82,8 @@ const updateCredential = catchAsync(async (req: Request, res: Response) => {
 
 const deleteCredential = catchAsync(async (req: Request, res: Response) => {
     const result = await VaultService.deleteCredential(
-        req.params.id as string,
-        req.user as IRequestUser,
+        idOf(req),
+        requireUser(req),
         accessContext(req)
     );
     sendResponse(res, {

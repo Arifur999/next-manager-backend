@@ -8,6 +8,7 @@ import {
     createConversationZodSchema,
     sendMessageZodSchema,
 } from "./chat.validation.js";
+import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -31,24 +32,24 @@ router.post(
     ChatController.createConversation
 );
 
-router.get("/:id/messages", ...member, ChatController.getMessages);
+router.get("/:id/messages", ...member, validateRequest({ params: idParams }), ChatController.getMessages);
 // Persisted here and broadcast afterwards, never socket-only: a dropped
 // connection must not lose a message.
 router.post(
     "/:id/messages",
     ...member,
-    validateRequest(sendMessageZodSchema),
+    validateRequest({ params: idParams, body: sendMessageZodSchema }),
     ChatController.sendMessage
 );
 
-router.post("/:id/read", ...member, ChatController.markRead);
+router.post("/:id/read", ...member, validateRequest({ params: idParams }), ChatController.markRead);
 router.post(
     "/:id/members",
     ...member,
-    validateRequest(addMembersZodSchema),
+    validateRequest({ params: idParams, body: addMembersZodSchema }),
     ChatController.addMembers
 );
-router.post("/:id/leave", ...member, ChatController.leave);
-router.post("/:id/archive", ...member, ChatController.setArchived);
+router.post("/:id/leave", ...member, validateRequest({ params: idParams }), ChatController.leave);
+router.post("/:id/archive", ...member, validateRequest({ params: idParams }), ChatController.setArchived);
 
 export const ChatRoutes = router;

@@ -4,6 +4,12 @@ import z from "zod";
 /** `/:id` on every route that takes one. */
 export const idParams = z.object({ id: z.uuid("Invalid id") });
 
+export const projectIdParams = z.object({ projectId: z.uuid("Invalid project id") });
+
+export const userIdParams = z.object({ userId: z.uuid("Invalid user id") });
+
+export const instalmentIdParams = z.object({ instalmentId: z.uuid("Invalid instalment id") });
+
 /** Invite links: opaque tokens, so only presence is checked (an unknown one is a 404). */
 export const tokenParams = z.object({ token: z.string().min(1, "Token is required") });
 

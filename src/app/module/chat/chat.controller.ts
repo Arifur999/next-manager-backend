@@ -1,17 +1,18 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import { ConversationType } from "../../../generated/prisma/enums.js";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ChatService } from "./chat.service.js";
+import { idOf } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const getConversations = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
     // Every sub-view the sidebar offers is a filter over this one list, not a
     // separate endpoint: Unread, Direct, Groups, Project and Archived.
-    const { rows } = await ChatService.getConversations(req.user as IRequestUser, {
+    const { rows } = await ChatService.getConversations(requireUser(req), {
         type:
             typeof query.type === "string" && query.type in ConversationType
                 ? (query.type as ConversationType)
@@ -29,7 +30,7 @@ const getConversations = catchAsync(async (req: Request, res: Response) => {
 });
 
 const createConversation = catchAsync(async (req: Request, res: Response) => {
-    const result = await ChatService.createConversation(req.body, req.user as IRequestUser);
+    const result = await ChatService.createConversation(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.CREATED,
@@ -41,8 +42,8 @@ const createConversation = catchAsync(async (req: Request, res: Response) => {
 const getMessages = catchAsync(async (req: Request, res: Response) => {
     const options = parseListOptions(req.query as Record<string, unknown>);
     const { rows, total } = await ChatService.getMessages(
-        req.params.id as string,
-        req.user as IRequestUser,
+        idOf(req),
+        requireUser(req),
         options
     );
     sendResponse(res, {
@@ -56,9 +57,9 @@ const getMessages = catchAsync(async (req: Request, res: Response) => {
 
 const sendMessage = catchAsync(async (req: Request, res: Response) => {
     const result = await ChatService.sendMessage(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -69,7 +70,7 @@ const sendMessage = catchAsync(async (req: Request, res: Response) => {
 });
 
 const markRead = catchAsync(async (req: Request, res: Response) => {
-    const result = await ChatService.markRead(req.params.id as string, req.user as IRequestUser);
+    const result = await ChatService.markRead(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -80,9 +81,9 @@ const markRead = catchAsync(async (req: Request, res: Response) => {
 
 const addMembers = catchAsync(async (req: Request, res: Response) => {
     const result = await ChatService.addMembers(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -93,7 +94,7 @@ const addMembers = catchAsync(async (req: Request, res: Response) => {
 });
 
 const leave = catchAsync(async (req: Request, res: Response) => {
-    const result = await ChatService.leave(req.params.id as string, req.user as IRequestUser);
+    const result = await ChatService.leave(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -104,9 +105,9 @@ const leave = catchAsync(async (req: Request, res: Response) => {
 
 const setArchived = catchAsync(async (req: Request, res: Response) => {
     const result = await ChatService.setArchived(
-        req.params.id as string,
+        idOf(req),
         req.body?.archived !== false,
-        req.user as IRequestUser
+        requireUser(req)
     );
     sendResponse(res, {
         success: true,
@@ -117,7 +118,7 @@ const setArchived = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getUnreadTotal = catchAsync(async (req: Request, res: Response) => {
-    const result = await ChatService.getUnreadTotal(req.user as IRequestUser);
+    const result = await ChatService.getUnreadTotal(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

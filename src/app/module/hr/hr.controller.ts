@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import { LeaveStatus } from "../../../generated/prisma/enums.js";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { AttendanceService } from "./attendance.service.js";
 import { LeaveService } from "./leave.service.js";
 import { PayrollService } from "./payroll.service.js";
+import { idOf } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const ok = (res: Response, message: string, data: unknown, httpStatus: number = status.OK) =>
     sendResponse(res, { success: true, httpStatus, message, data });
@@ -18,7 +19,7 @@ const str = (value: unknown) => (typeof value === "string" ? value : undefined);
 
 const getAttendance = catchAsync(async (req: Request, res: Response) => {
     const query = q(req);
-    const result = await AttendanceService.getAll(req.user as IRequestUser, {
+    const result = await AttendanceService.getAll(requireUser(req), {
         from: str(query.from),
         to: str(query.to),
         userId: str(query.user_id),
@@ -27,32 +28,32 @@ const getAttendance = catchAsync(async (req: Request, res: Response) => {
 });
 
 const clock = catchAsync(async (req: Request, res: Response) => {
-    const result = await AttendanceService.clock(req.user as IRequestUser);
+    const result = await AttendanceService.clock(requireUser(req));
     ok(res, result.check_out ? "Checked out" : "Checked in", result);
 });
 
 const recordAttendance = catchAsync(async (req: Request, res: Response) => {
-    const result = await AttendanceService.record(req.body, req.user as IRequestUser);
+    const result = await AttendanceService.record(req.body, requireUser(req));
     ok(res, "Attendance recorded successfully", result);
 });
 
 // ---------------------------------------------------------------- leave
 
 const getLeaveTypes = catchAsync(async (req: Request, res: Response) => {
-    const result = await LeaveService.getTypes(req.user as IRequestUser);
+    const result = await LeaveService.getTypes(requireUser(req));
     ok(res, "Leave types retrieved successfully", result);
 });
 
 const createLeaveType = catchAsync(async (req: Request, res: Response) => {
-    const result = await LeaveService.createType(req.body, req.user as IRequestUser);
+    const result = await LeaveService.createType(req.body, requireUser(req));
     ok(res, "Leave type added successfully", result, status.CREATED);
 });
 
 const updateLeaveType = catchAsync(async (req: Request, res: Response) => {
     const result = await LeaveService.updateType(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     ok(res, "Leave type updated successfully", result);
 });
@@ -61,7 +62,7 @@ const getLeaveRequests = catchAsync(async (req: Request, res: Response) => {
     const query = q(req);
     const raw = str(query.status);
 
-    const result = await LeaveService.getRequests(req.user as IRequestUser, {
+    const result = await LeaveService.getRequests(requireUser(req), {
         // An unknown status shows everything rather than an error page.
         status: raw && raw in LeaveStatus ? (raw as LeaveStatus) : undefined,
         userId: str(query.user_id),
@@ -72,7 +73,7 @@ const getLeaveRequests = catchAsync(async (req: Request, res: Response) => {
 
 const getLeaveBalance = catchAsync(async (req: Request, res: Response) => {
     const query = q(req);
-    const user = req.user as IRequestUser;
+    const user = requireUser(req);
 
     const result = await LeaveService.getBalance(
         user,
@@ -85,20 +86,20 @@ const getLeaveBalance = catchAsync(async (req: Request, res: Response) => {
 });
 
 const requestLeave = catchAsync(async (req: Request, res: Response) => {
-    const result = await LeaveService.request(req.body, req.user as IRequestUser);
+    const result = await LeaveService.request(req.body, requireUser(req));
     ok(res, "Leave requested successfully", result, status.CREATED);
 });
 
 const cancelLeave = catchAsync(async (req: Request, res: Response) => {
-    const result = await LeaveService.cancel(req.params.id as string, req.user as IRequestUser);
+    const result = await LeaveService.cancel(idOf(req), requireUser(req));
     ok(res, "Request withdrawn", result);
 });
 
 const decideLeave = catchAsync(async (req: Request, res: Response) => {
     const result = await LeaveService.decide(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     ok(res, req.body.approve ? "Leave approved" : "Leave turned down", result);
 });
@@ -106,29 +107,29 @@ const decideLeave = catchAsync(async (req: Request, res: Response) => {
 // ---------------------------------------------------------------- payroll
 
 const getPayrollRuns = catchAsync(async (req: Request, res: Response) => {
-    const result = await PayrollService.getRuns(req.user as IRequestUser);
+    const result = await PayrollService.getRuns(requireUser(req));
     ok(res, "Payroll runs retrieved successfully", result);
 });
 
 const createPayrollRun = catchAsync(async (req: Request, res: Response) => {
-    const result = await PayrollService.createRun(req.body, req.user as IRequestUser);
+    const result = await PayrollService.createRun(req.body, requireUser(req));
     ok(res, "Payroll opened successfully", result, status.CREATED);
 });
 
 const setPayrollItems = catchAsync(async (req: Request, res: Response) => {
     const result = await PayrollService.setItems(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     ok(res, "Payroll saved successfully", result);
 });
 
 const completePayroll = catchAsync(async (req: Request, res: Response) => {
     const result = await PayrollService.complete(
-        req.params.id as string,
+        idOf(req),
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
     // Says what actually happened to the money, because this is the one action
     // in the module that moves any.
@@ -138,8 +139,8 @@ const completePayroll = catchAsync(async (req: Request, res: Response) => {
 
 const deletePayrollRun = catchAsync(async (req: Request, res: Response) => {
     const result = await PayrollService.removeRun(
-        req.params.id as string,
-        req.user as IRequestUser
+        idOf(req),
+        requireUser(req)
     );
     ok(res, "Draft payroll discarded", result);
 });

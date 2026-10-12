@@ -6,6 +6,7 @@ import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { TimeEntryController } from "./timeEntry.controller.js";
 import { createTimeEntryZodSchema, setCapacityZodSchema, updateTimeEntryZodSchema } from "./timeEntry.validation.js";
+import { idParams, userIdParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -16,8 +17,8 @@ const router = Router();
 router.get("/", checkAuth(), requireCompany, TimeEntryController.getAllEntries);
 router.get("/summary", checkAuth(), requireCompany, TimeEntryController.getSummary);
 router.post("/", checkAuth(), requireCompany, validateRequest(createTimeEntryZodSchema), TimeEntryController.createEntry);
-router.patch("/:id", checkAuth(), requireCompany, validateRequest(updateTimeEntryZodSchema), TimeEntryController.updateEntry);
-router.delete("/:id", checkAuth(), requireCompany, TimeEntryController.deleteEntry);
+router.patch("/:id", checkAuth(), requireCompany, validateRequest({ params: idParams, body: updateTimeEntryZodSchema }), TimeEntryController.updateEntry);
+router.delete("/:id", checkAuth(), requireCompany, validateRequest({ params: idParams }), TimeEntryController.deleteEntry);
 
 // Capacity is the denominator every utilization figure divides by, so changing
 // it moves every one of those numbers. That belongs with the people who own
@@ -28,11 +29,11 @@ router.delete("/:id", checkAuth(), requireCompany, TimeEntryController.deleteEnt
 // person's week.
 router.get("/workload", checkAuth(Role.admin, Role.project_manager), TimeEntryController.getWorkload);
 router.get("/capacity", checkAuth(Role.admin, Role.project_manager), TimeEntryController.getCapacities);
-router.patch("/capacity/:userId", checkAuth(Role.admin, Role.project_manager), validateRequest(setCapacityZodSchema), TimeEntryController.setCapacity);
+router.patch("/capacity/:userId", checkAuth(Role.admin, Role.project_manager), validateRequest({ params: userIdParams, body: setCapacityZodSchema }), TimeEntryController.setCapacity);
 
 // Approval is what turns logged time into billable time, so it is a second
 // person's job by definition - the service also refuses self-approval.
-router.post("/:id/approve", checkAuth(Role.admin, Role.project_manager), requireScope("time", "edit"), TimeEntryController.approveEntry);
-router.post("/:id/unapprove", checkAuth(Role.admin, Role.project_manager), requireScope("time", "edit"), TimeEntryController.unapproveEntry);
+router.post("/:id/approve", checkAuth(Role.admin, Role.project_manager), requireScope("time", "edit"), validateRequest({ params: idParams }), TimeEntryController.approveEntry);
+router.post("/:id/unapprove", checkAuth(Role.admin, Role.project_manager), requireScope("time", "edit"), validateRequest({ params: idParams }), TimeEntryController.unapproveEntry);
 
 export const TimeEntryRoutes = router;

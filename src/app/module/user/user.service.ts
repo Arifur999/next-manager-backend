@@ -4,6 +4,7 @@ import { Role, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { assertSeatAvailable } from "../../shared/planLimits.js";
+import { lockRow } from "../../utils/rowLock.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
@@ -166,15 +167,19 @@ const createUser = async (payload: ICreateUserPayload, user: IRequestUser) => {
  * would leave a company nobody can administer, and no amount of support access
  * would fix it from inside.
  */
-const assertNotLastAdmin = async (targetId: string, user: IRequestUser) => {
-    const target = await prisma.user.findFirst({
+const assertNotLastAdmin = async (tx: Prisma.TransactionClient, targetId: string, user: IRequestUser) => {
+    // Locks every admin row first, so two admins demoting each other at once
+    // are serialised and the second one sees the first change.
+    await lockRow(tx, { kind: "organizationAdmins", organizationId: user.organizationId });
+
+    const target = await tx.user.findFirst({
         where: { id: targetId, organization_id: user.organizationId, deleted_at: null },
         select: { role: true },
     });
 
     if (target?.role !== Role.admin) return;
 
-    const adminCount = await prisma.user.count({
+    const adminCount = await tx.user.count({
         where: {
             organization_id: user.organizationId,
             deleted_at: null,
@@ -190,7 +195,6 @@ const assertNotLastAdmin = async (targetId: string, user: IRequestUser) => {
         );
     }
 };
-
 
 /**
  * A department id arriving in a request is checked against the caller's own
@@ -221,6 +225,8 @@ const updateUser = async (id: string, payload: IUpdateUserPayload, user: IReques
         throw new AppError(status.NOT_FOUND, "User not found");
     }
 
+    await assertOwnDepartment(payload.department_id, user);
+
     // Only a change that takes admin away needs the guard - editing the last
     // admin's phone number is fine.
     const losingAdmin =
@@ -228,16 +234,16 @@ const updateUser = async (id: string, payload: IUpdateUserPayload, user: IReques
         ((payload.role !== undefined && payload.role !== Role.admin) ||
             payload.status === UserStatus.suspended);
 
-    if (losingAdmin) {
-        await assertNotLastAdmin(id, user);
-    }
+    return prisma.$transaction(async (tx) => {
+        if (losingAdmin) {
+            await assertNotLastAdmin(tx, id, user);
+        }
 
-    await assertOwnDepartment(payload.department_id, user);
-
-    return prisma.user.update({
-        where: { id },
-        data: payload,
-        select: PUBLIC_USER_FIELDS,
+        return tx.user.update({
+            where: { id },
+            data: payload,
+            select: PUBLIC_USER_FIELDS,
+        });
     });
 };
 
@@ -254,11 +260,11 @@ const deleteUser = async (id: string, user: IRequestUser) => {
         throw new AppError(status.NOT_FOUND, "User not found");
     }
 
-    await assertNotLastAdmin(id, user);
-
     // Soft delete, and deactivate in the same write: a row that is only flagged
     // deleted but still active would keep passing checkAuth.
     await prisma.$transaction(async (tx) => {
+        await assertNotLastAdmin(tx, id, user);
+
         await tx.user.update({
             where: { id },
             data: { deleted_at: new Date(), deleted_by: user.userId, status: UserStatus.suspended },

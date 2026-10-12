@@ -5,6 +5,7 @@ import { env } from "../../config/env.js";
 import { UserStatus } from "../../generated/prisma/enums.js";
 import { prisma } from "../lib/prisma.js";
 import { jwtUtils } from "../utils/jwt.js";
+import { isAllowedOrigin } from "../shared/allowedOrigins.js";
 import { readAccessToken } from "./readAccessToken.js";
 
 /**
@@ -149,6 +150,14 @@ export const attachChatSocket = (server: Server) => {
         if (pathname !== "/ws") return;
 
         socket.on("error", () => socket.destroy());
+
+        // The cookie is SameSite=Lax, so a sibling site could still open a socket
+        // as the user. The Origin must be one CORS would accept.
+        if (!isAllowedOrigin(request.headers.origin)) {
+            socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
+            socket.destroy();
+            return;
+        }
 
         void authenticate(request.headers.cookie).then((user) => {
             if (!user) {

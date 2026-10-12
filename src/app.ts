@@ -10,7 +10,7 @@ import { PlatformFinanceService } from "./app/module/platform/platformFinance.se
 import { SecurityService } from "./app/module/security/security.service.js";
 import { indexRoute } from "./app/routes/index.js";
 import { syncTodaysRate } from "./app/utils/currencyRate.js";
-import { env } from "./config/env.js";
+import { isAllowedOrigin } from "./app/shared/allowedOrigins.js";
 
 const app: Application = express();
 
@@ -91,26 +91,6 @@ cron.schedule("15 2 * * *", async () => {
 // 1 = trust exactly one proxy hop.
 app.set("trust proxy", 1);
 
-// FRONTEND_URL may be a single origin or a comma-separated list (e.g. both the
-// www and bare-domain variants of a site).
-const staticAllowedOrigins = env.FRONTEND_URL.split(",")
-    .map((url) => url.trim())
-    .filter(Boolean);
-
-const isDevelopment = env.NODE_ENV !== "production";
-
-function isAllowedOrigin(origin?: string): boolean {
-    // No Origin header: same-origin navigations, curl, server-to-server. The
-    // Next.js server calls this API without one on every server-rendered page.
-    if (!origin) return true;
-    if (staticAllowedOrigins.includes(origin)) return true;
-    if (isDevelopment && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
-    return false;
-}
-
-// Never a wildcard-subdomain allowance here. A free-to-register preview host
-// accepted as a credentialed origin is one config change away from being a real
-// cross-workspace read of every tenant's data.
 app.use(cors({
     origin(origin, callback) {
         callback(null, isAllowedOrigin(origin));

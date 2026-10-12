@@ -8,6 +8,7 @@ import { logActivity, money } from "../../shared/activity.js";
 import { isOverdue, recalcInvoiceStatus } from "../../shared/invoiceStatus.js";
 import { dateRangeWhere, escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateInvoicePayload, IUpdateInvoicePayload } from "./invoice.validation.js";
+import { formatInvoiceNumber } from "./invoiceNumber.js";
 
 /**
  * Invoices, billed in USD like everything else client-facing.
@@ -80,25 +81,18 @@ const priceItems = (items: LineItemInput[], discount: number, tax: number) => {
 };
 
 /**
- * Next invoice number for the agency, as AGY-0001.
- *
- * Derived from the highest existing number rather than a count, so deleting an
- * invoice cannot make the next one collide with a number already used. Still
- * racy under genuinely simultaneous creates, which the unique index on
- * (organization_id, invoice_number) turns into a clean 409 rather than two
- * invoices sharing a number.
+ * Next invoice number, from the highest INV-<n> (up to nine digits) as a number. Text ordering put
+ * INV-10000 below INV-9999, and a hand-typed number like Retainer-Q3 is ignored.
+ * Simultaneous creates still meet the unique index and get a clean 409.
  */
 const nextInvoiceNumber = async (tx: Prisma.TransactionClient, organizationId: string) => {
-    const latest = await tx.invoice.findFirst({
-        where: { organization_id: organizationId },
-        orderBy: { invoice_number: "desc" },
-        select: { invoice_number: true },
-    });
+    const [row] = await tx.$queryRaw<{ seq: number | null }[]>`
+        SELECT max(substring(invoice_number from '^INV-([0-9]{1,9})$')::int) AS seq
+        FROM invoices
+        WHERE organization_id = ${organizationId}
+    `;
 
-    const trailing = latest?.invoice_number.match(/(\d+)$/);
-    const next = trailing ? Number(trailing[1]) + 1 : 1;
-
-    return `INV-${String(next).padStart(4, "0")}`;
+    return formatInvoiceNumber(row?.seq ?? null);
 };
 
 const decorate = <T extends { status: InvoiceStatus; due_date: Date }>(invoice: T) => ({

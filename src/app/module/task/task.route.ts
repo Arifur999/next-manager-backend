@@ -34,6 +34,7 @@ router.patch(
     "/:id",
     checkAuth(Role.admin, Role.project_manager, Role.operations),
     requireCompany,
+    requireScope("tasks", "edit"),
     validateRequestBy(taskUpdateSchemaFor),
     TaskController.updateTask
 );

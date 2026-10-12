@@ -2,6 +2,7 @@ import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
+import { requireScope } from "../../middleware/requireScope.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { ProjectMemberController } from "./projectMember.controller.js";
 import { assignMemberZodSchema } from "./projectMember.validation.js";
@@ -14,7 +15,7 @@ const router = Router();
 router.get("/overview", checkAuth(), requireCompany, ProjectMemberController.getAssignmentOverview);
 router.get("/:projectId", checkAuth(), requireCompany, ProjectMemberController.getProjectMembers);
 
-router.post("/", checkAuth(Role.admin, Role.project_manager), validateRequest(assignMemberZodSchema), ProjectMemberController.assignMember);
-router.delete("/:id", checkAuth(Role.admin, Role.project_manager), ProjectMemberController.removeMember);
+router.post("/", checkAuth(Role.admin, Role.project_manager), requireScope("projects", "assign"), validateRequest(assignMemberZodSchema), ProjectMemberController.assignMember);
+router.delete("/:id", checkAuth(Role.admin, Role.project_manager), requireScope("projects", "assign"), ProjectMemberController.removeMember);
 
 export const ProjectMemberRoutes = router;

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
+import { requireScope } from "../../middleware/requireScope.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { ServiceController } from "./service.controller.js";
 import {
@@ -25,12 +26,14 @@ router.get("/categories", checkAuth(), requireCompany, ServiceController.getCate
 router.post(
     "/categories",
     checkAuth(...seller),
+    requireScope("services", "create"),
     validateRequest(createServiceCategoryZodSchema),
     ServiceController.createCategory
 );
 router.patch(
     "/categories/:id",
     checkAuth(...seller),
+    requireScope("services", "edit"),
     validateRequest(updateServiceCategoryZodSchema),
     ServiceController.updateCategory
 );
@@ -40,12 +43,14 @@ router.get("/templates", checkAuth(), requireCompany, ServiceController.getTempl
 router.post(
     "/templates",
     checkAuth(...seller),
+    requireScope("services", "create"),
     validateRequest(createServiceTemplateZodSchema),
     ServiceController.createTemplate
 );
 router.patch(
     "/templates/:id",
     checkAuth(...seller),
+    requireScope("services", "edit"),
     validateRequest(updateServiceTemplateZodSchema),
     ServiceController.updateTemplate
 );
@@ -61,12 +66,14 @@ router.get("/:id", checkAuth(), requireCompany, ServiceController.getService);
 router.post(
     "/",
     checkAuth(...seller),
+    requireScope("services", "create"),
     validateRequest(createServiceZodSchema),
     ServiceController.createService
 );
 router.patch(
     "/:id",
     checkAuth(...seller),
+    requireScope("services", "edit"),
     validateRequest(updateServiceZodSchema),
     ServiceController.updateService
 );

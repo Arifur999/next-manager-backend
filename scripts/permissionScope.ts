@@ -242,6 +242,30 @@ const moved = await call("PATCH", `/vault/${onMineId}`, { project_id: theirsId }
 check("nor move one onto a project they are not on", moved.status === 404, `${moved.status}`);
 await setScope(Role.sales, "vault", "view", "all");
 
+console.log("\n--- task edits, service writes and assignment follow the grid ---");
+const pmEmail = `scopepm${stamp}@agencio.test`;
+await call("POST", "/users", { full_name: "Scope PM", email: pmEmail, password: "Passw0rd123", role: "project_manager" }, admin);
+const pmCookie = (await call("POST", "/auth/login", { email: pmEmail, password: "Passw0rd123" })).cookie;
+const task = await call("POST", "/tasks", { project_id: mineId, title: "Scoped task" }, admin);
+const taskId = (task.json as unknown as { data: { id: string } }).data?.id;
+
+const pmEditAllowed = await call("PATCH", `/tasks/${taskId}`, { title: "Renamed" }, pmCookie);
+check("by default a project manager edits tasks", pmEditAllowed.status === 200, `${pmEditAllowed.status}`);
+await setScope(Role.project_manager, "tasks", "edit", "none");
+const pmEditRefused = await call("PATCH", `/tasks/${taskId}`, { title: "Renamed again" }, pmCookie);
+check("tasks edit 'none' refuses a PATCH", pmEditRefused.status === 403, `${pmEditRefused.status}`);
+await setScope(Role.project_manager, "tasks", "edit", "all");
+
+await setScope(Role.project_manager, "projects", "assign", "none");
+const assignRefused = await call("POST", "/project-members", { project_id: theirsId, user_id: workerId }, pmCookie);
+check("projects assign 'none' refuses adding a member", assignRefused.status === 403, `${assignRefused.status}`);
+await setScope(Role.project_manager, "projects", "assign", "all");
+
+await setScope(Role.sales, "services", "create", "none");
+const serviceRefused = await call("POST", "/services", { name: `Scoped ${stamp}` }, salesCookie);
+check("services create 'none' refuses a new service", serviceRefused.status === 403, `${serviceRefused.status}`);
+await setScope(Role.sales, "services", "create", "all");
+
 await setRoleScope("assigned");
 await prisma.$disconnect();
 

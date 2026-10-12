@@ -1,15 +1,15 @@
 import { Request, Response } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ReportService } from "./report.service.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const getProfitAndLoss = catchAsync(async (req: Request, res: Response) => {
     const options = parseListOptions(req.query as Record<string, unknown>);
-    const result = await ReportService.getProfitAndLoss(req.user as IRequestUser, options);
+    const result = await ReportService.getProfitAndLoss(requireUser(req), options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -20,7 +20,7 @@ const getProfitAndLoss = catchAsync(async (req: Request, res: Response) => {
 
 const getCashFlow = catchAsync(async (req: Request, res: Response) => {
     const options = parseListOptions(req.query as Record<string, unknown>);
-    const result = await ReportService.getCashFlow(req.user as IRequestUser, options);
+    const result = await ReportService.getCashFlow(requireUser(req), options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -32,7 +32,7 @@ const getCashFlow = catchAsync(async (req: Request, res: Response) => {
 const getClientRevenue = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
     const options = parseListOptions(query);
-    const user = req.user as IRequestUser;
+    const user = requireUser(req);
 
     // Sales is FORCED into their own book, never asked. Reading it from the
     // query would mean the whole agency's revenue was one dropped parameter
@@ -51,7 +51,7 @@ const getClientRevenue = catchAsync(async (req: Request, res: Response) => {
 
 const getProjectProfitability = catchAsync(async (req: Request, res: Response) => {
     const options = parseListOptions(req.query as Record<string, unknown>);
-    const result = await ReportService.getProjectProfitability(req.user as IRequestUser, options);
+    const result = await ReportService.getProjectProfitability(requireUser(req), options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -65,7 +65,7 @@ const getMonthlySeries = catchAsync(async (req: Request, res: Response) => {
     // Clamped rather than rejected: a silly ?months value should narrow the
     // chart, not break the page.
     const months = Number.isInteger(raw) && raw > 0 ? Math.min(raw, 36) : 12;
-    const result = await ReportService.getMonthlySeries(req.user as IRequestUser, months);
+    const result = await ReportService.getMonthlySeries(requireUser(req), months);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

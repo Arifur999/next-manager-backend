@@ -1,14 +1,14 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import AppError from "../../errorHelpers/AppError.js";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { NotificationRuleService } from "./notificationRule.service.js";
 import { notificationEventParam } from "./notificationRule.validation.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const getRules = catchAsync(async (req: Request, res: Response) => {
-    const result = await NotificationRuleService.getRules(req.user as IRequestUser);
+    const result = await NotificationRuleService.getRules(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -28,7 +28,7 @@ const setRule = catchAsync(async (req: Request, res: Response) => {
     const result = await NotificationRuleService.setRule(
         parsed.data,
         req.body,
-        req.user as IRequestUser
+        requireUser(req)
     );
 
     sendResponse(res, {

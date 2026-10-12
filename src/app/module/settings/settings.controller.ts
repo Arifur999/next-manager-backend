@@ -1,12 +1,12 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { SettingsService } from "./settings.service.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const getOrganization = catchAsync(async (req: Request, res: Response) => {
-    const result = await SettingsService.getOrganization(req.user as IRequestUser);
+    const result = await SettingsService.getOrganization(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -16,7 +16,7 @@ const getOrganization = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateOrganization = catchAsync(async (req: Request, res: Response) => {
-    const result = await SettingsService.updateOrganization(req.body, req.user as IRequestUser);
+    const result = await SettingsService.updateOrganization(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -26,7 +26,7 @@ const updateOrganization = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getRateSettings = catchAsync(async (req: Request, res: Response) => {
-    const result = await SettingsService.getRateSettings(req.user as IRequestUser);
+    const result = await SettingsService.getRateSettings(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -36,7 +36,7 @@ const getRateSettings = catchAsync(async (req: Request, res: Response) => {
 });
 
 const setDefaultRate = catchAsync(async (req: Request, res: Response) => {
-    const result = await SettingsService.setDefaultRate(req.body, req.user as IRequestUser);
+    const result = await SettingsService.setDefaultRate(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

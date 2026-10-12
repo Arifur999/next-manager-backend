@@ -1,17 +1,17 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { SecurityService } from "./security.service.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const getLoginEvents = catchAsync(async (req: Request, res: Response) => {
     const query = req.query as Record<string, unknown>;
     const options = parseListOptions(query);
 
     const { rows, total, failed_last_24h, retention_days } = await SecurityService.getLoginEvents(
-        req.user as IRequestUser,
+        requireUser(req),
         options,
         {
             // Only the two real answers. Anything else is ignored rather than

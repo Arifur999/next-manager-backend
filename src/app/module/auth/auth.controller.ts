@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { cookieUtils } from "../../utils/cookie.js";
 import { AuthService } from "./auth.service.js";
+import { requireUser } from "../../shared/requireUser.js";
 
 const register = catchAsync(async (req: Request, res: Response) => {
     const result = await AuthService.register(req.body);
@@ -78,7 +78,7 @@ const logout = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getMe = catchAsync(async (req: Request, res: Response) => {
-    const result = await AuthService.getMe(req.user as IRequestUser);
+    const result = await AuthService.getMe(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -88,7 +88,7 @@ const getMe = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateMe = catchAsync(async (req: Request, res: Response) => {
-    const result = await AuthService.updateMe(req.body, req.user as IRequestUser);
+    const result = await AuthService.updateMe(req.body, requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -98,7 +98,7 @@ const updateMe = catchAsync(async (req: Request, res: Response) => {
 });
 
 const changePassword = catchAsync(async (req: Request, res: Response) => {
-    const result = await AuthService.changePassword(req.body, req.user as IRequestUser);
+    const result = await AuthService.changePassword(req.body, requireUser(req));
 
     // The password change bumped token_version, so the cookies in the browser
     // are already dead. Clearing them makes the client's state match.

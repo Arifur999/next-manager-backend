@@ -11,6 +11,7 @@ import {
     ICreateOwnerWithdrawalPayload,
     IUpdateOwnerWithdrawalPayload,
 } from "./ownerWithdrawal.validation.js";
+import { toDateOnly } from "../../shared/dates.js";
 
 /**
  * Money the owner takes out of the business.
@@ -21,7 +22,6 @@ import {
  * that add it to expenses would understate profit by exactly the amount taken.
  */
 
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 const getAllWithdrawals = async (user: IRequestUser, options: ListOptions = {}) => {
     const where: Prisma.OwnerWithdrawalWhereInput = {
@@ -56,7 +56,7 @@ const createWithdrawal = async (payload: ICreateOwnerWithdrawalPayload, user: IR
     return prisma.$transaction(async (tx) => {
         await assertAccount(tx, payload.account_id, user, Currency.BDT);
 
-        const date = toDate(payload.date);
+        const date = toDateOnly(payload.date);
 
         const withdrawal = await tx.ownerWithdrawal.create({
             data: {
@@ -105,7 +105,7 @@ const updateWithdrawal = async (
         const accountId = payload.account_id ?? existing.account_id;
         await assertAccount(tx, accountId, user, Currency.BDT);
 
-        const date = payload.date ? toDate(payload.date) : existing.date;
+        const date = payload.date ? toDateOnly(payload.date) : existing.date;
         const amount = payload.amount_bdt ?? existing.amount_bdt.toNumber();
 
         const ledgerChanged =

@@ -19,8 +19,8 @@ import {
     type ListOptions,
 } from "../../shared/listQuery.js";
 import { ICreateTaskPayload, IUpdateTaskPayload } from "./task.validation.js";
+import { toDateOnly } from "../../shared/dates.js";
 
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 const INCLUDE = {
     project: { select: { id: true, name: true, code: true } },
@@ -212,7 +212,7 @@ const createTask = async (payload: ICreateTaskPayload, user: IRequestUser) => {
                 assignee_id: payload.assignee_id ?? null,
                 status_id: statusId,
                 priority: payload.priority,
-                due_date: payload.due_date ? toDate(payload.due_date) : null,
+                due_date: payload.due_date ? toDateOnly(payload.due_date) : null,
                 created_by: user.userId,
             },
             include: INCLUDE,
@@ -281,7 +281,7 @@ const updateTask = async (id: string, payload: IUpdateTaskPayload, user: IReques
                 assignee_id: payload.assignee_id === undefined ? undefined : payload.assignee_id,
                 status_id: payload.status_id ?? undefined,
                 priority: payload.priority ?? undefined,
-                due_date: payload.due_date === undefined ? undefined : payload.due_date ? toDate(payload.due_date) : null,
+                due_date: payload.due_date === undefined ? undefined : payload.due_date ? toDateOnly(payload.due_date) : null,
                 completed_at: movingToDone ? new Date() : movingOffDone ? null : undefined,
             },
             include: INCLUDE,

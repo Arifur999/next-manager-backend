@@ -15,6 +15,7 @@ import {
     ISetBaselinePayload,
     IUpdateProjectPayload,
 } from "./project.validation.js";
+import { toDateOnly } from "../../shared/dates.js";
 
 /**
  * Projects the caller may see.
@@ -269,8 +270,8 @@ const createProject = async (payload: ICreateProjectPayload, user: IRequestUser)
                 code: payload.code,
                 description: payload.description ?? "",
                 status_id: statusId,
-                start_date: payload.start_date ? new Date(`${payload.start_date}T00:00:00.000Z`) : null,
-                end_date: payload.end_date ? new Date(`${payload.end_date}T00:00:00.000Z`) : null,
+                start_date: payload.start_date ? toDateOnly(payload.start_date) : null,
+                end_date: payload.end_date ? toDateOnly(payload.end_date) : null,
                 contract_value_usd: payload.contract_value_usd ?? 0,
                 notes: payload.notes ?? "",
             },
@@ -283,7 +284,7 @@ const createProject = async (payload: ICreateProjectPayload, user: IRequestUser)
 };
 
 const toOptionalDate = (value: string | null | undefined) =>
-    value === undefined || value === null ? value : new Date(`${value}T00:00:00.000Z`);
+    value === undefined || value === null ? value : toDateOnly(value);
 
 const updateProject = async (id: string, payload: IUpdateProjectPayload, user: IRequestUser) => {
     const existing = await prisma.project.findFirst({

@@ -11,6 +11,7 @@ import {
     ICreateDueTransactionPayload,
     IUpdateDuePersonPayload,
 } from "./duePayment.validation.js";
+import { toDateOnly } from "../../shared/dates.js";
 
 /**
  * Informal lending, in and out ("DP").
@@ -29,7 +30,6 @@ import {
  *   negative -> they owe the agency
  */
 
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 /**
  * Every person with their running balance, in two queries rather than one per
@@ -185,7 +185,7 @@ const createTransaction = async (payload: ICreateDueTransactionPayload, user: IR
 
         await assertAccount(tx, payload.account_id, user, Currency.BDT);
 
-        const date = toDate(payload.date);
+        const date = toDateOnly(payload.date);
         const isReceived = payload.direction === DueDirection.received;
 
         const transaction = await tx.dueTransaction.create({

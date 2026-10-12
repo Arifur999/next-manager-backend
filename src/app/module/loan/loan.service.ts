@@ -12,6 +12,7 @@ import {
     ISetInstalmentsPayload,
     IUpdateLoanPayload,
 } from "./loan.validation.js";
+import { toDateOnly } from "../../shared/dates.js";
 
 /**
  * Bank loans and EMIs.
@@ -34,7 +35,6 @@ import {
  *   the split is what profit and loss reads.
  */
 
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 const LOAN_INCLUDE = {
     account: { select: { id: true, name: true, currency: true } },
@@ -117,7 +117,7 @@ const summarise = (loan: LoanWithInstalments) => {
  * interest figure would flow straight into profit and loss.
  */
 const generateSchedule = (payload: ICreateLoanPayload) => {
-    const start = toDate(payload.started_on);
+    const start = toDateOnly(payload.started_on);
     const months = payload.term_months;
     // Floored to whole paisa with the remainder on the last row, so the rows
     // sum to exactly the principal rather than to a rounding error.
@@ -210,7 +210,7 @@ const getOne = async (id: string, user: IRequestUser) => {
 
 const create = async (payload: ICreateLoanPayload, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
-        const startedOn = toDate(payload.started_on);
+        const startedOn = toDateOnly(payload.started_on);
 
         // Borrowed money arriving is money IN. It is not revenue - profit and
         // loss reads payments, never the ledger - but it genuinely lands in an
@@ -236,7 +236,7 @@ const create = async (payload: ICreateLoanPayload, user: IRequestUser) => {
         const rows = payload.instalments?.length
             ? payload.instalments.map((item, index) => ({
                   seq: index + 1,
-                  due_date: toDate(item.due_date),
+                  due_date: toDateOnly(item.due_date),
                   principal_bdt: new Prisma.Decimal(item.principal_bdt),
                   interest_bdt: new Prisma.Decimal(item.interest_bdt ?? 0),
                   notes: item.notes ?? "",
@@ -319,7 +319,7 @@ const setInstalments = async (id: string, payload: ISetInstalmentsPayload, user:
                     organization_id: user.organizationId,
                     loan_id: id,
                     seq,
-                    due_date: toDate(item.due_date),
+                    due_date: toDateOnly(item.due_date),
                     principal_bdt: new Prisma.Decimal(item.principal_bdt),
                     interest_bdt: new Prisma.Decimal(item.interest_bdt ?? 0),
                     notes: item.notes ?? "",
@@ -357,7 +357,7 @@ const payInstalment = async (
 
         await assertAccount(tx, payload.account_id, user, Currency.BDT);
 
-        const date = payload.date ? toDate(payload.date) : new Date();
+        const date = payload.date ? toDateOnly(payload.date) : new Date();
         const principal = instalment.principal_bdt.toNumber();
         const interest = instalment.interest_bdt.toNumber();
         const total = principal + interest;

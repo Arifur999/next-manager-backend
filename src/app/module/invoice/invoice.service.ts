@@ -9,6 +9,7 @@ import { isOverdue, recalcInvoiceStatus } from "../../shared/invoiceStatus.js";
 import { dateRangeWhere, escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateInvoicePayload, IUpdateInvoicePayload } from "./invoice.validation.js";
 import { formatInvoiceNumber } from "./invoiceNumber.js";
+import { toDateOnly } from "../../shared/dates.js";
 
 /**
  * Invoices, billed in USD like everything else client-facing.
@@ -18,7 +19,6 @@ import { formatInvoiceNumber } from "./invoiceNumber.js";
  * and either way the figure would end up in receivables.
  */
 
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 interface LineItemInput {
     service_id?: string | null;
@@ -223,8 +223,8 @@ const createInvoice = async (payload: ICreateInvoicePayload, user: IRequestUser)
                 client_id: payload.client_id,
                 project_id: payload.project_id ?? null,
                 invoice_number: invoiceNumber,
-                issue_date: toDate(payload.issue_date),
-                due_date: toDate(payload.due_date),
+                issue_date: toDateOnly(payload.issue_date),
+                due_date: toDateOnly(payload.due_date),
                 status: payload.status ?? InvoiceStatus.draft,
                 subtotal,
                 discount,
@@ -287,8 +287,8 @@ const updateInvoice = async (id: string, payload: IUpdateInvoicePayload, user: I
             data: {
                 client_id: payload.client_id ?? undefined,
                 project_id: payload.project_id === undefined ? undefined : payload.project_id,
-                issue_date: payload.issue_date ? toDate(payload.issue_date) : undefined,
-                due_date: payload.due_date ? toDate(payload.due_date) : undefined,
+                issue_date: payload.issue_date ? toDateOnly(payload.issue_date) : undefined,
+                due_date: payload.due_date ? toDateOnly(payload.due_date) : undefined,
                 status: payload.status ?? undefined,
                 subtotal,
                 discount,

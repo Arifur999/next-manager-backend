@@ -10,6 +10,7 @@ import {
     ISubmitMilestonePayload,
     IUpdateMilestonePayload,
 } from "./milestone.validation.js";
+import { toDateOnly } from "../../shared/dates.js";
 
 /**
  * Dated promises inside a project.
@@ -33,7 +34,6 @@ const INCLUDE = {
     project: { select: { id: true, name: true, code: true } },
 } as const;
 
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 const findOwned = async (id: string, user: IRequestUser) => {
     const milestone = await prisma.projectMilestone.findFirst({
@@ -107,7 +107,7 @@ const createMilestone = async (payload: ICreateMilestonePayload, user: IRequestU
             project_id: payload.project_id,
             title: payload.title,
             description: payload.description ?? "",
-            due_date: toDate(payload.due_date),
+            due_date: toDateOnly(payload.due_date),
             sort_order: payload.sort_order ?? 0,
             created_by: user.userId,
         },
@@ -137,7 +137,7 @@ const updateMilestone = async (
         data: {
             ...(payload.title !== undefined ? { title: payload.title } : {}),
             ...(payload.description !== undefined ? { description: payload.description } : {}),
-            ...(payload.due_date !== undefined ? { due_date: toDate(payload.due_date) } : {}),
+            ...(payload.due_date !== undefined ? { due_date: toDateOnly(payload.due_date) } : {}),
             ...(payload.sort_order !== undefined ? { sort_order: payload.sort_order } : {}),
         },
         include: INCLUDE,

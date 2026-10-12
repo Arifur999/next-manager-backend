@@ -5,6 +5,7 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { resolveScope } from "../../shared/resolveScope.js";
 import { prisma } from "../../lib/prisma.js";
 import { IRecordAttendancePayload } from "./hr.validation.js";
+import { toDateOnly } from "../../shared/dates.js";
 
 /**
  * Who was here, and when.
@@ -30,7 +31,6 @@ const SELECT = {
 } as const;
 
 /** Midnight UTC for a YYYY-MM-DD, matching every other date column here. */
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 const today = () => {
     const now = new Date();
@@ -60,8 +60,8 @@ const getAll = async (
             ...(filters.from || filters.to
                 ? {
                       date: {
-                          ...(filters.from ? { gte: toDate(filters.from) } : {}),
-                          ...(filters.to ? { lte: toDate(filters.to) } : {}),
+                          ...(filters.from ? { gte: toDateOnly(filters.from) } : {}),
+                          ...(filters.to ? { lte: toDateOnly(filters.to) } : {}),
                       },
                   }
                 : {}),
@@ -131,7 +131,7 @@ const record = async (payload: IRecordAttendancePayload, user: IRequestUser) => 
         throw new AppError(status.NOT_FOUND, "That person is not on your team");
     }
 
-    const date = toDate(payload.date);
+    const date = toDateOnly(payload.date);
     const at = (time?: string) => (time ? new Date(`${payload.date}T${time}:00.000Z`) : null);
 
     const checkIn = at(payload.check_in);

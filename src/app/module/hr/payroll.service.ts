@@ -18,6 +18,7 @@ import {
     ICreatePayrollRunPayload,
     ISetPayrollItemsPayload,
 } from "./hr.validation.js";
+import { toDateOnly } from "../../shared/dates.js";
 
 /**
  * A month's salaries.
@@ -33,7 +34,6 @@ import {
  * somebody corrected one the books would disagree with themselves forever.
  */
 
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 const RUN_SELECT = {
     id: true,
@@ -73,8 +73,8 @@ const getRuns = async (user: IRequestUser) =>
  * a missing person is the mistake this makes hardest to make.
  */
 const createRun = async (payload: ICreatePayrollRunPayload, user: IRequestUser) => {
-    const periodStart = toDate(payload.period_start);
-    const periodEnd = toDate(payload.period_end);
+    const periodStart = toDateOnly(payload.period_start);
+    const periodEnd = toDateOnly(payload.period_end);
 
     if (periodEnd < periodStart) {
         throw new AppError(status.BAD_REQUEST, "The period ends before it starts");

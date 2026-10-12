@@ -7,6 +7,7 @@ import {
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { type ListOptions } from "../../shared/listQuery.js";
+import { endOfDay, toDateOnly } from "../../shared/dates.js";
 
 /**
  * Reporting.
@@ -24,8 +25,8 @@ import { type ListOptions } from "../../shared/listQuery.js";
  */
 
 const rangeOf = (options: ListOptions) => {
-    const from = options.from ? new Date(`${options.from}T00:00:00.000Z`) : undefined;
-    const to = options.to ? new Date(`${options.to}T23:59:59.999Z`) : undefined;
+    const from = options.from ? toDateOnly(options.from) : undefined;
+    const to = options.to ? endOfDay(options.to) : undefined;
     return from || to ? { gte: from, lte: to } : undefined;
 };
 

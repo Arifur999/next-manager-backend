@@ -8,6 +8,7 @@ import { logActivity, money } from "../../shared/activity.js";
 import { assertAccount, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
 import { dateRangeWhere, escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateExpensePayload, IUpdateExpensePayload } from "./expense.validation.js";
+import { toDateOnly } from "../../shared/dates.js";
 
 /**
  * Money out, always BDT - that is the currency the agency actually spends in.
@@ -16,7 +17,6 @@ import { ICreateExpensePayload, IUpdateExpensePayload } from "./expense.validati
  * left unassigned it is general overhead.
  */
 
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 const assertReferences = async (
     tx: Prisma.TransactionClient,
@@ -117,7 +117,7 @@ const createExpense = async (payload: ICreateExpensePayload, user: IRequestUser)
         await assertReferences(tx, payload, user);
         await assertAccount(tx, payload.account_id, user, Currency.BDT);
 
-        const date = toDate(payload.date);
+        const date = toDateOnly(payload.date);
 
         const expense = await tx.expense.create({
             data: {
@@ -176,7 +176,7 @@ const updateExpense = async (id: string, payload: IUpdateExpensePayload, user: I
         const accountId = payload.account_id ?? existing.account_id;
         await assertAccount(tx, accountId, user, Currency.BDT);
 
-        const date = payload.date ? toDate(payload.date) : existing.date;
+        const date = payload.date ? toDateOnly(payload.date) : existing.date;
         const amount = payload.amount_bdt ?? existing.amount_bdt.toNumber();
 
         // Only what the ledger cares about triggers a rewrite - editing a note

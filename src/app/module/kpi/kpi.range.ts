@@ -1,6 +1,7 @@
 import status from "http-status";
 import AppError from "../../errorHelpers/AppError.js";
 import { type ListOptions } from "../../shared/listQuery.js";
+import { endOfDay, toDateOnly } from "../../shared/dates.js";
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -14,11 +15,11 @@ export type Range = { from: Date; to: Date; days: number };
  */
 export const resolveRange = (options: ListOptions): Range => {
     const to = options.to
-        ? new Date(`${options.to}T23:59:59.999Z`)
+        ? endOfDay(options.to)
         : new Date();
 
     const from = options.from
-        ? new Date(`${options.from}T00:00:00.000Z`)
+        ? toDateOnly(options.from)
         : new Date(to.getTime() - 29 * DAY_MS);
 
     if (from.getTime() > to.getTime()) {

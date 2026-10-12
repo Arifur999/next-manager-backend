@@ -1,4 +1,5 @@
 import z from "zod";
+import { endOfDay, toDateOnly } from "./dates.js";
 
 // Shared pieces for list endpoints that page, search and date-filter on the
 // server.
@@ -41,7 +42,7 @@ const isoDate = z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .refine((value) => {
-        const parsed = new Date(`${value}T00:00:00Z`);
+        const parsed = toDateOnly(value);
         return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
     });
 
@@ -85,8 +86,8 @@ export const dateRangeWhere = (options: ListOptions, column = "date"): Record<st
     if (!options.from && !options.to) return {};
     return {
         [column]: {
-            ...(options.from ? { gte: new Date(`${options.from}T00:00:00.000Z`) } : {}),
-            ...(options.to ? { lte: new Date(`${options.to}T23:59:59.999Z`) } : {}),
+            ...(options.from ? { gte: toDateOnly(options.from) } : {}),
+            ...(options.to ? { lte: endOfDay(options.to) } : {}),
         },
     };
 };

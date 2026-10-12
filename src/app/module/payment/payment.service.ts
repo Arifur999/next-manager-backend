@@ -11,6 +11,7 @@ import { notify } from "../../shared/notify.js";
 import { dateRangeWhere, escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { getReportingRate } from "../../utils/currencyRate.js";
 import { ICreatePaymentPayload, IUpdatePaymentPayload } from "./payment.validation.js";
+import { toDateOnly } from "../../shared/dates.js";
 
 /**
  * Income from clients, always USD.
@@ -22,7 +23,6 @@ import { ICreatePaymentPayload, IUpdatePaymentPayload } from "./payment.validati
  * actually exchanged, which is the exchange module.
  */
 
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 // Confirms every id in the payload belongs to the caller's agency. Reads are
 // scoped by organization already; ids arriving in a request body are the gap.
@@ -123,7 +123,7 @@ const createPayment = async (payload: ICreatePaymentPayload, user: IRequestUser)
         // would corrupt both balances at once.
         await assertAccount(tx, payload.account_id, user, Currency.USD);
 
-        const date = toDate(payload.date);
+        const date = toDateOnly(payload.date);
         const amountBdt = new Prisma.Decimal(payload.amount_usd).times(rate).toDecimalPlaces(2);
 
         const payment = await tx.payment.create({
@@ -205,7 +205,7 @@ const updatePayment = async (id: string, payload: IUpdatePaymentPayload, user: I
         const accountId = payload.account_id ?? existing.account_id;
         await assertAccount(tx, accountId, user, Currency.USD);
 
-        const date = payload.date ? toDate(payload.date) : existing.date;
+        const date = payload.date ? toDateOnly(payload.date) : existing.date;
         const amountUsd = payload.amount_usd ?? existing.amount_usd.toNumber();
         const rate = payload.reporting_rate ?? existing.reporting_rate.toNumber();
 

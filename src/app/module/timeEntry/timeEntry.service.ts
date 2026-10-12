@@ -16,6 +16,7 @@ import {
     ISetCapacityPayload,
     IUpdateTimeEntryPayload,
 } from "./timeEntry.validation.js";
+import { endOfDay, toDateOnly } from "../../shared/dates.js";
 
 /**
  * Logged hours.
@@ -33,7 +34,6 @@ import {
  *      un-approving it first, which is a deliberate act by someone senior.
  */
 
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 // A day is 24 hours. Anything above it is a typo - almost always a decimal
 // point in the wrong place - and letting it through poisons every utilization
@@ -249,7 +249,7 @@ const createEntry = async (payload: ICreateTimeEntryPayload, user: IRequestUser)
                 user_id: user.userId,
                 project_id: payload.project_id,
                 task_id: payload.task_id ?? null,
-                date: toDate(payload.date),
+                date: toDateOnly(payload.date),
                 hours: payload.hours,
                 is_billable: payload.is_billable,
                 notes: payload.notes ?? "",
@@ -305,7 +305,7 @@ const updateEntry = async (id: string, payload: IUpdateTimeEntryPayload, user: I
             data: {
                 project_id: payload.project_id ?? undefined,
                 task_id: payload.task_id === undefined ? undefined : payload.task_id,
-                date: payload.date ? toDate(payload.date) : undefined,
+                date: payload.date ? toDateOnly(payload.date) : undefined,
                 hours: payload.hours ?? undefined,
                 is_billable: payload.is_billable ?? undefined,
                 notes: payload.notes ?? undefined,
@@ -460,9 +460,9 @@ const setCapacity = async (
 const getWorkload = async (user: IRequestUser, options: ListOptions = {}) => {
     // Defaults to the current week, because "who is free right now" is the
     // question this screen is opened with.
-    const to = options.to ? new Date(`${options.to}T23:59:59.999Z`) : new Date();
+    const to = options.to ? endOfDay(options.to) : new Date();
     const from = options.from
-        ? new Date(`${options.from}T00:00:00.000Z`)
+        ? toDateOnly(options.from)
         : new Date(to.getTime() - 6 * 24 * 60 * 60 * 1000);
 
     const days = Math.max(1, Math.round((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)) + 1);

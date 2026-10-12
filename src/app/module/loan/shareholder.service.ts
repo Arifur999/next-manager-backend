@@ -11,6 +11,7 @@ import {
     ICreateShareholderPayload,
     IUpdateShareholderPayload,
 } from "./loan.validation.js";
+import { toDateOnly } from "../../shared/dates.js";
 
 /**
  * The people who own the agency, and profit paid out to them.
@@ -22,7 +23,6 @@ import {
  * account balances see all of it, because the money genuinely leaves.
  */
 
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 const SHAREHOLDER_INCLUDE = {
     user: { select: { id: true, full_name: true, email: true } },
@@ -259,7 +259,7 @@ const createDistribution = async (payload: ICreateDistributionPayload, user: IRe
 
         await assertAccount(tx, payload.account_id, user, Currency.BDT);
 
-        const date = toDate(payload.date);
+        const date = toDateOnly(payload.date);
 
         const distribution = await tx.shareholderDistribution.create({
             data: {

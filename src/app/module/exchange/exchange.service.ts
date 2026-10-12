@@ -9,6 +9,7 @@ import { assertAccount, getAccountBalance, reverseLedgerEntries, writeLedgerEntr
 import { lockRow } from "../../utils/rowLock.js";
 import { dateRangeWhere, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateExchangePayload } from "./exchange.validation.js";
+import { toDateOnly } from "../../shared/dates.js";
 
 /**
  * Moving USD into BDT. This is the only place BDT comes into existence.
@@ -23,7 +24,6 @@ import { ICreateExchangePayload } from "./exchange.validation.js";
  * books that do not.
  */
 
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 const getAllExchanges = async (user: IRequestUser, options: ListOptions = {}) => {
     const where: Prisma.ExchangeTransactionWhereInput = {
@@ -87,7 +87,7 @@ const createExchange = async (payload: ICreateExchangePayload, user: IRequestUse
             );
         }
 
-        const date = toDate(payload.date);
+        const date = toDateOnly(payload.date);
 
         // Stored rather than recomputed on read, so a later change to the
         // rounding rule cannot silently restate history.

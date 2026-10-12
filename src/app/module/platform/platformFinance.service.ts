@@ -9,6 +9,7 @@ import {
     ICreatePlatformExpensePayload,
     IUpdatePlatformExpensePayload,
 } from "./platform.validation.js";
+import { endOfDay, toDateOnly } from "../../shared/dates.js";
 
 /**
  * AGENCIO's own books.
@@ -46,8 +47,8 @@ const getExpenses = async (options: { from?: string; to?: string } = {}) =>
             ...(options.from || options.to
                 ? {
                     date: {
-                        ...(options.from ? { gte: new Date(`${options.from}T00:00:00.000Z`) } : {}),
-                        ...(options.to ? { lte: new Date(`${options.to}T23:59:59.999Z`) } : {}),
+                        ...(options.from ? { gte: toDateOnly(options.from) } : {}),
+                        ...(options.to ? { lte: endOfDay(options.to) } : {}),
                     },
                 }
                 : {}),
@@ -60,7 +61,7 @@ const createExpense = async (payload: ICreatePlatformExpensePayload, user: IRequ
     prisma.$transaction(async (tx) => {
         const expense = await tx.platformExpense.create({
             data: {
-                date: new Date(`${payload.date}T00:00:00.000Z`),
+                date: toDateOnly(payload.date),
                 category: payload.category ?? "",
                 description: payload.description,
                 amount_usd: payload.amount_usd,
@@ -103,7 +104,7 @@ const updateExpense = async (
             where: { id },
             data: {
                 ...(payload.date !== undefined
-                    ? { date: new Date(`${payload.date}T00:00:00.000Z`) }
+                    ? { date: toDateOnly(payload.date) }
                     : {}),
                 ...(payload.category !== undefined ? { category: payload.category } : {}),
                 ...(payload.description !== undefined ? { description: payload.description } : {}),
@@ -176,10 +177,10 @@ const deleteExpense = async (id: string, user: IRequestUser) => {
 const getReport = async (options: { from?: string; to?: string } = {}) => {
     const now = new Date();
     const from = options.from
-        ? new Date(`${options.from}T00:00:00.000Z`)
+        ? toDateOnly(options.from)
         : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const to = options.to
-        ? new Date(`${options.to}T23:59:59.999Z`)
+        ? endOfDay(options.to)
         : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59));
 
     const [paying, byStatus, expenses, churnedInWindow, totalCompanies] = await Promise.all([

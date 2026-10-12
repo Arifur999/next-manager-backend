@@ -12,6 +12,7 @@ import {
     IRequestLeavePayload,
     IUpdateLeaveTypePayload,
 } from "./hr.validation.js";
+import { toDateOnly } from "../../shared/dates.js";
 
 /**
  * Asking to be away, and somebody deciding.
@@ -22,7 +23,6 @@ import {
  * leave that was already approved on different arithmetic.
  */
 
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 const TYPE_SELECT = {
     id: true,
@@ -196,8 +196,8 @@ const request = async (payload: IRequestLeavePayload, user: IRequestUser) => {
         throw new AppError(status.NOT_FOUND, "That kind of leave is not available");
     }
 
-    const from = toDate(payload.from_date);
-    const to = toDate(payload.to_date);
+    const from = toDateOnly(payload.from_date);
+    const to = toDateOnly(payload.to_date);
 
     if (to < from) {
         throw new AppError(status.BAD_REQUEST, "The last day cannot be before the first");

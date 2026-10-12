@@ -8,6 +8,7 @@ import { logActivity, money } from "../../shared/activity.js";
 import { assertAccount, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
 import { dateRangeWhere, pageSlice, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateTeamPayoutPayload, IUpdateTeamPayoutPayload } from "./teamPayout.validation.js";
+import { toDateOnly } from "../../shared/dates.js";
 
 /**
  * What the agency pays its own people, in BDT.
@@ -17,7 +18,6 @@ import { ICreateTeamPayoutPayload, IUpdateTeamPayoutPayload } from "./teamPayout
  * (a monthly salary, say) are general cost and belong to no single project.
  */
 
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 const assertReferences = async (
     tx: Prisma.TransactionClient,
@@ -96,7 +96,7 @@ const createPayout = async (payload: ICreateTeamPayoutPayload, user: IRequestUse
         await assertReferences(tx, payload, user);
         await assertAccount(tx, payload.account_id, user, Currency.BDT);
 
-        const date = toDate(payload.date);
+        const date = toDateOnly(payload.date);
 
         const payout = await tx.teamPayout.create({
             data: {
@@ -145,7 +145,7 @@ const updatePayout = async (id: string, payload: IUpdateTeamPayoutPayload, user:
         const accountId = payload.account_id ?? existing.account_id;
         await assertAccount(tx, accountId, user, Currency.BDT);
 
-        const date = payload.date ? toDate(payload.date) : existing.date;
+        const date = payload.date ? toDateOnly(payload.date) : existing.date;
         const amount = payload.amount_bdt ?? existing.amount_bdt.toNumber();
 
         const ledgerChanged =

@@ -9,6 +9,7 @@ import {
     IUpdateKpiTargetPayload,
     PERCENTAGE_METRICS,
 } from "./kpiTarget.validation.js";
+import { toDateOnly } from "../../shared/dates.js";
 
 /**
  * The numbers somebody committed to.
@@ -24,7 +25,6 @@ const INCLUDE = {
     user: { select: { id: true, full_name: true, email: true } },
 } as const;
 
-const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 /**
  * A period has to start where its type says it does.
@@ -97,7 +97,7 @@ const getAllTargets = async (
 };
 
 const createTarget = async (payload: ICreateKpiTargetPayload, user: IRequestUser) => {
-    const periodStart = toDate(payload.period_start);
+    const periodStart = toDateOnly(payload.period_start);
 
     assertPeriodStart(payload.period, periodStart);
     assertValue(payload.metric, payload.target_value);

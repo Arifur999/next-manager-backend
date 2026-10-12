@@ -40,6 +40,15 @@ export const sensitiveActionRateLimit = attemptLimit(20, (req) => req.user?.user
 /** Refreshing the access token. Browsers do this on their own, so it is looser. */
 export const refreshRateLimit = attemptLimit(60);
 
+/** Anonymous read-only endpoints, such as the public plan list. Per IP. */
+export const publicReadRateLimit = rateLimit({
+    windowMs: 60 * 1000,
+    limit: isProduction ? 60 : 3000,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    handler: refuseWith("Too many requests. Please slow down."),
+});
+
 // Same reasoning as above, now that the smoke suite has outgrown 300 requests
 // a minute: a single full run trips this and every check after the trip fails
 // with a rate-limit message rather than a real result, which is worse than

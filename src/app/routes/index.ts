@@ -44,6 +44,7 @@ import { TransactionRoutes } from "../module/transaction/transaction.route.js";
 import { WorkflowStatusRoutes } from "../module/workflowStatus/workflowStatus.route.js";
 import { UserRoutes } from "../module/user/user.route.js";
 import { VaultRoutes } from "../module/vault/vault.route.js";
+import { PublicPlanRoutes } from "../module/publicPlan/publicPlan.route.js";
 
 const router = Router();
 
@@ -94,5 +95,7 @@ router.use("/notification-rules", NotificationRuleRoutes);
 // Public: joining the platform team, before any account exists.
 router.use("/platform-join", PublicPlatformInviteRoutes);
 router.use("/agency-join", PublicAgencyInviteRoutes);
+// Public: the plans on sale, for the landing page.
+router.use("/public/plans", PublicPlanRoutes);
 
 export const indexRoute = router;

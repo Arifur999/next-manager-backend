@@ -44,9 +44,20 @@ let attempt = 0;
 const connect = async () => {
     if (closed) return;
 
-    client = new pg.Client({ connectionString: env.DATABASE_URL });
+    const self = new pg.Client({ connectionString: env.DATABASE_URL });
+    let retired = false;
 
-    client.on("notification", (message) => {
+    // error, end and a failed connect can all fire for one dropped connection;
+    // only the first schedules a reconnect, or listeners multiply.
+    const retire = () => {
+        if (retired) return;
+        retired = true;
+        if (client === self) client = null;
+        self.end().catch(() => {});
+        void reconnect();
+    };
+
+    self.on("notification", (message) => {
         if (message.channel !== CHANNEL || !message.payload) return;
 
         try {
@@ -58,31 +69,33 @@ const connect = async () => {
         }
     });
 
-    // A dropped listener is the failure mode that matters: it is silent, and
-    // every instance keeps serving HTTP perfectly while live updates quietly
-    // stop. So it reconnects rather than logging once and giving up.
-    client.on("error", () => {
-        void reconnect();
-    });
-    client.on("end", () => {
-        void reconnect();
-    });
+    // A dropped listener is silent: HTTP keeps working while live updates stop.
+    // So it reconnects rather than logging once and giving up.
+    self.on("error", retire);
+    self.on("end", retire);
 
     try {
-        await client.connect();
-        await client.query(`LISTEN ${CHANNEL}`);
-        attempt = 0;
-        console.log("Chat bus listening");
+        await self.connect();
+        await self.query(`LISTEN ${CHANNEL}`);
     } catch (error) {
         console.error("Chat bus could not connect:", error);
-        void reconnect();
+        retire();
+        return;
     }
+
+    if (closed || retired) {
+        self.end().catch(() => {});
+        return;
+    }
+
+    client = self;
+    attempt = 0;
+    console.log("Chat bus listening");
 };
 
 const reconnect = async () => {
     if (closed) return;
 
-    client = null;
     attempt += 1;
     // Backs off to thirty seconds. A database that is down for a minute should
     // not be hit every 200ms by every instance at once.

@@ -161,10 +161,15 @@ const deleteExchange = async (id: string, user: IRequestUser) => {
             throw new AppError(status.NOT_FOUND, "Exchange not found");
         }
 
-        // Both halves reverse together - reverseLedgerEntries matches on
-        // source_id, and each side was written with its own source_type.
-        await reverseLedgerEntries(tx, LedgerSource.exchange_out, id, user, "Exchange deleted");
-        await reverseLedgerEntries(tx, LedgerSource.exchange_in, id, user, "Exchange deleted");
+        // One call for both halves: they share a source_id, so two calls would
+        // each net the other half's adjustment row.
+        await reverseLedgerEntries(
+            tx,
+            [LedgerSource.exchange_out, LedgerSource.exchange_in],
+            id,
+            user,
+            "Exchange deleted"
+        );
 
         await tx.exchangeTransaction.update({
             where: { id },

@@ -4,6 +4,7 @@ import { Prisma } from "../../generated/prisma/client.js";
 import AppError from "../errorHelpers/AppError.js";
 import { prisma } from "../lib/prisma.js";
 import { IRequestUser } from "../interfaces/requestUser.interface.js";
+import { openPositions } from "./ledgerMath.js";
 
 type Tx = Prisma.TransactionClient;
 
@@ -88,45 +89,46 @@ export const writeLedgerEntry = async (
 };
 
 /**
- * Undo the ledger effect of a record without deleting its history.
- *
- * Writes an opposite row for each existing entry rather than removing them, so
- * "this payment was recorded and then reversed" stays visible. Used when a
- * money record is soft-deleted or edited - an edit is a reversal plus a fresh
- * write, never an in-place amount change.
+ * Undo what a record still holds on each account, keeping the history.
+ * Earlier reversals are adjustment rows on the same source_id, so they are
+ * netted in: a second edit or a delete after an edit reverses only once.
  */
 export const reverseLedgerEntries = async (
     tx: Tx,
-    sourceType: LedgerSource,
+    sourceTypes: LedgerSource | LedgerSource[],
     sourceId: string,
     user: IRequestUser,
     reason = "Reversed"
 ) => {
-    const existing = await tx.accountTransaction.findMany({
+    const types = Array.isArray(sourceTypes) ? sourceTypes : [sourceTypes];
+    const rows = await tx.accountTransaction.findMany({
         where: {
             organization_id: user.organizationId,
-            source_type: sourceType,
             source_id: sourceId,
+            source_type: { in: [...types, LedgerSource.adjustment] },
         },
+        orderBy: { created_at: "asc" },
     });
 
-    for (const entry of existing) {
+    const positions = openPositions(rows);
+
+    for (const position of positions) {
         await tx.accountTransaction.create({
             data: {
                 organization_id: user.organizationId,
-                account_id: entry.account_id,
+                account_id: position.accountId,
                 date: new Date(),
-                amount: entry.amount.negated(),
-                currency: entry.currency,
+                amount: position.amount.negated(),
+                currency: position.currency,
                 source_type: LedgerSource.adjustment,
                 source_id: sourceId,
-                description: `${reason}: ${entry.description}`.trim(),
+                description: `${reason}: ${position.description}`.trim(),
                 created_by: user.userId,
             },
         });
     }
 
-    return existing.length;
+    return positions.length;
 };
 
 export interface AccountBalance {

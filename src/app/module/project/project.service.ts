@@ -4,7 +4,7 @@ import { InvoiceStatus, WorkflowKind } from "../../../generated/prisma/enums.js"
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { resolveScope } from "../../shared/resolveScope.js";
-import { assertProjectAvailable } from "../../middleware/checkSubscription.js";
+import { assertProjectAvailable } from "../../shared/planLimits.js";
 import { prisma } from "../../lib/prisma.js";
 import { assertOwnService } from "../../shared/assertOwnService.js";
 import { assertOwnStatus, defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
@@ -227,55 +227,58 @@ const createProject = async (payload: ICreateProjectPayload, user: IRequestUser)
         throw new AppError(status.NOT_FOUND, "Client not found");
     }
 
-    await assertProjectAvailable(user.organizationId);
+    // The project count and the insert share one transaction, under a lock.
+    return prisma.$transaction(async (tx) => {
+        await assertProjectAvailable(tx, user.organizationId);
 
-    const duplicate = await prisma.project.findFirst({
-        where: { organization_id: user.organizationId, code: payload.code },
-        select: { id: true },
-    });
+        const duplicate = await tx.project.findFirst({
+            where: { organization_id: user.organizationId, code: payload.code },
+            select: { id: true },
+        });
 
-    if (duplicate) {
-        throw new AppError(status.CONFLICT, "A project with this code already exists");
-    }
+        if (duplicate) {
+            throw new AppError(status.CONFLICT, "A project with this code already exists");
+        }
 
-    await assertOwnService(prisma, payload.service_id, user);
+        await assertOwnService(tx, payload.service_id, user);
 
-    // Chosen, or whatever the board starts on. An agency always has statuses
-    // - they are seeded with the organization - so a missing one means every
-    // status was switched off, and saying that is more use than a foreign key
-    // error.
-    if (payload.status_id) {
-        await assertOwnStatus(prisma, payload.status_id, user.organizationId, WorkflowKind.project);
-    }
+        if (payload.status_id) {
+            await assertOwnStatus(tx, payload.status_id, user.organizationId, WorkflowKind.project);
+        }
 
-    const statusId =
-        payload.status_id ?? (await defaultStatusId(prisma, user.organizationId, WorkflowKind.project));
+        // Chosen, or whatever the board starts on. An agency always has statuses
+        // - they are seeded with the organization - so a missing one means every
+        // status was switched off, and saying that is more use than a foreign key
+        // error.
+        const statusId =
+            payload.status_id ?? (await defaultStatusId(tx, user.organizationId, WorkflowKind.project));
 
-    if (!statusId) {
-        throw new AppError(
-            status.BAD_REQUEST,
-            "This board has no statuses turned on. Add one before creating a project."
-        );
-    }
+        if (!statusId) {
+            throw new AppError(
+                status.BAD_REQUEST,
+                "This board has no statuses turned on. Add one before creating a project."
+            );
+        }
 
-    return prisma.project.create({
-        data: {
-            organization_id: user.organizationId,
-            client_id: payload.client_id,
-            service_id: payload.service_id ?? null,
-            name: payload.name,
-            code: payload.code,
-            description: payload.description ?? "",
-            status_id: statusId,
-            start_date: payload.start_date ? new Date(`${payload.start_date}T00:00:00.000Z`) : null,
-            end_date: payload.end_date ? new Date(`${payload.end_date}T00:00:00.000Z`) : null,
-            contract_value_usd: payload.contract_value_usd ?? 0,
-            notes: payload.notes ?? "",
-        },
-        include: {
-            client: { select: { id: true, name: true } },
-            status: { select: { id: true, name: true, category: true, sort_order: true } },
-        },
+        return tx.project.create({
+            data: {
+                organization_id: user.organizationId,
+                client_id: payload.client_id,
+                service_id: payload.service_id ?? null,
+                name: payload.name,
+                code: payload.code,
+                description: payload.description ?? "",
+                status_id: statusId,
+                start_date: payload.start_date ? new Date(`${payload.start_date}T00:00:00.000Z`) : null,
+                end_date: payload.end_date ? new Date(`${payload.end_date}T00:00:00.000Z`) : null,
+                contract_value_usd: payload.contract_value_usd ?? 0,
+                notes: payload.notes ?? "",
+            },
+            include: {
+                client: { select: { id: true, name: true } },
+                status: { select: { id: true, name: true, category: true, sort_order: true } },
+            },
+        });
     });
 };
 

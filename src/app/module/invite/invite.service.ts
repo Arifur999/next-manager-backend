@@ -6,7 +6,7 @@ import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { sendMail, teamInviteMail } from "../../lib/mailer.js";
 import { prisma } from "../../lib/prisma.js";
-import { assertSeatAvailable } from "../../middleware/checkSubscription.js";
+import { assertSeatAvailable } from "../../shared/planLimits.js";
 import { logActivity } from "../../shared/activity.js";
 import { getBrand } from "../../shared/platformSettings.js";
 import { notify } from "../../shared/notify.js";
@@ -345,9 +345,9 @@ const findPendingMember = async (id: string, user: IRequestUser) => {
 const approveMember = async (id: string, user: IRequestUser) => {
     const member = await findPendingMember(id, user);
 
-    await assertSeatAvailable(user.organizationId);
-
     return prisma.$transaction(async (tx) => {
+        await assertSeatAvailable(tx, user.organizationId);
+
         const approved = await tx.user.update({
             where: { id },
             data: { status: UserStatus.active },

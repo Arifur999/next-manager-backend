@@ -3,7 +3,7 @@ import { Prisma } from "../../../generated/prisma/client.js";
 import { Role, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
-import { assertSeatAvailable } from "../../middleware/checkSubscription.js";
+import { assertSeatAvailable } from "../../shared/planLimits.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
@@ -133,25 +133,28 @@ const createUser = async (payload: ICreateUserPayload, user: IRequestUser) => {
         throw new AppError(status.CONFLICT, "An account with this email already exists");
     }
 
-    // Checked here rather than in a route guard: the seat count and the insert
-    // belong together, and a limit enforced on the way in is a limit two admins
-    // can walk past simultaneously.
-    await assertSeatAvailable(user.organizationId);
     await assertOwnDepartment(payload.department_id, user);
+    const password = await passwordUtils.hashPassword(payload.password);
 
-    return prisma.user.create({
-        data: {
-            full_name: payload.full_name,
-            email: payload.email,
-            phone: payload.phone ?? "",
-            password: await passwordUtils.hashPassword(payload.password),
-            role: payload.role,
-            department_id: payload.department_id ?? null,
-            // The new colleague joins the caller's company, never whatever
-            // organization_id a request body might have carried.
-            organization_id: user.organizationId,
-        },
-        select: PUBLIC_USER_FIELDS,
+    // The seat count and the insert share one transaction, under a lock, so two
+    // admins cannot both take the last free seat.
+    return prisma.$transaction(async (tx) => {
+        await assertSeatAvailable(tx, user.organizationId);
+
+        return tx.user.create({
+            data: {
+                full_name: payload.full_name,
+                email: payload.email,
+                phone: payload.phone ?? "",
+                password,
+                role: payload.role,
+                department_id: payload.department_id ?? null,
+                // The new colleague joins the caller's company, never whatever
+                // organization_id a request body might have carried.
+                organization_id: user.organizationId,
+            },
+            select: PUBLIC_USER_FIELDS,
+        });
     });
 };
 

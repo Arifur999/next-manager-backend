@@ -44,7 +44,7 @@ const isConfigured = () => Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PA
 export const getMailerStatus = () => ({
     configured: isConfigured(),
     host: env.SMTP_HOST || "",
-    port: Number(env.SMTP_PORT) || 587,
+    port: env.SMTP_PORT,
     /** What recipients see in the From line. */
     from: env.MAIL_FROM || env.SMTP_USER || "",
     /** Which piece is missing, when one is. */
@@ -61,9 +61,9 @@ const getTransporter = (): Transporter => {
     if (!transporter) {
         transporter = nodemailer.createTransport({
             host: env.SMTP_HOST,
-            port: Number(env.SMTP_PORT) || 587,
+            port: env.SMTP_PORT,
             // 465 is implicit TLS; everything else upgrades with STARTTLS.
-            secure: Number(env.SMTP_PORT) === 465,
+            secure: env.SMTP_PORT === 465,
             auth: { user: env.SMTP_USER, pass: env.SMTP_PASSWORD },
         });
     }

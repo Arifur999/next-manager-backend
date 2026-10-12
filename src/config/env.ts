@@ -1,78 +1,63 @@
 import dotenv from "dotenv";
+import { z } from "zod";
 
 dotenv.config();
 
-interface ENVConfig {
-    NODE_ENV: string;
-    PORT: string | number;
-    DATABASE_URL: string;
-    ACCESS_TOKEN_SECRET: string;
-    REFRESH_TOKEN_SECRET: string;
-    ACCESS_TOKEN_EXPIRES_IN: string;
-    REFRESH_TOKEN_EXPIRES_IN: string;
-    FRONTEND_URL: string;
-    SUPER_ADMIN_EMAIL: string;
-    SUPER_ADMIN_PASSWORD: string;
-    // AES-256-GCM key for vault credentials. 64 hex chars (openssl rand -hex 32).
-    // Losing it loses every stored password - it belongs in the secret store.
-    VAULT_ENCRYPTION_KEY: string;
-    // Mail. Optional on purpose: without it the app runs and password resets
-    // log their link instead of sending it, which is what makes the flow
-    // testable before a mail plan is bought. Any SMTP provider works -
-    // Resend, SendGrid, Postmark, Mailgun, or a plain mailbox.
-    SMTP_HOST: string;
-    SMTP_PORT: string;
-    SMTP_USER: string;
-    SMTP_PASSWORD: string;
-    MAIL_FROM: string;
-    CLOUDINARY: {
-        CLOUD_NAME: string;
-        API_KEY: string;
-        API_SECRET: string;
-    };
+// Empty strings count as unset, so `FOO=` in a .env file falls back to the default.
+const optional = (fallback: string) =>
+    z.preprocess((value) => (value === "" ? undefined : value), z.string().default(fallback));
+
+const required = (name: string) => z.string(`${name} is not set`).min(1, `${name} is not set`);
+
+const envSchema = z
+    .object({
+        NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+        PORT: z.coerce.number().int().positive().default(5000),
+        DATABASE_URL: required("DATABASE_URL"),
+        ACCESS_TOKEN_SECRET: required("ACCESS_TOKEN_SECRET"),
+        REFRESH_TOKEN_SECRET: required("REFRESH_TOKEN_SECRET"),
+        ACCESS_TOKEN_EXPIRES_IN: optional("1d"),
+        REFRESH_TOKEN_EXPIRES_IN: optional("7d"),
+        // Origin(s) the web app is served from, comma-separated. Reset and
+        // invite links are built from the first one.
+        FRONTEND_URL: z.string().optional(),
+        SUPER_ADMIN_EMAIL: required("SUPER_ADMIN_EMAIL"),
+        SUPER_ADMIN_PASSWORD: required("SUPER_ADMIN_PASSWORD"),
+        // AES-256-GCM key for vault credentials, 64 hex chars (openssl rand -hex 32).
+        // Losing it loses every stored password.
+        VAULT_ENCRYPTION_KEY: required("VAULT_ENCRYPTION_KEY"),
+        // Mail is optional: without SMTP_HOST the app runs and mail is logged instead of sent.
+        SMTP_HOST: optional(""),
+        SMTP_PORT: z.preprocess((value) => (value === "" ? undefined : value), z.coerce.number().int().positive().default(587)),
+        SMTP_USER: optional(""),
+        SMTP_PASSWORD: optional(""),
+        MAIL_FROM: optional(""),
+    })
+    .superRefine((values, ctx) => {
+        if (values.NODE_ENV !== "production") return;
+
+        const issue = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
+
+        if (values.ACCESS_TOKEN_SECRET.length < 32) issue("ACCESS_TOKEN_SECRET", "must be at least 32 characters in production");
+        if (values.REFRESH_TOKEN_SECRET.length < 32) issue("REFRESH_TOKEN_SECRET", "must be at least 32 characters in production");
+        // Equal secrets would let a refresh token pass checkAuth as an access token.
+        if (values.ACCESS_TOKEN_SECRET === values.REFRESH_TOKEN_SECRET) issue("REFRESH_TOKEN_SECRET", "must differ from ACCESS_TOKEN_SECRET");
+        // Without it every reset and invite link points at localhost.
+        if (!values.FRONTEND_URL) issue("FRONTEND_URL", "is required in production");
+        if (!/^[0-9a-fA-F]{64}$/.test(values.VAULT_ENCRYPTION_KEY)) issue("VAULT_ENCRYPTION_KEY", "must be 64 hex characters");
+        if (values.SUPER_ADMIN_PASSWORD.length < 12) issue("SUPER_ADMIN_PASSWORD", "must be at least 12 characters in production");
+    });
+
+const parsed = envSchema.safeParse(process.env);
+
+if (!parsed.success) {
+    // stderr directly: the logger reads this module, so it cannot be used yet.
+    const lines = parsed.error.issues.map((issue) => `  ${issue.path.join(".")}: ${issue.message}`);
+    process.stderr.write(`Invalid environment, refusing to start:\n${lines.join("\n")}\n`);
+    process.exit(1);
 }
 
-// Missing here means the process should not start at all: every one of these is
-// something the app silently misbehaves without (an unset token secret would
-// sign every token with "undefined").
-const requiredEnvVars = [
-    "DATABASE_URL",
-    "ACCESS_TOKEN_SECRET",
-    "REFRESH_TOKEN_SECRET",
-    "SUPER_ADMIN_EMAIL",
-    "SUPER_ADMIN_PASSWORD",
-    "VAULT_ENCRYPTION_KEY",
-];
-
-requiredEnvVars.forEach((varName) => {
-    if (!process.env[varName]) {
-        throw new Error(`Environment variable ${varName} is not set`);
-    }
-});
-
-export const env: ENVConfig = {
-    NODE_ENV: process.env.NODE_ENV || "development",
-    PORT: process.env.PORT || 5000,
-    DATABASE_URL: process.env.DATABASE_URL as string,
-    ACCESS_TOKEN_SECRET: process.env.ACCESS_TOKEN_SECRET as string,
-    REFRESH_TOKEN_SECRET: process.env.REFRESH_TOKEN_SECRET as string,
-    ACCESS_TOKEN_EXPIRES_IN: process.env.ACCESS_TOKEN_EXPIRES_IN || "1d",
-    REFRESH_TOKEN_EXPIRES_IN: process.env.REFRESH_TOKEN_EXPIRES_IN || "7d",
-    FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:3000",
-    SUPER_ADMIN_EMAIL: process.env.SUPER_ADMIN_EMAIL as string,
-    SUPER_ADMIN_PASSWORD: process.env.SUPER_ADMIN_PASSWORD as string,
-    VAULT_ENCRYPTION_KEY: process.env.VAULT_ENCRYPTION_KEY as string,
-    // Empty rather than cast: mailer.ts tests these for truthiness to decide
-    // whether it can send at all, and `undefined as string` would pass that
-    // test and fail at connect time instead.
-    SMTP_HOST: process.env.SMTP_HOST || "",
-    SMTP_PORT: process.env.SMTP_PORT || "587",
-    SMTP_USER: process.env.SMTP_USER || "",
-    SMTP_PASSWORD: process.env.SMTP_PASSWORD || "",
-    MAIL_FROM: process.env.MAIL_FROM || "",
-    CLOUDINARY: {
-        CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME || "",
-        API_KEY: process.env.CLOUDINARY_API_KEY || "",
-        API_SECRET: process.env.CLOUDINARY_API_SECRET || "",
-    },
+export const env = {
+    ...parsed.data,
+    FRONTEND_URL: parsed.data.FRONTEND_URL || "http://localhost:3000",
 };

@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { env } from "../../config/env.js";
+import { jwtUtils } from "./jwt.js";
 
 const isProduction = env.NODE_ENV === "production";
 
@@ -18,15 +19,15 @@ const getCookie = (req: Request, name: string): string | undefined => {
     return req.cookies?.[name];
 };
 
+// The cookie lives exactly as long as the token inside it.
+const lifetimeOf = (token: string) => {
+    const exp: unknown = jwtUtils.decodeToken(token)?.exp;
+    return typeof exp === "number" ? Math.max(exp * 1000 - Date.now(), 0) : undefined;
+};
+
 const setAuthCookies = (res: Response, accessToken: string, refreshToken: string) => {
-    res.cookie("accessToken", accessToken, {
-        ...baseOptions,
-        maxAge: 24 * 60 * 60 * 1000, // 1 day
-    });
-    res.cookie("refreshToken", refreshToken, {
-        ...baseOptions,
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    res.cookie("accessToken", accessToken, { ...baseOptions, maxAge: lifetimeOf(accessToken) });
+    res.cookie("refreshToken", refreshToken, { ...baseOptions, maxAge: lifetimeOf(refreshToken) });
 };
 
 const clearAuthCookies = (res: Response) => {

@@ -5,6 +5,7 @@ import { env } from "../../config/env.js";
 import { UserStatus } from "../../generated/prisma/enums.js";
 import { prisma } from "../lib/prisma.js";
 import { jwtUtils } from "../utils/jwt.js";
+import { readAccessToken } from "./readAccessToken.js";
 
 /**
  * The chat socket.
@@ -51,23 +52,25 @@ type Authenticated = { userId: string; organizationId: string };
  * and each says why it is here.
  */
 const authenticate = async (cookieHeader?: string): Promise<Authenticated | null> => {
-    if (!cookieHeader) return null;
-
-    const accessToken = cookieHeader
-        .split(";")
-        .map((part) => part.trim())
-        .find((part) => part.startsWith("accessToken="))
-        ?.slice("accessToken=".length);
-
+    const accessToken = readAccessToken(cookieHeader);
     if (!accessToken) return null;
 
-    const verified = jwtUtils.verifyToken(decodeURIComponent(accessToken), env.ACCESS_TOKEN_SECRET);
+    const verified = jwtUtils.verifyToken(accessToken, env.ACCESS_TOKEN_SECRET);
     if (!verified.success) return null;
 
-    const user = await prisma.user.findUnique({
-        where: { id: verified.decoded.userId },
-        select: { id: true, organization_id: true, status: true, token_version: true },
-    });
+    const userId: unknown = verified.decoded.userId;
+    if (typeof userId !== "string") return null;
+
+    // A database error here refuses the handshake; it must never reject unhandled.
+    let user;
+    try {
+        user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, organization_id: true, status: true, token_version: true },
+        });
+    } catch {
+        return null;
+    }
 
     if (!user) return null;
     // A pending or suspended account has a valid token and must still be
@@ -145,6 +148,8 @@ export const attachChatSocket = (server: Server) => {
         const { pathname } = new URL(request.url ?? "/", "http://localhost");
         if (pathname !== "/ws") return;
 
+        socket.on("error", () => socket.destroy());
+
         void authenticate(request.headers.cookie).then((user) => {
             if (!user) {
                 socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
@@ -166,6 +171,9 @@ export const attachChatSocket = (server: Server) => {
 
                 ws.send(JSON.stringify({ type: "ready" }));
             });
+        }).catch(() => {
+            socket.write("HTTP/1.1 503 Service Unavailable\r\n\r\n");
+            socket.destroy();
         });
     });
 

@@ -177,7 +177,11 @@ const login = async (payload: ILoginPayload, context?: LoginContext) => {
     // Deliberately the same message for "no such account" and "wrong password":
     // telling them apart turns this endpoint into a way to enumerate who has an
     // account here.
-    if (!user || !(await passwordUtils.comparePassword(payload.password, user.password))) {
+    const passwordMatches = user
+        ? await passwordUtils.comparePassword(payload.password, user.password)
+        : await passwordUtils.compareAgainstDummy(payload.password);
+
+    if (!user || !passwordMatches) {
         // An address with no account belongs to no company, so this row has a
         // null organization_id and appears on nobody's screen. An address that
         // DOES exist is the valuable case - it is what tells an admin somebody

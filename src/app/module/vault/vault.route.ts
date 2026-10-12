@@ -23,8 +23,8 @@ router.get("/:id/reveal", checkAuth(Role.admin, Role.sales, Role.project_manager
 // needs - and it names colleagues.
 router.get("/:id/access-log", checkAuth(Role.admin), VaultController.getAccessLog);
 
-router.post("/", checkAuth(Role.admin, Role.sales, Role.project_manager), validateRequest(createCredentialZodSchema), VaultController.createCredential);
-router.patch("/:id", checkAuth(Role.admin, Role.sales, Role.project_manager), validateRequest(updateCredentialZodSchema), VaultController.updateCredential);
+router.post("/", checkAuth(Role.admin, Role.sales, Role.project_manager), requireScope("vault", "create"), validateRequest(createCredentialZodSchema), VaultController.createCredential);
+router.patch("/:id", checkAuth(Role.admin, Role.sales, Role.project_manager), requireScope("vault", "edit"), validateRequest(updateCredentialZodSchema), VaultController.updateCredential);
 router.delete("/:id", checkAuth(Role.admin), VaultController.deleteCredential);
 
 export const VaultRoutes = router;

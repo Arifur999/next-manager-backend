@@ -205,6 +205,43 @@ check(
 const otherById = await call("GET", `/projects/${otherId}`, undefined, workerCookie);
 check("nor readable by its id", otherById.status === 404, `${otherById.status}`);
 
+console.log("\n--- vault writes follow the grid, not just the role ---");
+const setScope = (role: Role, module: string, action: string, scope: string) =>
+    prisma.rolePermission.update({
+        where: {
+            organization_id_role_module_action: { organization_id: organizationId, role, module, action },
+        },
+        data: { scope },
+    });
+
+const salesEmail = `scopesales${stamp}@agencio.test`;
+const sales = await call(
+    "POST",
+    "/users",
+    { full_name: "Scope Sales", email: salesEmail, password: "Passw0rd123", role: "sales" },
+    admin
+);
+const salesId = (sales.json as unknown as { data: { id: string } }).data?.id;
+await call("POST", "/project-members", { project_id: mineId, user_id: salesId }, admin);
+const salesCookie = (await call("POST", "/auth/login", { email: salesEmail, password: "Passw0rd123" })).cookie;
+
+const onMine = await call("POST", "/vault", { label: "Mine", username: "u", password: "p", project_id: mineId }, admin);
+const onTheirs = await call("POST", "/vault", { label: "Theirs", username: "u", password: "p", project_id: theirsId }, admin);
+const onMineId = (onMine.json as unknown as { data: { id: string } }).data?.id;
+const onTheirsId = (onTheirs.json as unknown as { data: { id: string } }).data?.id;
+
+await setScope(Role.sales, "vault", "edit", "none");
+const editNone = await call("PATCH", `/vault/${onMineId}`, { label: "Edited" }, salesCookie);
+check("vault edit 'none' refuses a PATCH", editNone.status === 403, `${editNone.status}`);
+await setScope(Role.sales, "vault", "edit", "all");
+
+await setScope(Role.sales, "vault", "view", "assigned");
+const unseen = await call("PATCH", `/vault/${onTheirsId}`, { label: "Edited" }, salesCookie);
+check("vault view 'assigned' cannot edit a credential it cannot see", unseen.status === 404, `${unseen.status}`);
+const moved = await call("PATCH", `/vault/${onMineId}`, { project_id: theirsId }, salesCookie);
+check("nor move one onto a project they are not on", moved.status === 404, `${moved.status}`);
+await setScope(Role.sales, "vault", "view", "all");
+
 await setRoleScope("assigned");
 await prisma.$disconnect();
 

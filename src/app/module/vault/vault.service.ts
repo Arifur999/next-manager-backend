@@ -272,8 +272,9 @@ const updateCredential = async (
     context: { ip?: string; userAgent?: string }
 ) => {
     return prisma.$transaction(async (tx) => {
+        // Edits reach only what this person can see.
         const existing = await tx.credential.findFirst({
-            where: { id, organization_id: user.organizationId, deleted_at: null },
+            where: { id, organization_id: user.organizationId, deleted_at: null, ...(await visibilityScope(user)) },
             select: { id: true },
         });
 
@@ -282,6 +283,21 @@ const updateCredential = async (
         }
 
         await assertReferences(tx, payload, user);
+
+        // Under a narrowed scope a credential may only move onto a project they are on,
+        // or they could carry it somewhere and reveal it there.
+        if (payload.project_id !== undefined && (await resolveScope(user, "vault", "view")) !== "all") {
+            const member = payload.project_id
+                ? await tx.projectMember.findFirst({
+                      where: { project_id: payload.project_id, user_id: user.userId },
+                      select: { id: true },
+                  })
+                : null;
+
+            if (!member) {
+                throw new AppError(status.NOT_FOUND, "Project not found");
+            }
+        }
 
         const credential = await tx.credential.update({
             where: { id },

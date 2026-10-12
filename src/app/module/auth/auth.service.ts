@@ -414,39 +414,42 @@ const forgotPassword = async (
  * in each case. They ask for another link.
  */
 const resetPassword = async (payload: IResetPasswordPayload) => {
-    const record = await prisma.passwordResetToken.findUnique({
-        where: { token_hash: hashToken(payload.token) },
-        select: { id: true, user_id: true, expires_at: true, used_at: true },
-    });
-
-    const refuse = () =>
-        new AppError(
-            status.BAD_REQUEST,
-            "That reset link is no longer valid. Ask for a new one."
-        );
-
-    if (!record || record.used_at || record.expires_at.getTime() < Date.now()) {
-        throw refuse();
-    }
+    const tokenHash = hashToken(payload.token);
+    const password = await passwordUtils.hashPassword(payload.new_password);
 
     await prisma.$transaction(async (tx) => {
+        const now = new Date();
+
+        // Claim the token in one conditional write, so two requests racing with
+        // the same link cannot both set a password.
+        const claim = await tx.passwordResetToken.updateMany({
+            where: { token_hash: tokenHash, used_at: null, expires_at: { gt: now } },
+            data: { used_at: now },
+        });
+
+        if (claim.count !== 1) {
+            throw new AppError(status.BAD_REQUEST, "That reset link is no longer valid. Ask for a new one.");
+        }
+
+        const record = await tx.passwordResetToken.findUniqueOrThrow({
+            where: { token_hash: tokenHash },
+            select: { user_id: true },
+        });
+
         await tx.user.update({
             where: { id: record.user_id },
             data: {
-                password: await passwordUtils.hashPassword(payload.new_password),
+                password,
                 // Same as a deliberate change: every session open anywhere is
-                // retired. If somebody else had the account, this is what puts
-                // them out.
+                // retired. If somebody else had the account, this puts them out.
                 token_version: { increment: 1 },
             },
         });
 
-        // Spend this one, and everything else outstanding with it. Together in
-        // one transaction with the password write, so a failure cannot leave a
-        // changed password beside a link that still works.
+        // Spend every other outstanding link with it.
         await tx.passwordResetToken.updateMany({
             where: { user_id: record.user_id, used_at: null },
-            data: { used_at: new Date() },
+            data: { used_at: now },
         });
     });
 

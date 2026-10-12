@@ -1,6 +1,6 @@
 import cron, { type ScheduledTask } from "node-cron";
 import { logger } from "../lib/logger.js";
-import { PlatformService } from "../module/platform/platform.service.js";
+import { expireSubscriptions } from "../module/platform/platformSubscription.service.js";
 import { PlatformFinanceService } from "../module/platform/platformFinance.service.js";
 import { SecurityService } from "../module/security/security.service.js";
 import { syncTodaysRate } from "../utils/currencyRate.js";
@@ -38,7 +38,7 @@ export const startScheduledJobs = (): ScheduledTask[] => {
     // backfill.
     tasks.push(cron.schedule("30 1 * * *", async () => {
         try {
-            const result = await PlatformService.expireSubscriptions();
+            const result = await expireSubscriptions();
             if (result.moved_to_past_due > 0 || result.suspended > 0) {
                 logger.info("Subscription expiry sweep", {
                     movedToPastDue: result.moved_to_past_due,

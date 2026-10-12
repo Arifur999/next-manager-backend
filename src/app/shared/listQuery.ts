@@ -92,12 +92,38 @@ export const dateRangeWhere = (options: ListOptions, column = "date"): Record<st
     };
 };
 
+type PageSlice = { skip: number; take: number };
+
 // How many rows to skip, and how many to take. Undefined means "no paging" -
 // the caller returns the whole list.
-export const pageSlice = (options: ListOptions): { skip: number; take: number } | undefined => {
+export const pageSlice = (options: ListOptions): PageSlice | undefined => {
     if (!options.limit) return undefined;
     const page = options.page ?? 1;
     return { skip: (page - 1) * options.limit, take: options.limit };
+};
+
+// The paging branch every list service shares. Without a limit the whole list
+// comes back and its length is the total, so no count query runs. With one,
+// the page and the count are fetched together.
+//
+//     const { rows, total } = await findPage(
+//         options,
+//         (page) => prisma.client.findMany({ where, orderBy, ...page }),
+//         () => prisma.client.count({ where })
+//     );
+export const findPage = async <Row>(
+    options: ListOptions,
+    find: (page?: PageSlice) => Promise<Row[]>,
+    count: () => Promise<number>
+): Promise<{ rows: Row[]; total: number }> => {
+    const slice = pageSlice(options);
+    if (!slice) {
+        const rows = await find();
+        return { rows, total: rows.length };
+    }
+
+    const [rows, total] = await Promise.all([find(slice), count()]);
+    return { rows, total };
 };
 
 export const paginationMeta = (options: ListOptions, total: number) => {

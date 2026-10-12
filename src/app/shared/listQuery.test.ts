@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { dateRangeWhere, escapeLikeTerm, pageSlice, paginationMeta, parseListOptions } from "./listQuery.js";
+import { dateRangeWhere, escapeLikeTerm, findPage, pageSlice, paginationMeta, parseListOptions } from "./listQuery.js";
 
 describe("parseListOptions", () => {
     it("reads page, limit, search and dates", () => {
@@ -81,5 +81,34 @@ describe("paginationMeta", () => {
 
     it("an empty paged list reports zero pages", () => {
         assert.equal(paginationMeta({ limit: 10 }, 0).totalPages, 0);
+    });
+});
+
+describe("findPage", () => {
+    const fakes = (rows: string[], total: number) => {
+        const calls = { find: [] as Array<{ skip: number; take: number } | undefined>, count: 0 };
+        const find = async (page?: { skip: number; take: number }) => {
+            calls.find.push(page);
+            return rows;
+        };
+        const count = async () => {
+            calls.count += 1;
+            return total;
+        };
+        return { calls, find, count };
+    };
+
+    it("loads the whole list once without a limit and makes no count query", async () => {
+        const { calls, find, count } = fakes(["a", "b", "c"], 99);
+        assert.deepEqual(await findPage({}, find, count), { rows: ["a", "b", "c"], total: 3 });
+        assert.deepEqual(calls.find, [undefined]);
+        assert.equal(calls.count, 0);
+    });
+
+    it("passes the page slice to find and takes the total from count", async () => {
+        const { calls, find, count } = fakes(["k"], 41);
+        assert.deepEqual(await findPage({ page: 3, limit: 20 }, find, count), { rows: ["k"], total: 41 });
+        assert.deepEqual(calls.find, [{ skip: 40, take: 20 }]);
+        assert.equal(calls.count, 1);
     });
 });

@@ -636,7 +636,10 @@ const getOverview = async () => {
  * somebody can edit answers no question worth asking. There is no update and
  * no delete here, not even for the operator who wrote the entry.
  */
-const getActivity = async (filters: { entityType?: string; actorId?: string }, limit = 100) =>
+const getActivity = async (
+    filters: { entityType?: string; actorId?: string },
+    { page, limit }: { page: number; limit: number }
+) =>
     prisma.platformActivityLog.findMany({
         where: {
             ...(filters.entityType ? { entity_type: filters.entityType } : {}),
@@ -653,7 +656,8 @@ const getActivity = async (filters: { entityType?: string; actorId?: string }, l
             actor: { select: { id: true, full_name: true, email: true } },
         },
         orderBy: { created_at: "desc" },
-        take: Math.min(limit, 500),
+        skip: (page - 1) * limit,
+        take: limit,
     });
 
 // ---------------------------------------------------------------------------

@@ -1,32 +1,20 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { KpiMetric, KpiPeriod } from "../../../generated/prisma/enums.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { KpiTargetService } from "./kpiTarget.service.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
-
-// An unknown metric in the query string widens the view rather than erroring:
-// a stale bookmark should still show something.
-const parseFilters = (query: Record<string, unknown>) => ({
-    userId: typeof query.user_id === "string" ? query.user_id : undefined,
-    metric:
-        typeof query.metric === "string" && query.metric in KpiMetric
-            ? (query.metric as KpiMetric)
-            : undefined,
-    period:
-        typeof query.period === "string" && query.period in KpiPeriod
-            ? (query.period as KpiPeriod)
-            : undefined,
-});
+import { kpiTargetListQueryZodSchema } from "./kpiTarget.validation.js";
 
 const getAllTargets = catchAsync(async (req: Request, res: Response) => {
     // Not paginated: a company has a handful of targets, not a feed of them.
-    const { rows } = await KpiTargetService.getAllTargets(
-        requireUser(req),
-        parseFilters(req.query as Record<string, unknown>)
-    );
+    const { user_id, metric, period } = queryOf(req, kpiTargetListQueryZodSchema);
+    const { rows } = await KpiTargetService.getAllTargets(requireUser(req), {
+        userId: user_id,
+        metric,
+        period,
+    });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

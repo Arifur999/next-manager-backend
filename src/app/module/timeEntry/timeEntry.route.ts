@@ -5,7 +5,7 @@ import { requireScope } from "../../middleware/requireScope.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { TimeEntryController } from "./timeEntry.controller.js";
-import { createTimeEntryZodSchema, setCapacityZodSchema, updateTimeEntryZodSchema } from "./timeEntry.validation.js";
+import { createTimeEntryZodSchema, setCapacityZodSchema, updateTimeEntryZodSchema, timeEntryListQueryZodSchema, timeSummaryQueryZodSchema } from "./timeEntry.validation.js";
 import { idParams, userIdParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
@@ -14,8 +14,8 @@ const router = Router();
 // every signed-in user. The service - not the gate - is what keeps operations
 // to their own rows: their id is applied to the where clause, so somebody
 // else's entry reads as "not found" rather than as a refusal.
-router.get("/", checkAuth(), requireCompany, TimeEntryController.getAllEntries);
-router.get("/summary", checkAuth(), requireCompany, TimeEntryController.getSummary);
+router.get("/", checkAuth(), requireCompany, validateRequest({ query: timeEntryListQueryZodSchema }), TimeEntryController.getAllEntries);
+router.get("/summary", checkAuth(), requireCompany, validateRequest({ query: timeSummaryQueryZodSchema }), TimeEntryController.getSummary);
 router.post("/", checkAuth(), requireCompany, validateRequest(createTimeEntryZodSchema), TimeEntryController.createEntry);
 router.patch("/:id", checkAuth(), requireCompany, validateRequest({ params: idParams, body: updateTimeEntryZodSchema }), TimeEntryController.updateEntry);
 router.delete("/:id", checkAuth(), requireCompany, validateRequest({ params: idParams }), TimeEntryController.deleteEntry);

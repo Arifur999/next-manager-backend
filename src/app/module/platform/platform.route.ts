@@ -10,22 +10,7 @@ import { PlatformController } from "./platform.controller.js";
 import { PlatformFinanceController } from "./platformFinance.controller.js";
 import { PlatformInviteController } from "./platformInvite.controller.js";
 import { PlatformSettingsController } from "./platformSettings.controller.js";
-import {
-    acceptAgencyInviteZodSchema,
-    acceptPlatformInviteZodSchema,
-    createAgencyInviteZodSchema,
-    createAnnouncementZodSchema,
-    createCompanyZodSchema,
-    createPlatformExpenseZodSchema,
-    createPlatformInviteZodSchema,
-    createPlanZodSchema,
-    setPlatformPermissionsZodSchema,
-    setSubscriptionZodSchema,
-    updateAnnouncementZodSchema,
-    updatePlanZodSchema,
-    updatePlatformSettingsZodSchema,
-    updatePlatformExpenseZodSchema,
-} from "./platform.validation.js";
+import { acceptAgencyInviteZodSchema, acceptPlatformInviteZodSchema, createAgencyInviteZodSchema, createAnnouncementZodSchema, createCompanyZodSchema, createPlatformExpenseZodSchema, createPlatformInviteZodSchema, createPlanZodSchema, setPlatformPermissionsZodSchema, setSubscriptionZodSchema, updateAnnouncementZodSchema, updatePlanZodSchema, updatePlatformSettingsZodSchema, updatePlatformExpenseZodSchema, companyListQueryZodSchema, platformActivityQueryZodSchema } from "./platform.validation.js";
 import { idParams, tokenParams, organizationIdParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
@@ -75,6 +60,7 @@ router.get(
     "/activity",
     checkAuth(Role.super_admin),
     requirePermission("platform.companies.view"),
+    validateRequest({ query: platformActivityQueryZodSchema }),
     PlatformController.getActivity
 );
 
@@ -82,6 +68,7 @@ router.get(
     "/companies",
     checkAuth(Role.super_admin),
     requirePermission("platform.companies.view"),
+    validateRequest({ query: companyListQueryZodSchema }),
     PlatformController.getCompanies
 );
 

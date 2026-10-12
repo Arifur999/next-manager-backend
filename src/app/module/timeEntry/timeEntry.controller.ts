@@ -4,24 +4,15 @@ import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { TimeEntryService } from "./timeEntry.service.js";
-import { idOf, paramsOf, userIdParams } from "../../shared/requestSchemas.js";
+import { idOf, paramsOf, userIdParams, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
-
-// Anything unparseable is ignored rather than rejected: a stale bookmark should
-// widen the view, not produce an error page.
-const parseFilters = (query: Record<string, unknown>) => ({
-    userId: typeof query.user_id === "string" ? query.user_id : undefined,
-    projectId: typeof query.project_id === "string" ? query.project_id : undefined,
-    approved:
-        query.approved === "true" ? true : query.approved === "false" ? false : undefined,
-});
+import { timeEntryListQueryZodSchema, timeSummaryQueryZodSchema } from "./timeEntry.validation.js";
 
 const getAllEntries = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const options = parseListOptions(query);
+    const { user_id, project_id, approved, ...options } = queryOf(req, timeEntryListQueryZodSchema);
     const { rows, total } = await TimeEntryService.getAllEntries(
         requireUser(req),
-        parseFilters(query),
+        { userId: user_id, projectId: project_id, approved },
         options
     );
     sendResponse(res, {
@@ -34,13 +25,8 @@ const getAllEntries = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getSummary = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const options = parseListOptions(query);
-    const result = await TimeEntryService.getSummary(
-        requireUser(req),
-        { userId: typeof query.user_id === "string" ? query.user_id : undefined },
-        options
-    );
+    const { user_id, ...options } = queryOf(req, timeSummaryQueryZodSchema);
+    const result = await TimeEntryService.getSummary(requireUser(req), { userId: user_id }, options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

@@ -1,4 +1,6 @@
 import z from "zod";
+import { optionalFilter, queryFlag } from "../../shared/listQuery.js";
+import { LeaveStatus } from "../../../generated/prisma/enums.js";
 
 // ---------------------------------------------------------------- attendance
 
@@ -98,3 +100,15 @@ export const completePayrollZodSchema = z.object({
 export type ICreatePayrollRunPayload = z.infer<typeof createPayrollRunZodSchema>;
 export type ISetPayrollItemsPayload = z.infer<typeof setPayrollItemsZodSchema>;
 export type ICompletePayrollPayload = z.infer<typeof completePayrollZodSchema>;
+
+export const attendanceListQueryZodSchema = z.object({
+    from: optionalFilter(z.iso.date("from must be YYYY-MM-DD")),
+    to: optionalFilter(z.iso.date("to must be YYYY-MM-DD")),
+    user_id: optionalFilter(z.uuid("user_id must be a valid id")),
+});
+
+export const leaveListQueryZodSchema = z.object({
+    status: optionalFilter(z.enum(LeaveStatus, "Choose a valid leave status")),
+    user_id: optionalFilter(z.uuid("user_id must be a valid id")),
+    mine: queryFlag,
+});

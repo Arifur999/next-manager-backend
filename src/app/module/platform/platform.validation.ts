@@ -2,6 +2,7 @@ import z from "zod";
 import { AnnouncementAudience, SubscriptionStatus } from "../../../generated/prisma/enums.js";
 import { PLATFORM_PERMISSIONS } from "./platform.permissions.js";
 import { emailField } from "../../shared/emailField.js";
+import { optionalFilter, MAX_PAGE_SIZE } from "../../shared/listQuery.js";
 
 export const createPlanZodSchema = z.object({
     code: z
@@ -276,3 +277,22 @@ export const acceptAgencyInviteZodSchema = z.object({
 
 export type ICreateAgencyInvitePayload = z.infer<typeof createAgencyInviteZodSchema>;
 export type IAcceptAgencyInvitePayload = z.infer<typeof acceptAgencyInviteZodSchema>;
+
+export const companyListQueryZodSchema = z.object({
+    status: optionalFilter(z.enum(SubscriptionStatus, "Choose a valid subscription status")),
+    search: z.string().trim().optional().catch(undefined).transform((term) => term || undefined),
+});
+
+export const platformActivityQueryZodSchema = z.object({
+    entity_type: optionalFilter(z.string().max(60)),
+    actor_id: optionalFilter(z.uuid("actor_id must be a valid id")),
+    page: z.coerce.number().int().positive().catch(1).default(1),
+    // Capped like every list; a bad value falls back to the default page size.
+    limit: z.coerce
+        .number()
+        .int()
+        .positive()
+        .transform((limit) => Math.min(limit, MAX_PAGE_SIZE))
+        .catch(100)
+        .default(100),
+});

@@ -1,11 +1,11 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { SubscriptionStatus } from "../../../generated/prisma/enums.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { PlatformService } from "./platform.service.js";
-import { idOf, paramsOf, organizationIdParams } from "../../shared/requestSchemas.js";
+import { idOf, paramsOf, organizationIdParams, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
+import { companyListQueryZodSchema, platformActivityQueryZodSchema } from "./platform.validation.js";
 
 const getPlans = catchAsync(async (_req: Request, res: Response) => {
     const result = await PlatformService.getPlans();
@@ -42,16 +42,7 @@ const updatePlan = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getCompanies = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const result = await PlatformService.getCompanies({
-        // An unknown status widens the view rather than erroring - a stale
-        // bookmark should still show something.
-        status:
-            typeof query.status === "string" && query.status in SubscriptionStatus
-                ? (query.status as SubscriptionStatus)
-                : undefined,
-        search: typeof query.search === "string" ? query.search.trim() || undefined : undefined,
-    });
+    const result = await PlatformService.getCompanies(queryOf(req, companyListQueryZodSchema));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -105,13 +96,10 @@ const getOverview = catchAsync(async (_req: Request, res: Response) => {
 });
 
 const getActivity = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
+    const query = queryOf(req, platformActivityQueryZodSchema);
     const result = await PlatformService.getActivity(
-        {
-            entityType: typeof query.entity_type === "string" ? query.entity_type : undefined,
-            actorId: typeof query.actor_id === "string" ? query.actor_id : undefined,
-        },
-        typeof query.limit === "string" ? Number(query.limit) || 100 : 100
+        { entityType: query.entity_type, actorId: query.actor_id },
+        { page: query.page, limit: query.limit }
     );
     sendResponse(res, {
         success: true,

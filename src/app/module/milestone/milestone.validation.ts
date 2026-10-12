@@ -1,4 +1,5 @@
 import z from "zod";
+import { listQuerySchema, optionalFilter, queryBoolean } from "../../shared/listQuery.js";
 
 export const createMilestoneZodSchema = z.object({
     project_id: z.uuid("project_id must be a valid id"),
@@ -34,3 +35,8 @@ export const acceptMilestoneZodSchema = z.object({
 
 export type ISubmitMilestonePayload = z.infer<typeof submitMilestoneZodSchema>;
 export type IAcceptMilestonePayload = z.infer<typeof acceptMilestoneZodSchema>;
+
+export const milestoneListQueryZodSchema = listQuerySchema.extend({
+    project_id: optionalFilter(z.uuid("project_id must be a valid id")),
+    outstanding: queryBoolean,
+});

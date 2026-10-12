@@ -1,4 +1,5 @@
 import z from "zod";
+import { listQuerySchema, optionalFilter, queryBoolean } from "../../shared/listQuery.js";
 
 export const createTimeEntryZodSchema = z.object({
     project_id: z.uuid("project_id must be a valid id"),
@@ -45,3 +46,13 @@ export const setCapacityZodSchema = z
     );
 
 export type ISetCapacityPayload = z.infer<typeof setCapacityZodSchema>;
+
+export const timeEntryListQueryZodSchema = listQuerySchema.extend({
+    user_id: optionalFilter(z.uuid("user_id must be a valid id")),
+    project_id: optionalFilter(z.uuid("project_id must be a valid id")),
+    approved: queryBoolean,
+});
+
+export const timeSummaryQueryZodSchema = listQuerySchema.extend({
+    user_id: optionalFilter(z.uuid("user_id must be a valid id")),
+});

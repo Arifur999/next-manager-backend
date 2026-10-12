@@ -1,6 +1,7 @@
 import z from "zod";
 import { Role } from "../../../generated/prisma/enums.js";
 import { TaskPriority } from "../../../generated/prisma/enums.js";
+import { listQuerySchema, optionalFilter, queryFlag } from "../../shared/listQuery.js";
 
 export const createTaskZodSchema = z.object({
     project_id: z.uuid("project_id must be a valid id"),
@@ -57,3 +58,17 @@ export const taskUpdateSchemaFor = (role: Role) =>
 
 export type ICreateTaskPayload = z.infer<typeof createTaskZodSchema>;
 export type IUpdateTaskPayload = z.infer<typeof updateTaskZodSchema>;
+
+export const taskListQueryZodSchema = listQuerySchema.extend({
+    project_id: optionalFilter(z.uuid("project_id must be a valid id")),
+    assignee_id: optionalFilter(z.uuid("assignee_id must be a valid id")),
+    status_id: optionalFilter(z.uuid("status_id must be a valid id")),
+    status: optionalFilter(z.string().max(60)),
+    mine: queryFlag,
+    // A fixed "me" rather than an id: taking one would let anybody read anybody
+    // else's book of clients by guessing.
+    client_owner: z.unknown().optional().transform((value) => value === "me"),
+    overdue: queryFlag,
+    due: optionalFilter(z.enum(["today", "upcoming"], "due must be today or upcoming")),
+    completed: queryFlag,
+});

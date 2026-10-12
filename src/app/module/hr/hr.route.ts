@@ -4,16 +4,7 @@ import { checkAuth } from "../../middleware/checkAuth.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { HrController } from "./hr.controller.js";
-import {
-    completePayrollZodSchema,
-    createLeaveTypeZodSchema,
-    createPayrollRunZodSchema,
-    decideLeaveZodSchema,
-    recordAttendanceZodSchema,
-    requestLeaveZodSchema,
-    setPayrollItemsZodSchema,
-    updateLeaveTypeZodSchema,
-} from "./hr.validation.js";
+import { completePayrollZodSchema, createLeaveTypeZodSchema, createPayrollRunZodSchema, decideLeaveZodSchema, recordAttendanceZodSchema, requestLeaveZodSchema, setPayrollItemsZodSchema, updateLeaveTypeZodSchema, attendanceListQueryZodSchema, leaveListQueryZodSchema } from "./hr.validation.js";
 import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
@@ -28,7 +19,7 @@ const approver = [Role.admin, Role.project_manager] as const;
 // service narrows operations to their own rows. Being able to read when every
 // colleague arrived is a management view, and handing it to the whole company
 // turns a working record into something people manage their behaviour around.
-router.get("/attendance", checkAuth(), requireCompany, HrController.getAttendance);
+router.get("/attendance", checkAuth(), requireCompany, validateRequest({ query: attendanceListQueryZodSchema }), HrController.getAttendance);
 router.post("/attendance/clock", checkAuth(), requireCompany, HrController.clock);
 
 // Writing somebody else's day is a different claim from clocking your own, and
@@ -57,7 +48,7 @@ router.patch(
     HrController.updateLeaveType
 );
 
-router.get("/leave", checkAuth(), requireCompany, HrController.getLeaveRequests);
+router.get("/leave", checkAuth(), requireCompany, validateRequest({ query: leaveListQueryZodSchema }), HrController.getLeaveRequests);
 // Somebody else's balance is a management view; your own is always readable,
 // and the service defaults to the caller when no id is given.
 router.get("/leave/balance", checkAuth(), requireCompany, HrController.getLeaveBalance);

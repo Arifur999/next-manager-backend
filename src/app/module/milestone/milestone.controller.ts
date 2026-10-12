@@ -1,24 +1,18 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
-import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
+import { paginationMeta } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { MilestoneService } from "./milestone.service.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
-
-const parseFilters = (query: Record<string, unknown>) => ({
-    projectId: typeof query.project_id === "string" ? query.project_id : undefined,
-    outstanding:
-        query.outstanding === "true" ? true : query.outstanding === "false" ? false : undefined,
-});
+import { milestoneListQueryZodSchema } from "./milestone.validation.js";
 
 const getAllMilestones = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const options = parseListOptions(query);
+    const { project_id, outstanding, ...options } = queryOf(req, milestoneListQueryZodSchema);
     const { rows, total } = await MilestoneService.getAllMilestones(
         requireUser(req),
-        parseFilters(query),
+        { projectId: project_id, outstanding },
         options
     );
     sendResponse(res, {

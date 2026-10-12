@@ -1,24 +1,21 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { ConversationType } from "../../../generated/prisma/enums.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ChatService } from "./chat.service.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
+import { conversationListQueryZodSchema } from "./chat.validation.js";
 
 const getConversations = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
+    const query = queryOf(req, conversationListQueryZodSchema);
     // Every sub-view the sidebar offers is a filter over this one list, not a
     // separate endpoint: Unread, Direct, Groups, Project and Archived.
     const { rows } = await ChatService.getConversations(requireUser(req), {
-        type:
-            typeof query.type === "string" && query.type in ConversationType
-                ? (query.type as ConversationType)
-                : undefined,
-        unreadOnly: query.unread === "true",
-        archived: query.archived === "true",
+        type: query.type,
+        unreadOnly: query.unread,
+        archived: query.archived,
     });
 
     sendResponse(res, {

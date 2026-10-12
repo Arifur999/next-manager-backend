@@ -4,19 +4,14 @@ import { checkAuth } from "../../middleware/checkAuth.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { MilestoneController } from "./milestone.controller.js";
-import {
-    acceptMilestoneZodSchema,
-    createMilestoneZodSchema,
-    submitMilestoneZodSchema,
-    updateMilestoneZodSchema,
-} from "./milestone.validation.js";
+import { acceptMilestoneZodSchema, createMilestoneZodSchema, submitMilestoneZodSchema, updateMilestoneZodSchema, milestoneListQueryZodSchema } from "./milestone.validation.js";
 import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
 // Reading is open to everyone signed in: operations needs to see what it owes
 // and when, and a deadline nobody can look up is not a deadline.
-router.get("/", checkAuth(), requireCompany, MilestoneController.getAllMilestones);
+router.get("/", checkAuth(), requireCompany, validateRequest({ query: milestoneListQueryZodSchema }), MilestoneController.getAllMilestones);
 
 // Setting the schedule is the project manager's job by definition.
 router.post(

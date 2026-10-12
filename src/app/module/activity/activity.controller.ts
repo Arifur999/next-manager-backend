@@ -1,23 +1,18 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import catchAsync from "../../shared/catchAsync.js";
-import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
+import { paginationMeta } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ActivityService } from "./activity.service.js";
-
-const parseFilters = (query: Record<string, unknown>) => ({
-    userId: typeof query.user_id === "string" ? query.user_id : undefined,
-    entityType: typeof query.entity_type === "string" ? query.entity_type : undefined,
-    action: typeof query.action === "string" ? query.action : undefined,
-});
+import { queryOf } from "../../shared/requestSchemas.js";
+import { requireUser } from "../../shared/requireUser.js";
+import { activityListQueryZodSchema } from "./activity.validation.js";
 
 const getActivity = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const options = parseListOptions(query);
+    const { user_id, entity_type, action, ...options } = queryOf(req, activityListQueryZodSchema);
     const { rows, total } = await ActivityService.getActivity(
-        req.user as IRequestUser,
-        parseFilters(query),
+        requireUser(req),
+        { userId: user_id, entityType: entity_type, action },
         options
     );
     sendResponse(res, {
@@ -30,7 +25,7 @@ const getActivity = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getActivityFilters = catchAsync(async (req: Request, res: Response) => {
-    const result = await ActivityService.getActivityFilters(req.user as IRequestUser);
+    const result = await ActivityService.getActivityFilters(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

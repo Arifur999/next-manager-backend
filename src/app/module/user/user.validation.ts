@@ -1,6 +1,7 @@
 import z from "zod";
 import { Role, UserStatus } from "../../../generated/prisma/enums.js";
 import { emailField } from "../../shared/emailField.js";
+import { listQuerySchema, optionalFilter } from "../../shared/listQuery.js";
 
 // Roles an admin may hand out. super_admin is deliberately absent - it is a
 // platform role and cannot be granted from inside a company.
@@ -36,3 +37,8 @@ export const updateUserZodSchema = createUserZodSchema
 
 export type ICreateUserPayload = z.infer<typeof createUserZodSchema>;
 export type IUpdateUserPayload = z.infer<typeof updateUserZodSchema>;
+
+export const userListQueryZodSchema = listQuerySchema.extend({
+    status: optionalFilter(z.enum(UserStatus, "Choose a valid status")),
+    department_id: optionalFilter(z.uuid("department_id must be a valid id")),
+});

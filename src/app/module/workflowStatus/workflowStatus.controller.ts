@@ -1,19 +1,15 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { WorkflowKind } from "../../../generated/prisma/enums.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { WorkflowStatusService } from "./workflowStatus.service.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
+import { workflowStatusListQueryZodSchema } from "./workflowStatus.validation.js";
 
 const getAll = catchAsync(async (req: Request, res: Response) => {
-    const kind = (req.query as Record<string, unknown>).kind;
-
-    const result = await WorkflowStatusService.getAll(
-        requireUser(req),
-        typeof kind === "string" && kind in WorkflowKind ? (kind as WorkflowKind) : undefined
-    );
+    const { kind } = queryOf(req, workflowStatusListQueryZodSchema);
+    const result = await WorkflowStatusService.getAll(requireUser(req), kind);
 
     sendResponse(res, {
         success: true,

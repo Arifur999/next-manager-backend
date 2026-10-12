@@ -1,5 +1,6 @@
 import z from "zod";
 import { KpiMetric, KpiPeriod } from "../../../generated/prisma/enums.js";
+import { optionalFilter } from "../../shared/listQuery.js";
 
 export const createKpiTargetZodSchema = z.object({
     // Null (or absent) means the target belongs to the whole agency rather than
@@ -41,3 +42,9 @@ export const PERCENTAGE_METRICS: KpiMetric[] = [
     KpiMetric.on_time_delivery_pct,
     KpiMetric.project_margin_pct,
 ];
+
+export const kpiTargetListQueryZodSchema = z.object({
+    user_id: optionalFilter(z.uuid("user_id must be a valid id")),
+    metric: optionalFilter(z.enum(KpiMetric, "Choose a valid metric")),
+    period: optionalFilter(z.enum(KpiPeriod, "Choose a valid period")),
+});

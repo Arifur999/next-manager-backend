@@ -1,13 +1,13 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { LeaveStatus } from "../../../generated/prisma/enums.js";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { AttendanceService } from "./attendance.service.js";
 import { LeaveService } from "./leave.service.js";
 import { PayrollService } from "./payroll.service.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
+import { attendanceListQueryZodSchema, leaveListQueryZodSchema } from "./hr.validation.js";
 
 const ok = (res: Response, message: string, data: unknown, httpStatus: number = status.OK) =>
     sendResponse(res, { success: true, httpStatus, message, data });
@@ -18,11 +18,11 @@ const str = (value: unknown) => (typeof value === "string" ? value : undefined);
 // ---------------------------------------------------------------- attendance
 
 const getAttendance = catchAsync(async (req: Request, res: Response) => {
-    const query = q(req);
+    const query = queryOf(req, attendanceListQueryZodSchema);
     const result = await AttendanceService.getAll(requireUser(req), {
-        from: str(query.from),
-        to: str(query.to),
-        userId: str(query.user_id),
+        from: query.from,
+        to: query.to,
+        userId: query.user_id,
     });
     ok(res, "Attendance retrieved successfully", result);
 });
@@ -59,14 +59,11 @@ const updateLeaveType = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getLeaveRequests = catchAsync(async (req: Request, res: Response) => {
-    const query = q(req);
-    const raw = str(query.status);
-
+    const query = queryOf(req, leaveListQueryZodSchema);
     const result = await LeaveService.getRequests(requireUser(req), {
-        // An unknown status shows everything rather than an error page.
-        status: raw && raw in LeaveStatus ? (raw as LeaveStatus) : undefined,
-        userId: str(query.user_id),
-        mine: query.mine === "true",
+        status: query.status,
+        userId: query.user_id,
+        mine: query.mine,
     });
     ok(res, "Leave requests retrieved successfully", result);
 });

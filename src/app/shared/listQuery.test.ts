@@ -20,6 +20,11 @@ describe("parseListOptions", () => {
         assert.equal(parseListOptions({ limit: "1.5" }).limit, undefined);
     });
 
+    it("caps the page size at 200", () => {
+        assert.equal(parseListOptions({ limit: "100000000" }).limit, 200);
+        assert.equal(parseListOptions({ limit: "50" }).limit, 50);
+    });
+
     it("drops an impossible date rather than rolling it forward", () => {
         assert.equal(parseListOptions({ from: "2026-02-31" }).from, undefined);
     });

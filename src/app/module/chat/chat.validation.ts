@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { optionalFilter, queryFlag } from "../../shared/listQuery.js";
+import { ConversationType } from "../../../generated/prisma/enums.js";
 
 export const createConversationZodSchema = z
     .object({
@@ -44,3 +46,9 @@ export const addMembersZodSchema = z.object({
 export type ICreateConversationPayload = z.infer<typeof createConversationZodSchema>;
 export type ISendMessagePayload = z.infer<typeof sendMessageZodSchema>;
 export type IAddMembersPayload = z.infer<typeof addMembersZodSchema>;
+
+export const conversationListQueryZodSchema = z.object({
+    type: optionalFilter(z.enum(ConversationType, "Choose a valid conversation type")),
+    unread: queryFlag,
+    archived: queryFlag,
+});

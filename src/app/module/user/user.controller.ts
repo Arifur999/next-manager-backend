@@ -1,27 +1,18 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { UserStatus } from "../../../generated/prisma/enums.js";
 import catchAsync from "../../shared/catchAsync.js";
-import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
+import { paginationMeta } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { UserService } from "./user.service.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
-
-const parseFilters = (query: Record<string, unknown>) => ({
-    status:
-        typeof query.status === "string" && query.status in UserStatus
-            ? (query.status as UserStatus)
-            : undefined,
-    departmentId: typeof query.department_id === "string" ? query.department_id : undefined,
-});
+import { userListQueryZodSchema } from "./user.validation.js";
 
 const getAllUsers = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const options = parseListOptions(query);
+    const { status: userStatus, department_id, ...options } = queryOf(req, userListQueryZodSchema);
     const { rows, total } = await UserService.getAllUsers(
         requireUser(req),
-        parseFilters(query),
+        { status: userStatus, departmentId: department_id },
         options
     );
     sendResponse(res, {

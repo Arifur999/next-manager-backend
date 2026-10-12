@@ -24,3 +24,10 @@ export const paramsOf = <S extends z.ZodType>(req: Request, schema: S): z.infer<
 
 /** The validated `:id`. */
 export const idOf = (req: Request): string => paramsOf(req, idParams).id;
+
+/**
+ * Typed query filters for a controller. The route already rejected a bad query
+ * with validateRequest({ query: schema }); this parses the raw query again with
+ * the same schema, because a transformed result cannot be validated twice.
+ */
+export const queryOf = <S extends z.ZodType>(req: Request, schema: S): z.output<S> => schema.parse(req.query);

@@ -1,5 +1,6 @@
 import z from "zod";
 import { PayoutType } from "../../../generated/prisma/enums.js";
+import { listQuerySchema, optionalFilter } from "../../shared/listQuery.js";
 
 export const createTeamPayoutZodSchema = z.object({
     date: z.iso.date("Date must be YYYY-MM-DD"),
@@ -17,3 +18,7 @@ export const updateTeamPayoutZodSchema = createTeamPayoutZodSchema.partial();
 
 export type ICreateTeamPayoutPayload = z.infer<typeof createTeamPayoutZodSchema>;
 export type IUpdateTeamPayoutPayload = z.infer<typeof updateTeamPayoutZodSchema>;
+
+export const teamPayoutListQueryZodSchema = listQuerySchema.extend({
+    department_id: optionalFilter(z.uuid("department_id must be a valid id")),
+});

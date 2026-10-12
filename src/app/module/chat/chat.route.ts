@@ -3,11 +3,7 @@ import { checkAuth } from "../../middleware/checkAuth.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { ChatController } from "./chat.controller.js";
-import {
-    addMembersZodSchema,
-    createConversationZodSchema,
-    sendMessageZodSchema,
-} from "./chat.validation.js";
+import { addMembersZodSchema, createConversationZodSchema, sendMessageZodSchema, conversationListQueryZodSchema } from "./chat.validation.js";
 import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
@@ -24,7 +20,7 @@ const member = [checkAuth(), requireCompany] as const;
 // swallowed by the parameter route.
 router.get("/unread", ...member, ChatController.getUnreadTotal);
 
-router.get("/", ...member, ChatController.getConversations);
+router.get("/", ...member, validateRequest({ query: conversationListQueryZodSchema }), ChatController.getConversations);
 router.post(
     "/",
     ...member,

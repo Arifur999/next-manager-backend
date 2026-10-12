@@ -2,6 +2,8 @@ import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
 import { ActivityController } from "./activity.controller.js";
+import { validateRequest } from "../../middleware/validateRequest.js";
+import { activityListQueryZodSchema } from "./activity.validation.js";
 
 const router = Router();
 
@@ -11,7 +13,7 @@ const router = Router();
 //
 // No POST, no PATCH, no DELETE, and not by accident: a history somebody can
 // edit answers no question worth asking.
-router.get("/", checkAuth(Role.admin), ActivityController.getActivity);
+router.get("/", checkAuth(Role.admin), validateRequest({ query: activityListQueryZodSchema }), ActivityController.getActivity);
 router.get("/filters", checkAuth(Role.admin), ActivityController.getActivityFilters);
 
 export const ActivityRoutes = router;

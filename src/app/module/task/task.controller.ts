@@ -4,37 +4,28 @@ import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { TaskService } from "./task.service.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
-
-// Anything unrecognised is ignored rather than rejected: a stale bookmark with
-// an old status value should show the unfiltered board, not an error page.
-const parseFilters = (query: Record<string, unknown>) => ({
-    projectId: typeof query.project_id === "string" ? query.project_id : undefined,
-    assigneeId: typeof query.assignee_id === "string" ? query.assignee_id : undefined,
-    statusId: typeof query.status_id === "string" ? query.status_id : undefined,
-    statusName: typeof query.status === "string" ? query.status : undefined,
-    mine: query.mine === "true",
-    // Every task on the clients this person brought in - the sales board.
-    // Deliberately a fixed "me" rather than an id from the query: taking one
-    // would let anybody read anybody else's book by guessing.
-    clientOwnerMine: query.client_owner === "me",
-    overdue: query.overdue === "true",
-    // Anything else is ignored rather than rejected, like every filter here: a
-    // stale bookmark should show the unfiltered board, not an error page.
-    due:
-        query.due === "today" || query.due === "upcoming"
-            ? (query.due as "today" | "upcoming")
-            : undefined,
-    completed: query.completed === "true",
-});
+import { taskListQueryZodSchema } from "./task.validation.js";
 
 const getAllTasks = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const options = parseListOptions(query);
+    const query = queryOf(req, taskListQueryZodSchema);
+    const { page, limit, search, from, to } = query;
+    const options = { page, limit, search, from, to };
     const { rows, total } = await TaskService.getAllTasks(
         requireUser(req),
-        parseFilters(query),
+        {
+            projectId: query.project_id,
+            assigneeId: query.assignee_id,
+            statusId: query.status_id,
+            statusName: query.status,
+            mine: query.mine,
+            // Every task on the clients this person brought in - the sales board.
+            clientOwnerMine: query.client_owner,
+            overdue: query.overdue,
+            due: query.due,
+            completed: query.completed,
+        },
         options
     );
     sendResponse(res, {

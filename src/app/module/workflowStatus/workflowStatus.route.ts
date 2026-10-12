@@ -4,10 +4,7 @@ import { checkAuth } from "../../middleware/checkAuth.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { WorkflowStatusController } from "./workflowStatus.controller.js";
-import {
-    createWorkflowStatusZodSchema,
-    updateWorkflowStatusZodSchema,
-} from "./workflowStatus.validation.js";
+import { createWorkflowStatusZodSchema, updateWorkflowStatusZodSchema, workflowStatusListQueryZodSchema } from "./workflowStatus.validation.js";
 import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
@@ -21,7 +18,7 @@ const router = Router();
 // lack a permission.
 const boardOwner = [Role.admin, Role.project_manager] as const;
 
-router.get("/", checkAuth(), requireCompany, WorkflowStatusController.getAll);
+router.get("/", checkAuth(), requireCompany, validateRequest({ query: workflowStatusListQueryZodSchema }), WorkflowStatusController.getAll);
 
 router.post(
     "/",

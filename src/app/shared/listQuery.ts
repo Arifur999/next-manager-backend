@@ -1,3 +1,5 @@
+import z from "zod";
+
 // Shared pieces for list endpoints that page, search and date-filter on the
 // server.
 //
@@ -25,37 +27,52 @@ export interface ListOptions {
 export const escapeLikeTerm = (term: string): string =>
     term.replace(/[\\%_]/g, (character) => `\\${character}`);
 
-const positiveInt = (value: unknown): number | undefined => {
-    if (typeof value !== "string" || value.trim() === "") return undefined;
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1) return undefined;
-    return parsed;
-};
+export const MAX_PAGE_SIZE = 200;
 
-// Only a plain YYYY-MM-DD is accepted. Anything else is ignored rather than
-// guessed at, so a malformed param widens the range instead of breaking it.
-const isoDate = (value: unknown): string | undefined => {
-    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
-    const parsed = new Date(`${value}T00:00:00Z`);
-    if (Number.isNaN(parsed.getTime())) return undefined;
-    // JavaScript rolls impossible dates forward rather than rejecting them -
-    // "2026-02-31" becomes 3 March. Comparing the round trip catches that, so a
-    // typo drops the filter instead of quietly shifting the range.
-    return parsed.toISOString().slice(0, 10) === value ? value : undefined;
-};
+// A value that cannot be used is ignored, not rejected: a bad ?limit must not
+// turn a working list into an error page.
+const lenient = <T extends z.ZodType>(schema: T) => schema.optional().catch(undefined);
 
-// Reads page/limit/search/from/to off a request query. Anything unusable is
-// ignored rather than rejected: a bad ?limit must not turn a working list into
-// an error page.
+const positiveInt = z.coerce.number().int().positive();
+
+// Only a plain YYYY-MM-DD, and only a real day: JavaScript rolls "2026-02-31"
+// forward to 3 March, so the round trip must give back the same string.
+const isoDate = z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((value) => {
+        const parsed = new Date(`${value}T00:00:00Z`);
+        return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+    });
+
+/** page/limit/search/from/to. Lists extend this with their own filters. */
+export const listQuerySchema = z.object({
+    page: lenient(positiveInt),
+    // Capped, so one request cannot read a whole table as a single page.
+    limit: lenient(positiveInt.transform((limit) => Math.min(limit, MAX_PAGE_SIZE))),
+    search: lenient(z.string().trim().transform((term) => term || undefined)),
+    from: lenient(isoDate),
+    to: lenient(isoDate),
+});
+
+/**
+ * An optional filter that must be valid when given. An empty value (a select
+ * left on "All") counts as not given.
+ */
+export const optionalFilter = <T extends z.ZodType>(schema: T) =>
+    z.preprocess((value) => (value === "" ? undefined : value), schema.optional());
+
+/** A "true" flag in the query string; anything else is false. */
+export const queryFlag = z.unknown().optional().transform((value) => value === "true");
+
+/** A tri-state "true" / "false" filter; anything else means no filter. */
+export const queryBoolean = z.unknown().optional().transform((value) =>
+    value === "true" ? true : value === "false" ? false : undefined
+);
+
 export const parseListOptions = (query: Record<string, unknown>): ListOptions => {
-    const search = typeof query.search === "string" ? query.search.trim() : "";
-    return {
-        page: positiveInt(query.page),
-        limit: positiveInt(query.limit),
-        search: search || undefined,
-        from: isoDate(query.from),
-        to: isoDate(query.to),
-    };
+    const { page, limit, search, from, to } = listQuerySchema.parse(query);
+    return { page, limit, search, from, to };
 };
 
 // A Prisma filter for the given column, or undefined when neither bound was

@@ -1,5 +1,6 @@
 import z from "zod";
 import { StatusCategory, WorkflowKind } from "../../../generated/prisma/enums.js";
+import { optionalFilter } from "../../shared/listQuery.js";
 
 export const createWorkflowStatusZodSchema = z.object({
     kind: z.enum(WorkflowKind, "Choose a board"),
@@ -22,3 +23,7 @@ export const updateWorkflowStatusZodSchema = createWorkflowStatusZodSchema
 
 export type ICreateWorkflowStatusPayload = z.infer<typeof createWorkflowStatusZodSchema>;
 export type IUpdateWorkflowStatusPayload = z.infer<typeof updateWorkflowStatusZodSchema>;
+
+export const workflowStatusListQueryZodSchema = z.object({
+    kind: optionalFilter(z.enum(WorkflowKind, "kind must be task or project")),
+});

@@ -3,10 +3,7 @@ import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { UserController } from "./user.controller.js";
-import {
-    createUserZodSchema,
-    updateUserZodSchema,
-} from "./user.validation.js";
+import { createUserZodSchema, updateUserZodSchema, userListQueryZodSchema } from "./user.validation.js";
 import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
@@ -20,6 +17,7 @@ const router = Router();
 router.get(
     "/",
     checkAuth(Role.admin, Role.project_manager, Role.sales, Role.operations),
+    validateRequest({ query: userListQueryZodSchema }),
     UserController.getAllUsers
 );
 router.get("/:id", checkAuth(Role.admin, Role.project_manager), validateRequest({ params: idParams }), UserController.getSingleUser);

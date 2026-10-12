@@ -5,7 +5,7 @@ import { requireScope } from "../../middleware/requireScope.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest, validateRequestBy } from "../../middleware/validateRequest.js";
 import { TaskController } from "./task.controller.js";
-import { createTaskZodSchema, taskUpdateSchemaFor } from "./task.validation.js";
+import { createTaskZodSchema, taskUpdateSchemaFor, taskListQueryZodSchema } from "./task.validation.js";
 import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
@@ -20,7 +20,7 @@ const router = Router();
 // could not open.
 router.get("/report", checkAuth(), requireCompany, TaskController.getReport);
 
-router.get("/", checkAuth(), requireCompany, TaskController.getAllTasks);
+router.get("/", checkAuth(), requireCompany, validateRequest({ query: taskListQueryZodSchema }), TaskController.getAllTasks);
 
 // Who may edit a task they can reach, and what "edit" means, depend on who
 // they are. Operations gets status and description; the fields that define the

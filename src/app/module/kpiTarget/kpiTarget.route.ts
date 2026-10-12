@@ -4,14 +4,14 @@ import { checkAuth } from "../../middleware/checkAuth.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { KpiTargetController } from "./kpiTarget.controller.js";
-import { createKpiTargetZodSchema, updateKpiTargetZodSchema } from "./kpiTarget.validation.js";
+import { createKpiTargetZodSchema, updateKpiTargetZodSchema, kpiTargetListQueryZodSchema } from "./kpiTarget.validation.js";
 import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
 // Readable by anyone signed in. A target kept from the person being measured
 // against it is a number they cannot act on, which defeats the point.
-router.get("/", checkAuth(), requireCompany, KpiTargetController.getAllTargets);
+router.get("/", checkAuth(), requireCompany, validateRequest({ query: kpiTargetListQueryZodSchema }), KpiTargetController.getAllTargets);
 
 // Setting a target is committing the company to a number, so it stays with
 // admin - a salesperson who can edit their own quota does not have one.

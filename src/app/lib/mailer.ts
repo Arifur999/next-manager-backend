@@ -1,6 +1,7 @@
 import nodemailer, { type Transporter } from "nodemailer";
 import { env } from "../../config/env.js";
 import type { PlatformBrand } from "../shared/platformSettings.js";
+import { logger } from "./logger.js";
 
 /**
  * Sending mail, with an honest answer when it cannot.
@@ -74,14 +75,11 @@ export const sendMail = async (mail: Mail): Promise<MailResult> => {
     if (!isConfigured()) {
         // The body carries reset and invite links (bearer tokens), so it is
         // only printed in development, where a developer follows it by hand.
-        const body =
-            env.NODE_ENV === "development" ? `\n      ${mail.text.replace(/\n/g, "\n      ")}` : "";
-        console.warn(
-            `[mail] SMTP is not configured, so this was NOT sent:\n` +
-                `      to: ${mail.to}\n` +
-                `      subject: ${mail.subject}` +
-                body
-        );
+        logger.warn("SMTP is not configured, so this mail was NOT sent", {
+            to: mail.to,
+            subject: mail.subject,
+            ...(env.NODE_ENV === "development" ? { body: mail.text } : {}),
+        });
 
         return {
             delivered: false,
@@ -102,7 +100,7 @@ export const sendMail = async (mail: Mail): Promise<MailResult> => {
     } catch (error) {
         // Never rethrown. A mail provider being down must not turn into a 500
         // on a route whose real work already succeeded.
-        console.error("[mail] send failed:", (error as Error).message);
+        logger.error("Mail send failed", { error });
         return { delivered: false, reason: "The mail server refused the message" };
     }
 };

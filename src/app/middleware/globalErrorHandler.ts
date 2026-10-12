@@ -13,13 +13,7 @@ import {
 } from "../errorHelpers/handlePrismaErrors.js";
 import { handleZodError } from "../errorHelpers/handleZodError.js";
 import { IError, IErrorResponse } from "../interfaces/error.interfaces.js";
-
-// Expected auth rejections (not-logged-in visitors hitting /me, expired tokens)
-// are routine - log them as one line instead of a full stack trace, or real
-// errors get buried under them.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const isExpectedAuthError = (err: any) =>
-    err instanceof AppError && (err.statusCode === status.UNAUTHORIZED || err.statusCode === status.FORBIDDEN);
+import { logger } from "../lib/logger.js";
 
 // express.json() rejects with a 4xx `status` and a string `type` such as
 // entity.parse.failed or entity.too.large.
@@ -36,14 +30,6 @@ const isBodyParserError = (err: unknown): err is Error & { status: number; type:
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
 export const globalErrorHandler = async (err: any, req: Request, res: Response, next: NextFunction) => {
-    if (env.NODE_ENV === "development") {
-        if (isExpectedAuthError(err)) {
-            console.log(`[auth] ${req.method} ${req.originalUrl} -> ${err.statusCode}: ${err.message}`);
-        } else {
-            console.log("Error from Global Error Handler:", err);
-        }
-    }
-
     let errorSource: IError[] = [];
     let statusCode: number = status.INTERNAL_SERVER_ERROR;
     let message = "Internal Server Error";
@@ -100,6 +86,16 @@ export const globalErrorHandler = async (err: any, req: Request, res: Response, 
         message = env.NODE_ENV === "production" ? "Internal Server Error" : err.message;
         stack = err.stack;
         errorSource = [{ path: "", message }];
+    }
+
+    // 5xx is always logged, so a production failure leaves a trace. 4xx is
+    // routine and only logged while developing. Path only: a query string can
+    // carry a search term or a token.
+    const fields = { method: req.method, path: req.path, status: statusCode, error: err };
+    if (statusCode >= 500) {
+        logger.error("Request failed", fields);
+    } else if (env.NODE_ENV === "development") {
+        logger.warn("Request rejected", { method: req.method, path: req.path, status: statusCode, reason: message });
     }
 
     const errorResponse: IErrorResponse = {

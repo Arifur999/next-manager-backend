@@ -2,6 +2,7 @@ import status from "http-status";
 import { env } from "../../config/env.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { ISimplifiedError } from "../interfaces/error.interfaces.js";
+import { logger } from "../lib/logger.js";
 
 // Prisma messages carry the detail that makes them useful while developing and
 // risky in production: P2010 (raw query failure) embeds the PostgreSQL error,
@@ -10,7 +11,7 @@ import { ISimplifiedError } from "../interfaces/error.interfaces.js";
 // server log instead, where it is still there to read.
 const safeMessage = (error: { code?: string; message: string }, fallback: string): string => {
     if (env.NODE_ENV !== "production") return error.message || fallback;
-    console.error(`[prisma] ${error.code ?? "unknown"}: ${error.message}`);
+    logger.error("Prisma error", { code: error.code ?? "unknown", err: error.message });
     return fallback;
 };
 

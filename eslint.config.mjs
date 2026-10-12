@@ -9,6 +9,12 @@ export default tseslint.config(
     ignores: ['dist', 'node_modules', 'src/generated'],
   },
   {
+    // The server logs through src/app/lib/logger.ts; scripts keep console.
+    files: ['src/**/*.ts'],
+    ignores: ['src/app/lib/logger.ts'],
+    rules: { 'no-console': 'error' },
+  },
+  {
     // Everything in this repo runs in Node - the server and the scripts beside
     // it - so process, console, fetch and the timers are all defined.
     // typescript-eslint turns no-undef off for .ts because the type checker

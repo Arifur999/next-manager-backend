@@ -22,6 +22,7 @@ import {
     IUpdateMePayload,
 } from "./auth.validation.js";
 import { sameEmail } from "../../shared/emailField.js";
+import { logger } from "../../lib/logger.js";
 
 // Everything the client is allowed to know about the signed-in user. Anything
 // not listed here - the password hash above all - never leaves the service.
@@ -167,7 +168,7 @@ const recordLogin = async (entry: {
             },
         });
     } catch (error) {
-        console.error("[security] could not record a login attempt:", (error as Error).message);
+        logger.error("Could not record a login attempt", { error });
     }
 };
 
@@ -403,7 +404,7 @@ const forgotPassword = async (
     // telling an anonymous form that delivery failed would leak that the
     // address exists just as surely as telling it the account was found.
     if (!result.delivered) {
-        console.warn(`[auth] reset link for ${user.email} was not delivered: ${result.reason}`);
+        logger.warn("Reset link was not delivered", { userId: user.id, reason: result.reason });
     }
 
     return sameAnswer;

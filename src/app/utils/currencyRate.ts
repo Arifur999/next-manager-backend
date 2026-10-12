@@ -1,5 +1,6 @@
 import { Currency, RateSource } from "../../generated/prisma/enums.js";
 import { prisma } from "../lib/prisma.js";
+import { logger } from "../lib/logger.js";
 
 /**
  * USD -> BDT rates.
@@ -70,7 +71,7 @@ export const fetchUsdToBdtRate = async (): Promise<FetchedRate | null> => {
 
             return { rate, provider: provider.name };
         } catch (error) {
-            console.error(`[currency] ${provider.name} failed:`, (error as Error).message);
+            logger.error("Currency provider failed", { provider: provider.name, error });
         }
     }
 
@@ -86,7 +87,7 @@ export const syncTodaysRate = async (): Promise<FetchedRate | null> => {
     const fetched = await fetchUsdToBdtRate();
 
     if (!fetched) {
-        console.error("[currency] every provider failed; keeping the last known rate");
+        logger.error("Every currency provider failed; keeping the last known rate");
         return null;
     }
 

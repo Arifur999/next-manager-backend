@@ -93,7 +93,8 @@ const assertHours = (hours: number) => {
 const assertReferences = async (
     tx: Prisma.TransactionClient,
     payload: { project_id?: string; task_id?: string | null },
-    user: IRequestUser
+    user: IRequestUser,
+    existing?: { project_id: string; task_id: string | null }
 ) => {
     if (payload.project_id) {
         const project = await tx.project.findFirst({
@@ -124,16 +125,21 @@ const assertReferences = async (
         }
     }
 
-    if (payload.task_id) {
+    // A task on a different project would make the project's logged hours
+    // disagree with the sum of its tasks'. On an edit either side may change,
+    // so the comparison uses whatever the entry will hold afterwards.
+    const projectId = payload.project_id ?? existing?.project_id;
+    const taskId = payload.task_id !== undefined ? payload.task_id : existing?.task_id;
+    const pairTouched = payload.task_id !== undefined || payload.project_id !== undefined;
+
+    if (taskId && pairTouched) {
         const task = await tx.task.findFirst({
-            where: { id: payload.task_id, organization_id: user.organizationId, deleted_at: null },
+            where: { id: taskId, organization_id: user.organizationId, deleted_at: null },
             select: { id: true, project_id: true },
         });
         if (!task) throw new AppError(status.NOT_FOUND, "Task not found");
 
-        // A task belonging to a different project would make the project's
-        // logged hours disagree with the sum of its tasks'.
-        if (payload.project_id && task.project_id !== payload.project_id) {
+        if (projectId && task.project_id !== projectId) {
             throw new AppError(status.BAD_REQUEST, "That task belongs to a different project");
         }
     }
@@ -292,7 +298,7 @@ const updateEntry = async (id: string, payload: IUpdateTimeEntryPayload, user: I
             );
         }
 
-        await assertReferences(tx, payload, user);
+        await assertReferences(tx, payload, user, existing);
 
         return tx.timeEntry.update({
             where: { id },

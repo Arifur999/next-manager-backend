@@ -95,7 +95,7 @@ EXPOSE 5000
 # nothing" from outside, which nothing else can. start-period covers the
 # migration, which on a fresh database applies every file before the port opens.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-    CMD node -e "fetch('http://127.0.0.1:5000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+    CMD node -e "fetch('http://127.0.0.1:5000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # The entrypoint migrates, then EXECS the server so it becomes PID 1 and
 # receives SIGTERM directly - server.ts drains on it and exits 0. The migration

@@ -11,6 +11,10 @@ import { SecurityService } from "./app/module/security/security.service.js";
 import { indexRoute } from "./app/routes/index.js";
 import { syncTodaysRate } from "./app/utils/currencyRate.js";
 import { isAllowedOrigin } from "./app/shared/allowedOrigins.js";
+import { prisma } from "./app/lib/prisma.js";
+import { sendResponse } from "./app/shared/sendResponse.js";
+import { chatBusReady } from "./app/socket/chatBus.js";
+import { socketStats } from "./app/socket/chatSocket.js";
 
 const app: Application = express();
 
@@ -105,6 +109,25 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 app.use("/api/v1", apiRateLimit, indexRoute);
+
+// For the container healthcheck: up only when the database answers.
+app.get("/health", async (_req: Request, res: Response) => {
+    const runtime = { chatBus: chatBusReady(), sockets: socketStats() };
+
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error("timeout")), 3000);
+    });
+
+    try {
+        await Promise.race([prisma.$queryRaw`SELECT 1`, timeout]);
+        sendResponse(res, { httpStatus: 200, success: true, message: "Healthy", data: { db: "ok", ...runtime } });
+    } catch {
+        sendResponse(res, { httpStatus: 503, success: false, message: "Database unavailable", data: { db: "down", ...runtime } });
+    } finally {
+        clearTimeout(timer);
+    }
+});
 
 app.get("/", async (req: Request, res: Response) => {
     res.status(200).json({

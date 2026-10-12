@@ -1,5 +1,7 @@
 import rateLimit, { ipKeyGenerator, type Options } from "express-rate-limit";
+import status from "http-status";
 import { env } from "../../config/env.js";
+import AppError from "../errorHelpers/AppError.js";
 
 const isProduction = env.NODE_ENV === "production";
 
@@ -7,6 +9,12 @@ const isProduction = env.NODE_ENV === "production";
 // the smoke suite is not throttled by its own sign-ins. Each kind of route has
 // its own bucket: vault reveals from one office IP must not block sign-in.
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
+
+// Through the global error handler, so a 429 has the same envelope as any error.
+const refuseWith =
+    (message: string): Options["handler"] =>
+    (_req, _res, next) =>
+        next(new AppError(status.TOO_MANY_REQUESTS, message));
 
 const attemptLimit = (productionLimit: number, keyGenerator?: Options["keyGenerator"]) =>
     rateLimit({
@@ -17,10 +25,7 @@ const attemptLimit = (productionLimit: number, keyGenerator?: Options["keyGenera
         standardHeaders: "draft-7",
         legacyHeaders: false,
         keyGenerator,
-        message: {
-            success: false,
-            message: "Too many attempts. Please try again in a few minutes.",
-        },
+        handler: refuseWith("Too many attempts. Please try again in a few minutes."),
     });
 
 /** Login, register, forgot and reset password. */
@@ -46,8 +51,5 @@ export const apiRateLimit = rateLimit({
     limit: isProduction ? 300 : 3000,
     standardHeaders: "draft-7",
     legacyHeaders: false,
-    message: {
-        success: false,
-        message: "Too many requests. Please slow down.",
-    },
+    handler: refuseWith("Too many requests. Please slow down."),
 });

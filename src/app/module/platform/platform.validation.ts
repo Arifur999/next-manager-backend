@@ -1,6 +1,7 @@
 import z from "zod";
 import { AnnouncementAudience, SubscriptionStatus } from "../../../generated/prisma/enums.js";
 import { PLATFORM_PERMISSIONS } from "./platform.permissions.js";
+import { emailField } from "../../shared/emailField.js";
 
 export const createPlanZodSchema = z.object({
     code: z
@@ -65,11 +66,9 @@ export type ISetSubscriptionPayload = z.infer<typeof setSubscriptionZodSchema>;
  */
 export const createCompanyZodSchema = z.object({
     name: z.string("Company name must be a string").min(1, "Company name is required"),
-    email: z.string("Email must be a string").email("Enter a valid email address").optional(),
+    email: emailField().optional(),
     admin_name: z.string("Admin name must be a string").min(1, "The admin's name is required"),
-    admin_email: z
-        .string("Admin email must be a string")
-        .email("Enter a valid email address for the admin"),
+    admin_email: emailField("Enter a valid email address for the admin"),
     // Set by whoever is provisioning. They hand it over out of band; the admin
     // changes it, or uses the reset flow.
     admin_password: z
@@ -112,7 +111,7 @@ export type ISetPlatformPermissionsPayload = z.infer<typeof setPlatformPermissio
  * least resistance.
  */
 export const createPlatformInviteZodSchema = z.object({
-    email: z.string("Email must be a string").email("Enter a valid email address"),
+    email: emailField(),
     // At least one, on purpose. An empty list means full access in
     // requirePermission - the hatch that stops the FIRST operator, seeded from
     // .env, locking themselves out. An invited operator always has somebody
@@ -231,7 +230,7 @@ export type IUpdatePlatformSettingsPayload = z.infer<typeof updatePlatformSettin
  * agency, leave it out and the owner types their own on the way in.
  */
 export const createAgencyInviteZodSchema = z.object({
-    email: z.email("A valid email is required"),
+    email: emailField("A valid email is required"),
     company_name: z
         .string("Agency name must be a string")
         .max(120, "That is longer than a name")

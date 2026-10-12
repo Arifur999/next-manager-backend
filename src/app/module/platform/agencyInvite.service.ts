@@ -17,6 +17,7 @@ import {
     IAcceptAgencyInvitePayload,
     ICreateAgencyInvitePayload,
 } from "./platform.validation.js";
+import { sameEmail } from "../../shared/emailField.js";
 
 /**
  * Bringing an agency onto the platform.
@@ -62,8 +63,8 @@ const INVITE_FIELDS = {
 const createInvite = async (payload: ICreateAgencyInvitePayload, user: IRequestUser) => {
     const email = payload.email.toLowerCase().trim();
 
-    const existing = await prisma.user.findUnique({
-        where: { email },
+    const existing = await prisma.user.findFirst({
+        where: { email: sameEmail(email) },
         select: { id: true, role: true },
     });
 
@@ -269,8 +270,8 @@ const acceptInvite = async (token: string, payload: IAcceptAgencyInvitePayload) 
             );
         }
 
-        const taken = await tx.user.findUnique({
-            where: { email: invite.email },
+        const taken = await tx.user.findFirst({
+            where: { email: sameEmail(invite.email) },
             select: { id: true },
         });
 

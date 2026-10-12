@@ -1,11 +1,12 @@
 import z from "zod";
+import { emailField } from "../../shared/emailField.js";
 
 export const registerZodSchema = z.object({
     // Signing up creates the agency too, so its name is required here rather
     // than being a later settings step.
     organization_name: z.string("Agency name must be string").min(1, "Agency name is required"),
     full_name: z.string("Full name must be string").min(1, "Full name is required"),
-    email: z.string("Email must be string").email("Enter a valid email address"),
+    email: emailField(),
     password: z
         .string("Password must be string")
         .min(8, "Password must be at least 8 characters")
@@ -15,7 +16,7 @@ export const registerZodSchema = z.object({
 });
 
 export const loginZodSchema = z.object({
-    email: z.string("Email must be string").email("Enter a valid email address"),
+    email: emailField(),
     password: z.string("Password must be string").min(1, "Password is required"),
 });
 
@@ -57,7 +58,7 @@ export const updateMeZodSchema = z
 export type IUpdateMePayload = z.infer<typeof updateMeZodSchema>;
 
 export const forgotPasswordZodSchema = z.object({
-    email: z.string("Email must be string").email("Enter a valid email address"),
+    email: emailField(),
 });
 
 export const resetPasswordZodSchema = z.object({

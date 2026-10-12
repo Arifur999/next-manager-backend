@@ -21,6 +21,7 @@ import {
     IResetPasswordPayload,
     IUpdateMePayload,
 } from "./auth.validation.js";
+import { sameEmail } from "../../shared/emailField.js";
 
 // Everything the client is allowed to know about the signed-in user. Anything
 // not listed here - the password hash above all - never leaves the service.
@@ -62,8 +63,8 @@ const issueTokens = (user: { id: string; email: string; role: Role; token_versio
 // route, or anyone could self-register into a role.
 const register = async (payload: IRegisterPayload) => {
     // Existence only - see the note in user.service.ts.
-    const existing = await prisma.user.findUnique({
-        where: { email: payload.email },
+    const existing = await prisma.user.findFirst({
+        where: { email: sameEmail(payload.email) },
         select: { id: true },
     });
 
@@ -171,7 +172,7 @@ const recordLogin = async (entry: {
 };
 
 const login = async (payload: ILoginPayload, context?: LoginContext) => {
-    const user = await prisma.user.findUnique({ where: { email: payload.email } });
+    const user = await prisma.user.findFirst({ where: { email: sameEmail(payload.email) } });
 
     // Deliberately the same message for "no such account" and "wrong password":
     // telling them apart turns this endpoint into a way to enumerate who has an
@@ -360,7 +361,7 @@ const forgotPassword = async (
     };
 
     const user = await prisma.user.findFirst({
-        where: { email: payload.email, deleted_at: null, status: UserStatus.active },
+        where: { email: sameEmail(payload.email), deleted_at: null, status: UserStatus.active },
         select: { id: true, email: true, full_name: true },
     });
 

@@ -16,6 +16,7 @@ import {
     ICreateInvitePayload,
     IRejectMemberPayload,
 } from "./invite.validation.js";
+import { sameEmail } from "../../shared/emailField.js";
 
 /**
  * Joining a company as an operations member.
@@ -56,8 +57,8 @@ const INVITE_FIELDS = {
 const createInvite = async (payload: ICreateInvitePayload, user: IRequestUser) => {
     const email = payload.email.toLowerCase().trim();
 
-    const existingUser = await prisma.user.findUnique({
-        where: { email },
+    const existingUser = await prisma.user.findFirst({
+        where: { email: sameEmail(email) },
         select: { id: true, organization_id: true },
     });
 
@@ -241,8 +242,8 @@ const acceptInvite = async (token: string, payload: IAcceptInvitePayload) => {
 
         // Between the link being sent and opened, somebody may have signed up
         // some other way.
-        const taken = await tx.user.findUnique({
-            where: { email: invite.email },
+        const taken = await tx.user.findFirst({
+            where: { email: sameEmail(invite.email) },
             select: { id: true },
         });
 

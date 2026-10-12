@@ -1,4 +1,5 @@
 import z from "zod";
+import { emailField } from "../../shared/emailField.js";
 
 /**
  * Inviting somebody to join as an operations member.
@@ -8,7 +9,7 @@ import z from "zod";
  * is nothing in the payload for an attacker to tamper with in the first place.
  */
 export const createInviteZodSchema = z.object({
-    email: z.string("Email must be a string").email("Enter a valid email address"),
+    email: emailField(),
     // Days. Short by default because an invite is a credential sitting in
     // somebody's inbox, and one that never expires is one that works forever.
     expires_in_days: z

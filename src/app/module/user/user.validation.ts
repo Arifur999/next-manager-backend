@@ -1,5 +1,6 @@
 import z from "zod";
 import { Role, UserStatus } from "../../../generated/prisma/enums.js";
+import { emailField } from "../../shared/emailField.js";
 
 // Roles an admin may hand out. super_admin is deliberately absent - it is a
 // platform role and cannot be granted from inside a company.
@@ -7,7 +8,7 @@ const assignableRoles = [Role.admin, Role.sales, Role.project_manager, Role.oper
 
 export const createUserZodSchema = z.object({
     full_name: z.string("Full name must be string").min(1, "Full name is required"),
-    email: z.string("Email must be string").email("Enter a valid email address"),
+    email: emailField(),
     password: z
         .string("Password must be string")
         .min(8, "Password must be at least 8 characters")

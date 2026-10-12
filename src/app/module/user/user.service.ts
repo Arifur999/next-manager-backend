@@ -12,6 +12,7 @@ import {
     ICreateUserPayload,
     IUpdateUserPayload,
 } from "./user.validation.js";
+import { sameEmail } from "../../shared/emailField.js";
 
 /**
  * What a directory shows.
@@ -123,8 +124,8 @@ const getSingleUser = async (id: string, user: IRequestUser) => {
 const createUser = async (payload: ICreateUserPayload, user: IRequestUser) => {
     // Existence only. Selecting the row would pull the password hash out of
     // the database to answer a yes/no question.
-    const existing = await prisma.user.findUnique({
-        where: { email: payload.email },
+    const existing = await prisma.user.findFirst({
+        where: { email: sameEmail(payload.email) },
         select: { id: true },
     });
 

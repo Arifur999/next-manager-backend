@@ -16,6 +16,7 @@ import {
     ISetSubscriptionPayload,
     IUpdatePlanPayload,
 } from "./platform.validation.js";
+import { sameEmail } from "../../shared/emailField.js";
 
 /**
  * The platform's view of its customers.
@@ -440,8 +441,8 @@ const expireSubscriptions = async (now: Date = new Date()) => {
  * anybody would notice.
  */
 const createCompany = async (payload: ICreateCompanyPayload, user: IRequestUser) => {
-    const existingUser = await prisma.user.findUnique({
-        where: { email: payload.admin_email },
+    const existingUser = await prisma.user.findFirst({
+        where: { email: sameEmail(payload.admin_email) },
         select: { id: true },
     });
 

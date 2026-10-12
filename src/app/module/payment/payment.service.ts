@@ -29,7 +29,8 @@ const toDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 const assertReferences = async (
     tx: Prisma.TransactionClient,
     payload: { client_id?: string; project_id?: string | null; invoice_id?: string | null },
-    user: IRequestUser
+    user: IRequestUser,
+    existing?: { client_id: string; invoice_id: string | null }
 ) => {
     if (payload.client_id) {
         const client = await tx.client.findFirst({
@@ -47,9 +48,15 @@ const assertReferences = async (
         if (!project) throw new AppError(status.NOT_FOUND, "Project not found");
     }
 
-    if (payload.invoice_id) {
+    // The invoice must be the payment's own client's, or paying client A would
+    // mark client B's invoice paid. Re-checked when only the client changes.
+    const invoiceId = payload.invoice_id !== undefined ? payload.invoice_id : existing?.invoice_id;
+    const clientId = payload.client_id ?? existing?.client_id;
+    const invoiceTouched = payload.invoice_id !== undefined || payload.client_id !== undefined;
+
+    if (invoiceId && invoiceTouched) {
         const invoice = await tx.invoice.findFirst({
-            where: { id: payload.invoice_id, organization_id: user.organizationId, deleted_at: null },
+            where: { id: invoiceId, client_id: clientId, organization_id: user.organizationId, deleted_at: null },
             select: { id: true },
         });
         if (!invoice) throw new AppError(status.NOT_FOUND, "Invoice not found");
@@ -193,7 +200,7 @@ const updatePayment = async (id: string, payload: IUpdatePaymentPayload, user: I
             throw new AppError(status.NOT_FOUND, "Payment not found");
         }
 
-        await assertReferences(tx, payload, user);
+        await assertReferences(tx, payload, user, existing);
 
         const accountId = payload.account_id ?? existing.account_id;
         await assertAccount(tx, accountId, user, Currency.USD);

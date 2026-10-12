@@ -1,48 +1,36 @@
 import { NextFunction, Request, Response } from "express";
+import status from "http-status";
 import z from "zod";
 import { Role } from "../../generated/prisma/enums.js";
+import AppError from "../errorHelpers/AppError.js";
 
-const runValidation = (
-    zodSchema: z.ZodType,
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
-        // Multipart forms send the JSON payload as a `data` field alongside the
-        // file. Malformed JSON here is the caller's mistake, so it answers 400
-        // rather than throwing - an uncaught SyntaxError becomes a 500 whose
-        // body carries the parser's own message.
-        if (req.body && typeof req.body.data === "string") {
-            try {
-                req.body = JSON.parse(req.body.data);
-            } catch {
-                return res.status(400).json({
-                    success: false,
-                    message: "Validation failed",
-                    errors: [{ path: ["data"], message: "Expected valid JSON" }],
-                });
-            }
+const runValidation = (zodSchema: z.ZodType, req: Request, next: NextFunction) => {
+    // Multipart forms send the JSON payload as a `data` field beside the file.
+    // Malformed JSON there is the caller's mistake: a 400 naming the field.
+    if (req.body && typeof req.body.data === "string") {
+        try {
+            req.body = JSON.parse(req.body.data);
+        } catch {
+            return next(new z.ZodError([{ code: "custom", path: ["data"], message: "Expected valid JSON", input: req.body.data }]));
         }
+    }
 
-        const parseResult = zodSchema.safeParse(req.body);
+    const parseResult = zodSchema.safeParse(req.body);
 
-        if (!parseResult.success) {
-            return res.status(400).json({
-                success: false,
-                message: "Validation failed",
-                errors: parseResult.error.issues,
-            });
-        }
+    // The global error handler turns this into the standard envelope.
+    if (!parseResult.success) {
+        return next(parseResult.error);
+    }
 
-        // Replaced, not merged: defaults and coercions declared on the schema
-        // are what the service should see.
+    // Replaced, not merged: defaults and coercions declared on the schema
+    // are what the service should see.
     req.body = parseResult.data;
     next();
 };
 
 export const validateRequest = (zodSchema: z.ZodType) =>
-    (req: Request, res: Response, next: NextFunction) =>
-        runValidation(zodSchema, req, res, next);
+    (req: Request, _res: Response, next: NextFunction) =>
+        runValidation(zodSchema, req, next);
 
 /**
  * The same validation, with the schema chosen by who is asking.
@@ -57,12 +45,12 @@ export const validateRequest = (zodSchema: z.ZodType) =>
  * it refuses rather than guessing a schema.
  */
 export const validateRequestBy = (pick: (role: Role) => z.ZodType) =>
-    (req: Request, res: Response, next: NextFunction) => {
+    (req: Request, _res: Response, next: NextFunction) => {
         const user = req.user;
 
         if (!user) {
-            return res.status(401).json({ success: false, message: "Not authenticated" });
+            return next(new AppError(status.UNAUTHORIZED, "Not authenticated"));
         }
 
-        return runValidation(pick(user.role), req, res, next);
+        return runValidation(pick(user.role), req, next);
     };

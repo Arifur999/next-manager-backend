@@ -1,5 +1,7 @@
 import { Server } from "http";
+import type { ScheduledTask } from "node-cron";
 import app from "./app.js";
+import { startScheduledJobs } from "./app/jobs/scheduler.js";
 import { seedSuperAdmin } from "./app/utils/seed.js";
 import { startChatBus, stopChatBus } from "./app/socket/chatBus.js";
 import { attachChatSocket, deliverLocally } from "./app/socket/chatSocket.js";
@@ -8,12 +10,14 @@ import { logger } from "./app/lib/logger.js";
 import { prisma } from "./app/lib/prisma.js";
 
 let server: Server;
+let scheduledJobs: ScheduledTask[] = [];
 
 const bootstrap = async () => {
     try {
         await seedSuperAdmin();
         server = app.listen(env.PORT, () => {
             logger.info("Server is running", { url: `http://localhost:${env.PORT}` });
+            scheduledJobs = startScheduledJobs();
         });
 
         // The chat socket shares this HTTP server rather than binding a
@@ -46,10 +50,8 @@ const bootstrap = async () => {
         });
     } catch (error) {
         logger.error("Failed to start server", { error });
-        // Exiting rather than returning. app.ts schedules four cron jobs at
-        // import time, and those timers hold the event loop open on their own -
-        // so a bootstrap that merely returned left a process that is alive,
-        // listening to nothing, and reported as healthy forever. A container
+        // Exiting rather than returning: open handles (the Prisma pool, the
+        // chat bus) would keep a process alive that serves nothing. A container
         // that cannot start has to be a container that stopped.
         process.exit(1);
     }
@@ -75,6 +77,7 @@ const shutdown = (reason: string, exitCode: 0 | 1, error?: unknown) => {
     }, 10_000);
 
     const finish = async () => {
+        for (const job of scheduledJobs) await job.stop();
         await stopChatBus().catch(() => {});
         await prisma.$disconnect().catch(() => {});
         clearTimeout(giveUp);

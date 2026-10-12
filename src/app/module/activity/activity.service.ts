@@ -1,7 +1,7 @@
 import { Prisma } from "../../../generated/prisma/client.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
-import { dateRangeWhere, pageSlice, type ListOptions } from "../../shared/listQuery.js";
+import { dateRangeWhere, findPage, type ListOptions } from "../../shared/listQuery.js";
 
 /**
  * Reading the audit trail.
@@ -34,23 +34,11 @@ const getActivity = async (
 
     // Newest first, which is the index's own order.
     const orderBy: Prisma.ActivityLogOrderByWithRelationInput = { created_at: "desc" };
-    const slice = pageSlice(options);
-
-    if (!slice) {
-        const rows = await prisma.activityLog.findMany({ where, include: INCLUDE, orderBy });
-        return { rows, total: rows.length };
-    }
-
-    const [rows, total] = await Promise.all([
-        prisma.activityLog.findMany({
-            where,
-            include: INCLUDE,
-            orderBy,
-            skip: slice.skip,
-            take: slice.take,
-        }),
-        prisma.activityLog.count({ where }),
-    ]);
+    const { rows, total } = await findPage(
+        options,
+        (page) => prisma.activityLog.findMany({ where, include: INCLUDE, orderBy, ...page }),
+        () => prisma.activityLog.count({ where })
+    );
 
     return { rows, total };
 };

@@ -15,7 +15,7 @@ import { notify } from "../../shared/notify.js";
 import {
     dateRangeWhere,
     escapeLikeTerm,
-    pageSlice,
+    findPage,
     type ListOptions,
 } from "../../shared/listQuery.js";
 import { ICreateTaskPayload, IUpdateTaskPayload } from "./task.validation.js";
@@ -154,17 +154,11 @@ const getAllTasks = async (
         { priority: "desc" },
     ];
 
-    const slice = pageSlice(options);
-
-    if (!slice) {
-        const rows = await prisma.task.findMany({ where, include: INCLUDE, orderBy });
-        return { rows, total: rows.length };
-    }
-
-    const [rows, total] = await Promise.all([
-        prisma.task.findMany({ where, include: INCLUDE, orderBy, skip: slice.skip, take: slice.take }),
-        prisma.task.count({ where }),
-    ]);
+    const { rows, total } = await findPage(
+        options,
+        (page) => prisma.task.findMany({ where, include: INCLUDE, orderBy, ...page }),
+        () => prisma.task.count({ where })
+    );
 
     return { rows, total };
 };

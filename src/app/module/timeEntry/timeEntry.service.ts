@@ -10,7 +10,7 @@ import { DEFAULT_WEEKLY_HOURS, loadCapacityRows } from "../../shared/capacity.js
 // The same hours-per-period arithmetic utilization is measured with, so a
 // workload row and a KPI cannot describe the same week differently.
 import { availableHours } from "../kpi/kpi.formulas.js";
-import { dateRangeWhere, pageSlice, type ListOptions } from "../../shared/listQuery.js";
+import { dateRangeWhere, findPage, type ListOptions } from "../../shared/listQuery.js";
 import {
     ICreateTimeEntryPayload,
     ISetCapacityPayload,
@@ -166,17 +166,11 @@ const getAllEntries = async (
         { created_at: "desc" },
     ];
 
-    const slice = pageSlice(options);
-
-    if (!slice) {
-        const rows = await prisma.timeEntry.findMany({ where, include: INCLUDE, orderBy });
-        return { rows, total: rows.length };
-    }
-
-    const [rows, total] = await Promise.all([
-        prisma.timeEntry.findMany({ where, include: INCLUDE, orderBy, skip: slice.skip, take: slice.take }),
-        prisma.timeEntry.count({ where }),
-    ]);
+    const { rows, total } = await findPage(
+        options,
+        (page) => prisma.timeEntry.findMany({ where, include: INCLUDE, orderBy, ...page }),
+        () => prisma.timeEntry.count({ where })
+    );
 
     return { rows, total };
 };

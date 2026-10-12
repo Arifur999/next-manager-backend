@@ -6,7 +6,7 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { resolveScope } from "../../shared/resolveScope.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
-import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
+import { escapeLikeTerm, findPage, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateClientPayload, IUpdateClientPayload } from "./client.validation.js";
 import { assertOwnMember } from "../../shared/ownership.js";
 
@@ -72,22 +72,11 @@ const getAllClients = async (
             : {}),
     };
 
-    const slice = pageSlice(options);
-
-    if (!slice) {
-        const rows = await prisma.client.findMany({ where, orderBy: { created_at: "desc" } });
-        return { rows, total: rows.length };
-    }
-
-    const [rows, total] = await Promise.all([
-        prisma.client.findMany({
-            where,
-            orderBy: { created_at: "desc" },
-            skip: slice.skip,
-            take: slice.take,
-        }),
-        prisma.client.count({ where }),
-    ]);
+    const { rows, total } = await findPage(
+        options,
+        (page) => prisma.client.findMany({ where, orderBy: { created_at: "desc" }, ...page }),
+        () => prisma.client.count({ where })
+    );
 
     return { rows, total };
 };

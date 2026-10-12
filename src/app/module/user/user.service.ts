@@ -7,7 +7,7 @@ import { assertSeatAvailable } from "../../shared/planLimits.js";
 import { lockRow } from "../../utils/rowLock.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
-import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
+import { escapeLikeTerm, findPage, type ListOptions } from "../../shared/listQuery.js";
 import { passwordUtils } from "../../utils/password.js";
 import {
     ICreateUserPayload,
@@ -84,27 +84,11 @@ const getAllUsers = async (
             ? PUBLIC_USER_FIELDS
             : DIRECTORY_FIELDS;
 
-    const slice = pageSlice(options);
-
-    if (!slice) {
-        const rows = await prisma.user.findMany({
-            where,
-            select: fields,
-            orderBy: { created_at: "desc" },
-        });
-        return { rows, total: rows.length };
-    }
-
-    const [rows, total] = await Promise.all([
-        prisma.user.findMany({
-            where,
-            select: fields,
-            orderBy: { created_at: "desc" },
-            skip: slice.skip,
-            take: slice.take,
-        }),
-        prisma.user.count({ where }),
-    ]);
+    const { rows, total } = await findPage(
+        options,
+        (page) => prisma.user.findMany({ where, select: fields, orderBy: { created_at: "desc" }, ...page }),
+        () => prisma.user.count({ where })
+    );
 
     return { rows, total };
 };

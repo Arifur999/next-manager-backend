@@ -5,7 +5,7 @@ import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { assertAccount, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
-import { pageSlice, type ListOptions } from "../../shared/listQuery.js";
+import { findPage, type ListOptions } from "../../shared/listQuery.js";
 import {
     ICreateLoanPayload,
     IPayInstalmentPayload,
@@ -174,23 +174,17 @@ const getAll = async (
         ...(filters.status ? { status: filters.status } : {}),
     };
 
-    const slice = pageSlice(options);
     const query = {
         where,
         include: LOAN_INCLUDE,
         orderBy: [{ status: "asc" as const }, { started_on: "desc" as const }],
     };
 
-    if (!slice) {
-        const loans = await prisma.loan.findMany(query);
-        const rows = loans.map(summarise);
-        return { rows, total: rows.length };
-    }
-
-    const [loans, total] = await Promise.all([
-        prisma.loan.findMany({ ...query, skip: slice.skip, take: slice.take }),
-        prisma.loan.count({ where }),
-    ]);
+    const { rows: loans, total } = await findPage(
+        options,
+        (page) => prisma.loan.findMany({ ...query, ...page }),
+        () => prisma.loan.count({ where })
+    );
 
     return { rows: loans.map(summarise), total };
 };

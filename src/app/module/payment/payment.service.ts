@@ -8,7 +8,7 @@ import { logActivity, money } from "../../shared/activity.js";
 import { recalcInvoiceStatus } from "../../shared/invoiceStatus.js";
 import { assertAccount, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
 import { notify } from "../../shared/notify.js";
-import { dateRangeWhere, escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
+import { dateRangeWhere, escapeLikeTerm, findPage, type ListOptions } from "../../shared/listQuery.js";
 import { getReportingRate } from "../../utils/currencyRate.js";
 import { ICreatePaymentPayload, IUpdatePaymentPayload } from "./payment.validation.js";
 import { toDateOnly } from "../../shared/dates.js";
@@ -72,23 +72,11 @@ const getAllPayments = async (user: IRequestUser, options: ListOptions = {}) => 
         account: { select: { id: true, name: true, currency: true } },
     };
 
-    const slice = pageSlice(options);
-
-    if (!slice) {
-        const rows = await prisma.payment.findMany({ where, include, orderBy: { date: "desc" } });
-        return { rows, total: rows.length };
-    }
-
-    const [rows, total] = await Promise.all([
-        prisma.payment.findMany({
-            where,
-            include,
-            orderBy: { date: "desc" },
-            skip: slice.skip,
-            take: slice.take,
-        }),
-        prisma.payment.count({ where }),
-    ]);
+    const { rows, total } = await findPage(
+        options,
+        (page) => prisma.payment.findMany({ where, include, orderBy: { date: "desc" }, ...page }),
+        () => prisma.payment.count({ where })
+    );
 
     return { rows, total };
 };

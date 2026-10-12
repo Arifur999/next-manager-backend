@@ -5,7 +5,7 @@ import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { assertAccount, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
-import { dateRangeWhere, pageSlice, type ListOptions } from "../../shared/listQuery.js";
+import { dateRangeWhere, findPage, type ListOptions } from "../../shared/listQuery.js";
 import {
     ICreateDistributionPayload,
     ICreateShareholderPayload,
@@ -228,27 +228,11 @@ const getDistributions = async (
         account: { select: { id: true, name: true, currency: true } },
     };
 
-    const slice = pageSlice(options);
-
-    if (!slice) {
-        const rows = await prisma.shareholderDistribution.findMany({
-            where,
-            include,
-            orderBy: { date: "desc" },
-        });
-        return { rows, total: rows.length };
-    }
-
-    const [rows, total] = await Promise.all([
-        prisma.shareholderDistribution.findMany({
-            where,
-            include,
-            orderBy: { date: "desc" },
-            skip: slice.skip,
-            take: slice.take,
-        }),
-        prisma.shareholderDistribution.count({ where }),
-    ]);
+    const { rows, total } = await findPage(
+        options,
+        (page) => prisma.shareholderDistribution.findMany({ where, include, orderBy: { date: "desc" }, ...page }),
+        () => prisma.shareholderDistribution.count({ where })
+    );
 
     return { rows, total };
 };

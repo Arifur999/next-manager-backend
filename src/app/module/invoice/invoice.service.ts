@@ -6,7 +6,7 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity, money } from "../../shared/activity.js";
 import { isOverdue, recalcInvoiceStatus } from "../../shared/invoiceStatus.js";
-import { dateRangeWhere, escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
+import { dateRangeWhere, escapeLikeTerm, findPage, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateInvoicePayload, IUpdateInvoicePayload } from "./invoice.validation.js";
 import { formatInvoiceNumber } from "./invoiceNumber.js";
 import { toDateOnly } from "../../shared/dates.js";
@@ -122,23 +122,11 @@ const getAllInvoices = async (user: IRequestUser, options: ListOptions = {}) => 
         _count: { select: { items: true, payments: true } },
     };
 
-    const slice = pageSlice(options);
-
-    if (!slice) {
-        const rows = await prisma.invoice.findMany({ where, include, orderBy: { issue_date: "desc" } });
-        return { rows: rows.map(decorate), total: rows.length };
-    }
-
-    const [rows, total] = await Promise.all([
-        prisma.invoice.findMany({
-            where,
-            include,
-            orderBy: { issue_date: "desc" },
-            skip: slice.skip,
-            take: slice.take,
-        }),
-        prisma.invoice.count({ where }),
-    ]);
+    const { rows, total } = await findPage(
+        options,
+        (page) => prisma.invoice.findMany({ where, include, orderBy: { issue_date: "desc" }, ...page }),
+        () => prisma.invoice.count({ where })
+    );
 
     return { rows: rows.map(decorate), total };
 };

@@ -8,7 +8,7 @@ import { assertProjectAvailable } from "../../shared/planLimits.js";
 import { prisma } from "../../lib/prisma.js";
 import { defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
 import { logActivity } from "../../shared/activity.js";
-import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
+import { escapeLikeTerm, findPage, type ListOptions } from "../../shared/listQuery.js";
 import {
     ICreateProjectPayload,
     ISetBaselinePayload,
@@ -97,23 +97,11 @@ const getAllProjects = async (
         _count: { select: { tasks: true, members: true } },
     };
 
-    const slice = pageSlice(options);
-
-    if (!slice) {
-        const rows = await prisma.project.findMany({ where, include, orderBy: { created_at: "desc" } });
-        return { rows, total: rows.length };
-    }
-
-    const [rows, total] = await Promise.all([
-        prisma.project.findMany({
-            where,
-            include,
-            orderBy: { created_at: "desc" },
-            skip: slice.skip,
-            take: slice.take,
-        }),
-        prisma.project.count({ where }),
-    ]);
+    const { rows, total } = await findPage(
+        options,
+        (page) => prisma.project.findMany({ where, include, orderBy: { created_at: "desc" }, ...page }),
+        () => prisma.project.count({ where })
+    );
 
     return { rows, total };
 };

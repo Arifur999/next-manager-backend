@@ -5,7 +5,7 @@ import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { resolveScope } from "../../shared/resolveScope.js";
 import { prisma } from "../../lib/prisma.js";
-import { escapeLikeTerm, pageSlice, type ListOptions } from "../../shared/listQuery.js";
+import { escapeLikeTerm, findPage, type ListOptions } from "../../shared/listQuery.js";
 import { decryptSecret, encryptSecret, maskSecret } from "../../utils/crypto.js";
 import { ICreateCredentialPayload, IUpdateCredentialPayload } from "./vault.validation.js";
 import { assertOwnClient, assertOwnProject } from "../../shared/ownership.js";
@@ -127,26 +127,14 @@ const getAllCredentials = async (
         project: { select: { id: true, name: true, code: true } },
     };
 
-    const slice = pageSlice(options);
-
     const withMask = (rows: Array<Record<string, unknown>>) =>
         rows.map((row) => ({ ...row, password: maskSecret() }));
 
-    if (!slice) {
-        const rows = await prisma.credential.findMany({ where, select, orderBy: { created_at: "desc" } });
-        return { rows: withMask(rows), total: rows.length };
-    }
-
-    const [rows, total] = await Promise.all([
-        prisma.credential.findMany({
-            where,
-            select,
-            orderBy: { created_at: "desc" },
-            skip: slice.skip,
-            take: slice.take,
-        }),
-        prisma.credential.count({ where }),
-    ]);
+    const { rows, total } = await findPage(
+        options,
+        (page) => prisma.credential.findMany({ where, select, orderBy: { created_at: "desc" }, ...page }),
+        () => prisma.credential.count({ where })
+    );
 
     return { rows: withMask(rows), total };
 };

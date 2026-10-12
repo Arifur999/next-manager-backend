@@ -7,7 +7,7 @@ import { prisma } from "../../lib/prisma.js";
 import { logActivity, money } from "../../shared/activity.js";
 import { assertAccount, getAccountBalance, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
 import { lockRow } from "../../utils/rowLock.js";
-import { dateRangeWhere, pageSlice, type ListOptions } from "../../shared/listQuery.js";
+import { dateRangeWhere, findPage, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateExchangePayload } from "./exchange.validation.js";
 import { toDateOnly } from "../../shared/dates.js";
 
@@ -37,23 +37,11 @@ const getAllExchanges = async (user: IRequestUser, options: ListOptions = {}) =>
         to_account: { select: { id: true, name: true, currency: true } },
     };
 
-    const slice = pageSlice(options);
-
-    if (!slice) {
-        const rows = await prisma.exchangeTransaction.findMany({ where, include, orderBy: { date: "desc" } });
-        return { rows, total: rows.length };
-    }
-
-    const [rows, total] = await Promise.all([
-        prisma.exchangeTransaction.findMany({
-            where,
-            include,
-            orderBy: { date: "desc" },
-            skip: slice.skip,
-            take: slice.take,
-        }),
-        prisma.exchangeTransaction.count({ where }),
-    ]);
+    const { rows, total } = await findPage(
+        options,
+        (page) => prisma.exchangeTransaction.findMany({ where, include, orderBy: { date: "desc" }, ...page }),
+        () => prisma.exchangeTransaction.count({ where })
+    );
 
     return { rows, total };
 };

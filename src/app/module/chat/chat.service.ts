@@ -5,7 +5,7 @@ import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { publishChatEvent } from "../../socket/chatBus.js";
-import { pageSlice, type ListOptions } from "../../shared/listQuery.js";
+import { findPage, type ListOptions } from "../../shared/listQuery.js";
 import {
     IAddMembersPayload,
     ICreateConversationPayload,
@@ -278,29 +278,14 @@ const getMessages = async (
         sender: { select: { id: true, full_name: true, avatar_url: true, role: true } },
     };
 
-    const slice = pageSlice(options);
+    // Fetched newest-first so a page is the latest messages, handed back
+    // oldest-first for reading.
+    const { rows, total } = await findPage(
+        options,
+        (page) => prisma.message.findMany({ where, include, orderBy: { created_at: "desc" }, ...page }),
+        () => prisma.message.count({ where })
+    );
 
-    if (!slice) {
-        const rows = await prisma.message.findMany({
-            where,
-            include,
-            orderBy: { created_at: "asc" },
-        });
-        return { rows, total: rows.length };
-    }
-
-    const [rows, total] = await Promise.all([
-        prisma.message.findMany({
-            where,
-            include,
-            orderBy: { created_at: "desc" },
-            skip: slice.skip,
-            take: slice.take,
-        }),
-        prisma.message.count({ where }),
-    ]);
-
-    // Fetched newest-first for paging, handed back oldest-first for reading.
     return { rows: rows.reverse(), total };
 };
 

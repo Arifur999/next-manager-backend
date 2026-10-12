@@ -3,7 +3,7 @@ import { Prisma } from "../../../generated/prisma/client.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
-import { pageSlice, type ListOptions } from "../../shared/listQuery.js";
+import { findPage, type ListOptions } from "../../shared/listQuery.js";
 import {
     IAcceptMilestonePayload,
     ICreateMilestonePayload,
@@ -67,23 +67,11 @@ const getAllMilestones = async (
         { sort_order: "asc" },
     ];
 
-    const slice = pageSlice(options);
-
-    if (!slice) {
-        const rows = await prisma.projectMilestone.findMany({ where, include: INCLUDE, orderBy });
-        return { rows, total: rows.length };
-    }
-
-    const [rows, total] = await Promise.all([
-        prisma.projectMilestone.findMany({
-            where,
-            include: INCLUDE,
-            orderBy,
-            skip: slice.skip,
-            take: slice.take,
-        }),
-        prisma.projectMilestone.count({ where }),
-    ]);
+    const { rows, total } = await findPage(
+        options,
+        (page) => prisma.projectMilestone.findMany({ where, include: INCLUDE, orderBy, ...page }),
+        () => prisma.projectMilestone.count({ where })
+    );
 
     return { rows, total };
 };

@@ -6,7 +6,7 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity, money } from "../../shared/activity.js";
 import { assertAccount, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
-import { dateRangeWhere, pageSlice, type ListOptions } from "../../shared/listQuery.js";
+import { dateRangeWhere, findPage, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateTeamPayoutPayload, IUpdateTeamPayoutPayload } from "./teamPayout.validation.js";
 import { toDateOnly } from "../../shared/dates.js";
 import { assertOwnMember, assertOwnProject } from "../../shared/ownership.js";
@@ -58,23 +58,11 @@ const getAllPayouts = async (
         account: { select: { id: true, name: true, currency: true } },
     };
 
-    const slice = pageSlice(options);
-
-    if (!slice) {
-        const rows = await prisma.teamPayout.findMany({ where, include, orderBy: { date: "desc" } });
-        return { rows, total: rows.length };
-    }
-
-    const [rows, total] = await Promise.all([
-        prisma.teamPayout.findMany({
-            where,
-            include,
-            orderBy: { date: "desc" },
-            skip: slice.skip,
-            take: slice.take,
-        }),
-        prisma.teamPayout.count({ where }),
-    ]);
+    const { rows, total } = await findPage(
+        options,
+        (page) => prisma.teamPayout.findMany({ where, include, orderBy: { date: "desc" }, ...page }),
+        () => prisma.teamPayout.count({ where })
+    );
 
     return { rows, total };
 };

@@ -29,11 +29,10 @@ const verifyToken = (token: string, secret: string): VerifyTokenResult => {
       decoded,
       message: 'Token verified successfully',
     };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message,
+      message: error instanceof Error ? error.message : 'Token could not be verified',
       error: error,
     };
   }

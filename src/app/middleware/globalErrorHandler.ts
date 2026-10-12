@@ -28,8 +28,13 @@ const isBodyParserError = (err: unknown): err is Error & { status: number; type:
     );
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
-export const globalErrorHandler = async (err: any, req: Request, res: Response, next: NextFunction) => {
+export const globalErrorHandler = async (err: unknown, req: Request, res: Response, next: NextFunction) => {
+    // Express's own handler closes a response that has already started streaming.
+    if (res.headersSent) {
+        next(err);
+        return;
+    }
+
     let errorSource: IError[] = [];
     let statusCode: number = status.INTERNAL_SERVER_ERROR;
     let message = "Internal Server Error";

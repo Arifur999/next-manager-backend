@@ -110,8 +110,7 @@ export const checkAuth = (...authRoles: Role[]) => async (req: Request, res: Res
         await enforceSubscription(req);
 
         next();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
+    } catch (error: unknown) {
         next(error);
     }
 };

@@ -1,3 +1,4 @@
+import z from "zod";
 import { Currency, RateSource } from "../../generated/prisma/enums.js";
 import { prisma } from "../lib/prisma.js";
 import { logger } from "../lib/logger.js";
@@ -15,26 +16,32 @@ import { logger } from "../lib/logger.js";
  * by whoever did the exchange - that is what makes the books reconcile.
  */
 
+// Only the fields read below; anything else in the body is ignored.
+const erApiBody = z.object({
+    result: z.literal("success"),
+    rates: z.object({ BDT: z.number() }),
+});
+const currencyApiBody = z.object({
+    usd: z.object({ bdt: z.number() }),
+});
+
 // Both are free and need no API key. The second is a fallback for when the
 // first is down, which for a free service is worth planning for.
 const PROVIDERS = [
     {
         name: "open.er-api.com",
         url: "https://open.er-api.com/v6/latest/USD",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        extract: (body: any): number | null => {
-            if (body?.result !== "success") return null;
-            const rate = body?.rates?.BDT;
-            return typeof rate === "number" ? rate : null;
+        extract: (body: unknown): number | null => {
+            const parsed = erApiBody.safeParse(body);
+            return parsed.success ? parsed.data.rates.BDT : null;
         },
     },
     {
         name: "fawazahmed0/currency-api",
         url: "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        extract: (body: any): number | null => {
-            const rate = body?.usd?.bdt;
-            return typeof rate === "number" ? rate : null;
+        extract: (body: unknown): number | null => {
+            const parsed = currencyApiBody.safeParse(body);
+            return parsed.success ? parsed.data.usd.bdt : null;
         },
     },
 ] as const;

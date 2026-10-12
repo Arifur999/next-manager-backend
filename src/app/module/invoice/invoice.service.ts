@@ -9,6 +9,7 @@ import { isOverdue, recalcInvoiceStatus } from "../../shared/invoiceStatus.js";
 import { dateRangeWhere, escapeLikeTerm, findPage, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateInvoicePayload, IUpdateInvoicePayload } from "./invoice.validation.js";
 import { formatInvoiceNumber } from "./invoiceNumber.js";
+import { LineItemInput, priceItems } from "./invoicePricing.js";
 import { toDateOnly } from "../../shared/dates.js";
 import { assertOwnClient, assertOwnProject } from "../../shared/ownership.js";
 
@@ -19,15 +20,6 @@ import { assertOwnClient, assertOwnProject } from "../../shared/ownership.js";
  * request. A client that sends its own total is either out of date or lying,
  * and either way the figure would end up in receivables.
  */
-
-
-interface LineItemInput {
-    service_id?: string | null;
-    description: string;
-    quantity?: number;
-    unit_price?: number;
-    sort_order?: number;
-}
 
 /**
  * Every service named on the lines belongs to the caller's agency.
@@ -47,38 +39,6 @@ const assertOwnServices = async (items: LineItemInput[], user: IRequestUser) => 
     if (found !== ids.length) {
         throw new AppError(status.NOT_FOUND, "One of those services does not exist");
     }
-};
-
-/** Line amounts and the invoice total, worked out server-side. */
-const priceItems = (items: LineItemInput[], discount: number, tax: number) => {
-    const priced = items.map((item, index) => {
-        const quantity = new Prisma.Decimal(item.quantity ?? 1);
-        const unitPrice = new Prisma.Decimal(item.unit_price ?? 0);
-        return {
-            // Kept on the line, not resolved at read time: what a line was
-            // for is a fact about the invoice, and a service renamed later
-            // must not restate what was billed.
-            service_id: item.service_id ?? null,
-            description: item.description,
-            quantity,
-            unit_price: unitPrice,
-            amount: quantity.times(unitPrice).toDecimalPlaces(2),
-            sort_order: item.sort_order ?? index,
-        };
-    });
-
-    const subtotal = priced.reduce(
-        (running, item) => running.plus(item.amount),
-        new Prisma.Decimal(0)
-    );
-
-    const total = subtotal.minus(discount).plus(tax).toDecimalPlaces(2);
-
-    if (total.lessThan(0)) {
-        throw new AppError(status.BAD_REQUEST, "The discount cannot be larger than the invoice subtotal");
-    }
-
-    return { priced, subtotal: subtotal.toDecimalPlaces(2), total };
 };
 
 /**

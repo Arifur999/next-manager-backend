@@ -3,6 +3,7 @@ import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
+import { TimeCapacityService } from "./timeCapacity.service.js";
 import { TimeEntryService } from "./timeEntry.service.js";
 import { idOf, paramsOf, userIdParams, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
@@ -98,7 +99,7 @@ const deleteEntry = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getCapacities = catchAsync(async (req: Request, res: Response) => {
-    const result = await TimeEntryService.getCapacities(requireUser(req));
+    const result = await TimeCapacityService.getCapacities(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -109,7 +110,7 @@ const getCapacities = catchAsync(async (req: Request, res: Response) => {
 
 const getWorkload = catchAsync(async (req: Request, res: Response) => {
     const options = parseListOptions(req.query as Record<string, unknown>);
-    const result = await TimeEntryService.getWorkload(requireUser(req), options);
+    const result = await TimeCapacityService.getWorkload(requireUser(req), options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -119,7 +120,7 @@ const getWorkload = catchAsync(async (req: Request, res: Response) => {
 });
 
 const setCapacity = catchAsync(async (req: Request, res: Response) => {
-    const result = await TimeEntryService.setCapacity(
+    const result = await TimeCapacityService.setCapacity(
         paramsOf(req, userIdParams).userId,
         req.body,
         requireUser(req)

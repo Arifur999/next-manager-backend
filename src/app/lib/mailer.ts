@@ -72,14 +72,15 @@ const getTransporter = (): Transporter => {
 
 export const sendMail = async (mail: Mail): Promise<MailResult> => {
     if (!isConfigured()) {
-        // Logged, loudly, with the body - so a developer can follow the link
-        // and a deployment missing its config is obvious in the output rather
-        // than discovered by a user who never got their email.
+        // The body carries reset and invite links (bearer tokens), so it is
+        // only printed in development, where a developer follows it by hand.
+        const body =
+            env.NODE_ENV === "development" ? `\n      ${mail.text.replace(/\n/g, "\n      ")}` : "";
         console.warn(
             `[mail] SMTP is not configured, so this was NOT sent:\n` +
                 `      to: ${mail.to}\n` +
-                `      subject: ${mail.subject}\n` +
-                `      ${mail.text.replace(/\n/g, "\n      ")}`
+                `      subject: ${mail.subject}` +
+                body
         );
 
         return {

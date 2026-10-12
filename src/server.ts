@@ -4,6 +4,7 @@ import { seedSuperAdmin } from "./app/utils/seed.js";
 import { startChatBus, stopChatBus } from "./app/socket/chatBus.js";
 import { attachChatSocket, deliverLocally } from "./app/socket/chatSocket.js";
 import { env } from "./config/env.js";
+import { logger } from "./app/lib/logger.js";
 
 let server: Server;
 
@@ -11,7 +12,7 @@ const bootstrap = async () => {
     try {
         await seedSuperAdmin();
         server = app.listen(env.PORT, () => {
-            console.log(`Server is running on http://localhost:${env.PORT}`);
+            logger.info("Server is running", { url: `http://localhost:${env.PORT}` });
         });
 
         // The chat socket shares this HTTP server rather than binding a
@@ -39,11 +40,11 @@ const bootstrap = async () => {
         // throwing, so the try above never sees them. Without this a port
         // clash is a process that logged a success line and serves nothing.
         server.on("error", (error) => {
-            console.error("Server failed to bind:", error);
+            logger.error("Server failed to bind", { error });
             process.exit(1);
         });
     } catch (error) {
-        console.error("Failed to start server:", error);
+        logger.error("Failed to start server", { error });
         // Exiting rather than returning. app.ts schedules four cron jobs at
         // import time, and those timers hold the event loop open on their own -
         // so a bootstrap that merely returned left a process that is alive,
@@ -71,12 +72,12 @@ const shutdown = (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
 
-    console.log(`${signal} signal received. Shutting down server...`);
+    logger.info("Shutting down server", { signal });
 
     // Nothing may hang the stop forever. Docker sends SIGKILL when its grace
     // period runs out anyway; exiting first means the logs say why.
     const giveUp = setTimeout(() => {
-        console.error("Shutdown timed out with connections still open. Exiting.");
+        logger.error("Shutdown timed out with connections still open. Exiting.");
         process.exit(1);
     }, 10_000);
 
@@ -84,7 +85,7 @@ const shutdown = (signal: string) => {
         // Its own connection, so it does not close with the HTTP server.
         await stopChatBus().catch(() => {});
         clearTimeout(giveUp);
-        console.log("Server closed gracefully.");
+        logger.info("Server closed gracefully.");
         process.exit(0);
     };
 
@@ -100,7 +101,7 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
 process.on("uncaughtException", (error) => {
-    console.log("Uncaught Exception Detected... Shutting down server", error);
+    logger.error("Uncaught exception, shutting down", { error });
     if (server) {
         server.close(() => {
             process.exit(1);
@@ -110,7 +111,7 @@ process.on("uncaughtException", (error) => {
 });
 
 process.on("unhandledRejection", (error) => {
-    console.log("Unhandled Rejection Detected... Shutting down server", error);
+    logger.error("Unhandled rejection, shutting down", { error });
     if (server) {
         server.close(() => {
             process.exit(1);

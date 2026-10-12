@@ -15,6 +15,7 @@ import { prisma } from "./app/lib/prisma.js";
 import { sendResponse } from "./app/shared/sendResponse.js";
 import { chatBusReady } from "./app/socket/chatBus.js";
 import { socketStats } from "./app/socket/chatSocket.js";
+import { logger } from "./app/lib/logger.js";
 
 const app: Application = express();
 
@@ -29,10 +30,10 @@ cron.schedule("30 0 * * *", async () => {
     try {
         const result = await syncTodaysRate();
         if (result) {
-            console.log(`[currency] USD/BDT ${result.rate} via ${result.provider}`);
+            logger.info("Currency rate synced", { rate: result.rate, provider: result.provider });
         }
     } catch (error) {
-        console.error("[currency] daily sync failed:", (error as Error).message);
+        logger.error("Currency daily sync failed", { error });
     }
 });
 
@@ -46,12 +47,13 @@ cron.schedule("30 1 * * *", async () => {
     try {
         const result = await PlatformService.expireSubscriptions();
         if (result.moved_to_past_due > 0 || result.suspended > 0) {
-            console.log(
-                `[billing] ${result.moved_to_past_due} moved to past_due, ${result.suspended} suspended`
-            );
+            logger.info("Subscription expiry sweep", {
+                movedToPastDue: result.moved_to_past_due,
+                suspended: result.suspended,
+            });
         }
     } catch (error) {
-        console.error("[billing] expiry sweep failed:", (error as Error).message);
+        logger.error("Subscription expiry sweep failed", { error });
     }
 });
 
@@ -64,11 +66,12 @@ cron.schedule("30 1 * * *", async () => {
 cron.schedule("45 1 * * *", async () => {
     try {
         const snapshot = await PlatformFinanceService.takeSnapshot();
-        console.log(
-            `[platform] snapshot: MRR $${snapshot.mrr_usd}, ${snapshot.companies_total} companies`
-        );
+        logger.info("Platform snapshot taken", {
+            mrrUsd: snapshot.mrr_usd,
+            companies: snapshot.companies_total,
+        });
     } catch (error) {
-        console.error("[platform] snapshot failed:", (error as Error).message);
+        logger.error("Platform snapshot failed", { error });
     }
 });
 
@@ -82,10 +85,10 @@ cron.schedule("15 2 * * *", async () => {
     try {
         const result = await SecurityService.pruneLoginEvents();
         if (result.deleted > 0) {
-            console.log(`[security] pruned ${result.deleted} login events`);
+            logger.info("Login events pruned", { deleted: result.deleted });
         }
     } catch (error) {
-        console.error("[security] prune failed:", (error as Error).message);
+        logger.error("Login event prune failed", { error });
     }
 });
 

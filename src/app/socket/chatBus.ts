@@ -1,5 +1,6 @@
 import pg from "pg";
 import { env } from "../../config/env.js";
+import { logger } from "../lib/logger.js";
 
 /**
  * How one instance tells the others that something happened.
@@ -78,7 +79,7 @@ const connect = async () => {
         await self.connect();
         await self.query(`LISTEN ${CHANNEL}`);
     } catch (error) {
-        console.error("Chat bus could not connect:", error);
+        logger.error("Chat bus could not connect", { error });
         retire();
         return;
     }
@@ -90,7 +91,7 @@ const connect = async () => {
 
     client = self;
     attempt = 0;
-    console.log("Chat bus listening");
+    logger.info("Chat bus listening");
 };
 
 const reconnect = async () => {
@@ -129,7 +130,7 @@ export const publishChatEvent = async (
     try {
         await query(`SELECT pg_notify($1, $2)`, [CHANNEL, JSON.stringify(event)]);
     } catch (error) {
-        console.error("Chat bus could not publish:", error);
+        logger.error("Chat bus could not publish", { error });
     }
 };
 

@@ -2,6 +2,7 @@ import { Role } from "../../generated/prisma/enums.js";
 import { env } from "../../config/env.js";
 import { prisma } from "../lib/prisma.js";
 import { passwordUtils } from "./password.js";
+import { logger } from "../lib/logger.js";
 
 /**
  * Creates the platform super admin on boot if it isn't there yet.
@@ -32,7 +33,7 @@ export const seedSuperAdmin = async () => {
         },
     });
 
-    console.log(`Super admin created: ${superAdmin.email}`);
+    logger.info("Super admin created", { email: superAdmin.email });
 
     return superAdmin;
 };

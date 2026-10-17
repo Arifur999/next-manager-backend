@@ -301,6 +301,25 @@ balance = await balanceOf(salesId, workerCookie);
 check("and 'all' lets them read it", daysTaken(balance) === 3, `${daysTaken(balance)} days`);
 await setScope(Role.operations, "leave", "view", "own");
 
+console.log("\n--- a leave decision follows the grid and reaches the requester ---");
+const asked = await call("POST", "/hr/leave", { leave_type_id: leaveType.id, from_date: "2026-05-04", to_date: "2026-05-05", days: 2 }, salesCookie);
+const askedId = (asked.json as unknown as { data: { id: string } }).data?.id;
+check("a request to decide", asked.status === 201, `${asked.status} ${asked.json.message}`);
+await setScope(Role.project_manager, "leave", "edit", "none");
+const decideRefused = await call("POST", `/hr/leave/${askedId}/decide`, { approve: true }, pmCookie);
+check("leave edit 'none' refuses deciding", decideRefused.status === 403, `${decideRefused.status}`);
+await setScope(Role.project_manager, "leave", "edit", "all");
+const decided = await call("POST", `/hr/leave/${askedId}/decide`, { approve: false, note: "Launch week, sorry" }, pmCookie);
+check("with the square back, a project manager decides it with a note", decided.status === 200, `${decided.status} ${decided.json.message}`);
+type LeaveRow = { id: string; status: string; decision_note: string; decided_at: string | null };
+const ownLeave = await call<LeaveRow>("GET", "/hr/leave?mine=true", undefined, salesCookie);
+const answer = (ownLeave.json.data ?? []).find((row) => row.id === askedId);
+check(
+    "and the requester's own list carries the note and when it was decided",
+    answer?.status === "rejected" && answer.decision_note === "Launch week, sorry" && Boolean(answer.decided_at),
+    JSON.stringify(answer)
+);
+
 const otherAdmin = await prisma.user.findFirst({ where: { email: otherEmail }, select: { id: true } });
 balance = await balanceOf(otherAdmin?.id ?? "", admin);
 check("even 'all' cannot read another agency's member", balance.status === 404, `${balance.status}`);

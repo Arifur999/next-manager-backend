@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { leaveBalanceQueryZodSchema } from "./hr.validation.js";
+import { decideLeaveZodSchema, leaveBalanceQueryZodSchema } from "./hr.validation.js";
 
 describe("leaveBalanceQueryZodSchema", () => {
     it("reads a year", () => {
@@ -19,5 +19,20 @@ describe("leaveBalanceQueryZodSchema", () => {
 
     it("refuses a malformed user_id", () => {
         assert.equal(leaveBalanceQueryZodSchema.safeParse({ user_id: "not-an-id" }).success, false);
+    });
+});
+
+describe("decideLeaveZodSchema", () => {
+    it("decides without a note", () => {
+        assert.deepEqual(decideLeaveZodSchema.parse({ approve: true }), { approve: true });
+    });
+
+    it("carries an optional note for the requester", () => {
+        assert.equal(decideLeaveZodSchema.parse({ approve: false, note: "Launch week" }).note, "Launch week");
+    });
+
+    it("refuses a note past 300 characters, and a missing decision", () => {
+        assert.equal(decideLeaveZodSchema.safeParse({ approve: false, note: "x".repeat(301) }).success, false);
+        assert.equal(decideLeaveZodSchema.safeParse({ note: "Launch week" }).success, false);
     });
 });

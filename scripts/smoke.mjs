@@ -1677,7 +1677,8 @@ if (!superEmail || !superPassword) {
   check(
     "including whether email works at all",
     typeof r.json.data?.smtp?.configured === "boolean",
-    JSON.stringify(r.json.data?.smtp)
+    // The type only: the host, port and sender are not for the logs.
+    `configured is ${typeof r.json.data?.smtp?.configured}`
   );
   check(
     "without ever reading the password back",

@@ -1,11 +1,12 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
-import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
+import { paginationMeta } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { VaultService } from "./vault.service.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
+import { credentialListQueryZodSchema } from "./vault.validation.js";
 
 // Who and from where, for the access log. Behind a proxy the real client
 // address is in X-Forwarded-For, which app.set("trust proxy", 1) makes req.ip
@@ -16,11 +17,10 @@ const accessContext = (req: Request) => ({
 });
 
 const getAllCredentials = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const options = parseListOptions(query);
+    const { client_id, project_id, ...options } = queryOf(req, credentialListQueryZodSchema);
     const { rows, total } = await VaultService.getAllCredentials(requireUser(req), options, {
-        clientId: typeof query.client_id === "string" ? query.client_id : undefined,
-        projectId: typeof query.project_id === "string" ? query.project_id : undefined,
+        clientId: client_id,
+        projectId: project_id,
     });
     sendResponse(res, {
         success: true,

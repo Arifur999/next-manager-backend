@@ -5,7 +5,7 @@ import { requireScope } from "../../middleware/requireScope.js";
 import { sensitiveActionRateLimit } from "../../middleware/rateLimit.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { VaultController } from "./vault.controller.js";
-import { createCredentialZodSchema, updateCredentialZodSchema } from "./vault.validation.js";
+import { createCredentialZodSchema, credentialListQueryZodSchema, updateCredentialZodSchema } from "./vault.validation.js";
 import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
@@ -13,7 +13,7 @@ const router = Router();
 // Operations reads this through the project detail page, never the standalone
 // vault screen - the route rule keeps that page shut. WHICH credentials they
 // get is decided in the service: only those on a project they are a member of.
-router.get("/", checkAuth(Role.admin, Role.sales, Role.project_manager, Role.operations), VaultController.getAllCredentials);
+router.get("/", checkAuth(Role.admin, Role.sales, Role.project_manager, Role.operations), validateRequest({ query: credentialListQueryZodSchema }), VaultController.getAllCredentials);
 
 // Reveal is the only route that returns a real password, so it gets the tight
 // rate limit as well as the role gate: someone walking the id space one request

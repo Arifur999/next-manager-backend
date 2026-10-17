@@ -1,5 +1,6 @@
 import cron, { type ScheduledTask } from "node-cron";
 import { logger } from "../lib/logger.js";
+import { notifyOverdueInvoices } from "../module/invoice/invoiceOverdue.js";
 import { expireSubscriptions } from "../module/platform/platformSubscription.service.js";
 import { PlatformFinanceService } from "../module/platform/platformFinance.service.js";
 import { SecurityService } from "../module/security/security.service.js";
@@ -27,6 +28,20 @@ export const startScheduledJobs = (): ScheduledTask[] => {
             }
         } catch (error) {
             logger.error("Currency daily sync failed", { error });
+        }
+    }));
+
+    // Invoices that went overdue yesterday, told to whoever the agency's rule
+    // names. After midnight UTC, so "yesterday" is a finished day. Claimed per
+    // invoice, so a second instance firing too notifies nobody twice.
+    tasks.push(cron.schedule("15 1 * * *", async () => {
+        try {
+            const result = await notifyOverdueInvoices();
+            if (result.checked > 0) {
+                logger.info("Overdue invoice sweep", { checked: result.checked, notified: result.notified });
+            }
+        } catch (error) {
+            logger.error("Overdue invoice sweep failed", { error });
         }
     }));
 

@@ -88,6 +88,12 @@ interface NotifyInput {
 
 type Rule = { in_app: boolean; email: boolean; roles: Role[] };
 
+/**
+ * Whose action it was: a request's user, or a nightly job with nobody behind
+ * it (userId null), in which case nobody is left out of the audience.
+ */
+export type NotifyActor = Pick<IRequestUser, "organizationId"> & { userId: string | null };
+
 /** Somebody an event can reach. */
 export type NotifyPerson = { id: string; email: string; full_name: string; status: UserStatus };
 
@@ -143,7 +149,7 @@ const audienceOf = async (tx: Tx, organizationId: string, input: NotifyInput, ru
 export const planDelivery = (
     rule: Pick<Rule, "in_app" | "email">,
     audience: NotifyPerson[],
-    actorId: string
+    actorId: string | null
 ): { inApp: NotifyPerson[]; mail: NotifyPerson[] } => {
     const reached = audience.filter((person) => person.id !== actorId);
 
@@ -170,7 +176,7 @@ export interface PendingNotificationMail {
  */
 export const notify = async (
     tx: Tx,
-    actor: IRequestUser,
+    actor: NotifyActor,
     input: NotifyInput
 ): Promise<PendingNotificationMail | null> => {
     const rule = await ruleFor(tx, actor.organizationId, input.event);

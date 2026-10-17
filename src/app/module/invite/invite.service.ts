@@ -254,15 +254,7 @@ const acceptInvite = async (token: string, payload: IAcceptInvitePayload) => {
         // screen, and somebody who cannot sign in will not chase it.
         const mail = await notify(
             tx,
-            {
-                userId: member.id,
-                organizationId: invite.organization_id,
-                role: member.role,
-                email: member.email,
-                name: member.full_name,
-                tokenVersion: 0,
-                permissions: [],
-            },
+            { userId: member.id, organizationId: invite.organization_id },
             {
                 event: NotificationEvent.member_awaiting_approval,
                 title: `${member.full_name} is waiting to join`,

@@ -17,6 +17,10 @@ model Invoice {
   total          Decimal       @default(0) @db.Decimal(15, 2)
   notes          String        @default("")
   terms          String        @default("")
+  /// When the nightly job told the agency this invoice went overdue. Claimed
+  /// with a conditional update, so a second instance or a re-run that night
+  /// cannot notify twice.
+  overdue_notified_at DateTime?
   deleted_at     DateTime?
   deleted_by     String?
   created_by     String?

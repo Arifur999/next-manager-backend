@@ -13,18 +13,10 @@ import { IAcceptInvitePayload, ICreateInvitePayload } from "./invite.validation.
 import { sameEmail } from "../../shared/emailField.js";
 
 /**
- * Joining a company as an operations member.
- *
- * Admin sends a link → the person sets their own name and password → they land
- * as `pending` → admin approves.
- *
- * Two admin actions rather than one, deliberately. A link that leaks does not
- * by itself let a stranger in, because admission is still a separate decision
- * taken after somebody can see who actually turned up.
- *
- * The token is hashed in the database, exactly like a password reset. This
- * table read from a backup would otherwise be a set of working keys into live
- * companies.
+ * Joining a company as an operations member: an admin sends a link, the person
+ * sets their own name and password and lands `pending`, and an admin approves
+ * (memberApproval.service.ts). Two admin steps, so a leaked link alone lets
+ * nobody in. Only the token's hash is stored, like a password reset.
  */
 
 const DEFAULT_EXPIRY_DAYS = 7;
@@ -40,11 +32,8 @@ const INVITE_FIELDS = {
 } as const;
 
 /**
- * Create an invite and return the link.
- *
- * The token is returned exactly once, here. Nothing can read it back
- * afterwards - only its hash is stored - so an admin who loses the link
- * revokes it and sends another rather than looking it up.
+ * Create an invite and return the link - the only time the token is readable,
+ * so a lost link is revoked and sent again, never looked up.
  */
 const createInvite = async (payload: ICreateInvitePayload, user: IRequestUser) => {
     const email = payload.email.toLowerCase().trim();
@@ -94,14 +83,8 @@ const createInvite = async (payload: ICreateInvitePayload, user: IRequestUser) =
         select: INVITE_FIELDS,
     });
 
-    // Sent, rather than left for the admin to copy out and deliver by hand.
-    // The platform and agency invites have both emailed since they were
-    // written; this one asked an admin to do the delivery themselves, which
-    // is the same job done worse.
-    //
-    // Outside no transaction to hold open, but the ordering still matters:
-    // the invite exists first, so a mail failure leaves a working link rather
-    // than a sent mail pointing at nothing.
+    // Mailed after the invite exists, so a mail failure leaves a working link
+    // rather than a sent mail pointing at nothing.
     const agency = await prisma.organization.findUnique({
         where: { id: user.organizationId },
         select: { name: true },
@@ -161,11 +144,8 @@ const revokeInvite = async (id: string, user: IRequestUser) => {
 };
 
 /**
- * What the join page may know before anybody has signed in.
- *
- * The company name and the address the invite was sent to, and nothing else.
- * Enough to show "Join Bright Pixel" so the person knows they are in the right
- * place; not enough to enumerate customers by guessing tokens.
+ * What the join page may know before sign-in: the company name and the address
+ * the invite was sent to, and nothing else.
  */
 const getInviteByToken = async (token: string) => {
     const invite = await prisma.teamInvite.findUnique({
@@ -192,11 +172,8 @@ const getInviteByToken = async (token: string) => {
 };
 
 /**
- * Accept an invite: create the account, pending.
- *
- * No tokens are issued and nothing is signed in. The person cannot get past
- * checkAuth until an admin approves, which is the point of the flow, so
- * handing them a session here would be a session that does nothing.
+ * Accept an invite: create the account, pending. No session is issued, since
+ * checkAuth refuses them until an admin approves.
  */
 const acceptInvite = async (token: string, payload: IAcceptInvitePayload) => {
     const tokenHash = hashLinkToken(token);

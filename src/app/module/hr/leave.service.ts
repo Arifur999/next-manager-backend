@@ -13,14 +13,12 @@ import {
     IUpdateLeaveTypePayload,
 } from "./hr.validation.js";
 import { toDateOnly } from "../../shared/dates.js";
+import { assertOwnMember } from "../../shared/ownership.js";
 
 /**
- * Asking to be away, and somebody deciding.
- *
- * `days` is stored on the request rather than worked out from the dates,
- * because what counts as a working day is an agency's own business - half days,
- * weekends, public holidays - and recomputing it later would silently restate
- * leave that was already approved on different arithmetic.
+ * Asking to be away, and somebody deciding. `days` is stored, not derived from
+ * the dates: working days are each agency's own business, and recomputing them
+ * later would restate leave already approved.
  */
 
 
@@ -107,11 +105,8 @@ const updateType = async (id: string, payload: IUpdateLeaveTypePayload, user: IR
 // ---------------------------------------------------------------- requests
 
 /**
- * The queue, or one person's own.
- *
- * Operations sees only their own requests. Reading why every colleague was away
- * is not something a colleague should be able to do - the reason field alone
- * makes that clear.
+ * The queue, or one person's own. Why a colleague was away is private: without
+ * the "all" leave view, only one's own requests.
  */
 const getRequests = async (
     user: IRequestUser,
@@ -134,19 +129,21 @@ const getRequests = async (
 };
 
 /**
- * What is left of somebody's allowance this year.
- *
- * Counts approved days only. Counting pending ones would show a balance that
- * drops and then jumps back when a request is turned down, and somebody
- * planning around it would be planning around a number that is not theirs yet.
- *
- * A type with a zero allowance reports `null` remaining rather than zero:
- * "tracked but not capped" and "you have none left" are opposite answers.
+ * What is left of somebody's allowance this year, counting approved days only,
+ * so a pending request does not move the balance. A zero allowance reports
+ * `null` remaining: "not capped" and "none left" are opposite answers.
  */
 const getBalance = async (user: IRequestUser, requestedUserId: string | undefined, year: number) => {
-    // The request list's rule: without the "all" view, only your own balance.
-    const seesEveryone = (await resolveScope(user, "leave", "view")) === "all";
-    const userId = seesEveryone && requestedUserId ? requestedUserId : user.userId;
+    const userId = requestedUserId ?? user.userId;
+
+    // Somebody else's balance needs the "all" leave view, as the request list
+    // does. Both refusals are a 404, so neither confirms the person exists.
+    if (userId !== user.userId) {
+        if ((await resolveScope(user, "leave", "view")) !== "all") {
+            throw new AppError(status.NOT_FOUND, "Team member not found");
+        }
+        await assertOwnMember(prisma, userId, user.organizationId);
+    }
 
     const from = new Date(Date.UTC(year, 0, 1));
     const to = new Date(Date.UTC(year, 11, 31));
@@ -184,11 +181,8 @@ const getBalance = async (user: IRequestUser, requestedUserId: string | undefine
 };
 
 /**
- * Asking.
- *
- * Overlapping an existing request is refused. Two approved absences covering
- * the same day is not a thing that can be true, and letting it through would
- * double-count against the allowance.
+ * Asking. An overlap with an existing request is refused, or one day would count
+ * twice against the allowance.
  */
 const request = async (payload: IRequestLeavePayload, user: IRequestUser) => {
     const type = await prisma.leaveType.findFirst({
@@ -288,12 +282,7 @@ const cancel = async (id: string, user: IRequestUser) => {
     });
 };
 
-/**
- * Deciding.
- *
- * Only pending requests can be decided. Re-approving an approved one would
- * write a second decision over the first and lose who actually made it.
- */
+/** Deciding, only a pending request, so a second decision cannot overwrite who made the first. */
 const decide = async (id: string, payload: IDecideLeavePayload, user: IRequestUser) => {
     const existing = await prisma.leaveRequest.findFirst({
         where: { id, organization_id: user.organizationId },

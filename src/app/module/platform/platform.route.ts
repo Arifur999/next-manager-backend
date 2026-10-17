@@ -3,16 +3,14 @@ import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
-import { inviteTokenRateLimit } from "../../middleware/rateLimit.js";
-import { AgencyInviteController } from "./agencyInvite.controller.js";
-import { AnnouncementController } from "./announcement.controller.js";
+import { AgencyInviteRoutes } from "./agencyInvite.route.js";
+import { AnnouncementRoutes } from "./announcement.route.js";
 import { PlatformController } from "./platform.controller.js";
-import { PlatformFinanceController } from "./platformFinance.controller.js";
-import { PlatformInviteController } from "./platformInvite.controller.js";
-import { PlatformSettingsController } from "./platformSettings.controller.js";
-import { acceptAgencyInviteZodSchema, acceptPlatformInviteZodSchema, createAgencyInviteZodSchema, createAnnouncementZodSchema, createCompanyZodSchema, createPlatformExpenseZodSchema, createPlatformInviteZodSchema, createPlanZodSchema, setPlatformPermissionsZodSchema, setSubscriptionZodSchema, updateAnnouncementZodSchema, updatePlanZodSchema, updatePlatformSettingsZodSchema, updatePlatformExpenseZodSchema, companyListQueryZodSchema, platformActivityQueryZodSchema, platformTrendQueryZodSchema } from "./platform.validation.js";
-import { idParams, tokenParams, organizationIdParams } from "../../shared/requestSchemas.js";
-import { listQuerySchema } from "../../shared/listQuery.js";
+import { PlatformFinanceRoutes } from "./platformFinance.route.js";
+import { PlatformInviteRoutes } from "./platformInvite.route.js";
+import { PlatformSettingsRoutes } from "./platformSettings.route.js";
+import { createCompanyZodSchema, createPlanZodSchema, setPlatformPermissionsZodSchema, setSubscriptionZodSchema, updatePlanZodSchema, companyListQueryZodSchema, platformActivityQueryZodSchema } from "./platform.validation.js";
+import { idParams, organizationIdParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
@@ -108,236 +106,12 @@ router.patch(
     PlatformController.setPermissions
 );
 
-// Growing the team. Every one of these is behind platform.admins.manage - the
-// permission that can grant every other, including itself.
-router.get(
-    "/invites",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.admins.manage"),
-    PlatformInviteController.getInvites
-);
-router.post(
-    "/invites",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.admins.manage"),
-    validateRequest(createPlatformInviteZodSchema),
-    PlatformInviteController.createInvite
-);
-router.delete(
-    "/invites/:id",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.admins.manage"),
-    validateRequest({ params: idParams }),
-    PlatformInviteController.revokeInvite
-);
-
-router.post(
-    "/admins/:id/approve",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.admins.manage"),
-    validateRequest({ params: idParams }),
-    PlatformInviteController.approveAdmin
-);
-router.delete(
-    "/admins/:id",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.admins.manage"),
-    validateRequest({ params: idParams }),
-    PlatformInviteController.removeAdmin
-);
-
-// AGENCIO's own books. Reading the numbers and recording what is spent are
-// separate permissions: somebody can be shown how the business is doing
-// without being able to change what it says.
-router.get(
-    "/finance",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.finance.view"),
-    validateRequest({ query: listQuerySchema }),
-    PlatformFinanceController.getReport
-);
-router.get(
-    "/trend",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.companies.view"),
-    validateRequest({ query: platformTrendQueryZodSchema }),
-    PlatformFinanceController.getTrend
-);
-router.get(
-    "/expenses",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.finance.view", "platform.expenses.manage"),
-    validateRequest({ query: listQuerySchema }),
-    PlatformFinanceController.getExpenses
-);
-router.post(
-    "/expenses",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.expenses.manage"),
-    validateRequest(createPlatformExpenseZodSchema),
-    PlatformFinanceController.createExpense
-);
-router.patch(
-    "/expenses/:id",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.expenses.manage"),
-    validateRequest({ params: idParams, body: updatePlatformExpenseZodSchema }),
-    PlatformFinanceController.updateExpense
-);
-router.delete(
-    "/expenses/:id",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.expenses.manage"),
-    validateRequest({ params: idParams }),
-    PlatformFinanceController.deleteExpense
-);
-
-// ---------------------------------------------------------------------------
-// Announcements
-// ---------------------------------------------------------------------------
-//
-// The console half. Writing a draft and sending it are the same permission,
-// because a draft nobody may publish is a document, not a feature.
-router.get(
-    "/announcements",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.campaigns.send"),
-    AnnouncementController.getAnnouncements
-);
-router.post(
-    "/announcements",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.campaigns.send"),
-    validateRequest(createAnnouncementZodSchema),
-    AnnouncementController.createAnnouncement
-);
-router.patch(
-    "/announcements/:id",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.campaigns.send"),
-    validateRequest({ params: idParams, body: updateAnnouncementZodSchema }),
-    AnnouncementController.updateAnnouncement
-);
-// Its own endpoint rather than a flag on the edit: this is the one that cannot
-// be taken back, and it should not be reachable by a form that autosaves.
-router.post(
-    "/announcements/:id/publish",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.campaigns.send"),
-    validateRequest({ params: idParams }),
-    AnnouncementController.publishAnnouncement
-);
-router.delete(
-    "/announcements/:id",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.campaigns.send"),
-    validateRequest({ params: idParams }),
-    AnnouncementController.deleteAnnouncement
-);
-
-// ---------------------------------------------------------------------------
-// How this installation is set up
-// ---------------------------------------------------------------------------
-//
-// Its own permission rather than folding into admins.manage: one edit here
-// changes what every future customer is put on and what every email this
-// server sends, which is a wider blast radius than adding a colleague.
-router.get(
-    "/settings",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.settings.manage"),
-    PlatformSettingsController.getSettings
-);
-router.patch(
-    "/settings",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.settings.manage"),
-    validateRequest(updatePlatformSettingsZodSchema),
-    PlatformSettingsController.updateSettings
-);
-
-// ---------------------------------------------------------------------------
-// Bringing an agency on
-// ---------------------------------------------------------------------------
-//
-// The console's actual job. Gated by companies.manage, the same permission as
-// creating one by hand - this is the same act with the password step handed
-// back to the person it belongs to.
-router.get(
-    "/agency-invites",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.companies.view"),
-    AgencyInviteController.getInvites
-);
-router.post(
-    "/agency-invites",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.companies.manage"),
-    validateRequest(createAgencyInviteZodSchema),
-    AgencyInviteController.createInvite
-);
-router.delete(
-    "/agency-invites/:id",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.companies.manage"),
-    validateRequest({ params: idParams }),
-    AgencyInviteController.revokeInvite
-);
+// The rest of the console, mounted in the order it has always been matched.
+// Every route carries its own gates, so mounting adds none.
+router.use(PlatformInviteRoutes);
+router.use(PlatformFinanceRoutes);
+router.use(AnnouncementRoutes);
+router.use(PlatformSettingsRoutes);
+router.use(AgencyInviteRoutes);
 
 export const PlatformRoutes = router;
-
-// ---------------------------------------------------------------------------
-// The customer half: the bell.
-// ---------------------------------------------------------------------------
-//
-// `checkAuth()` with no role, because a notice about Sunday maintenance is for
-// whoever works on Sunday, not only for whoever pays. Nothing here is scoped to
-// an organization - the audience is worked out from the reader's own company -
-// so requireCompany would add a way to fail and nothing else.
-const notificationRouter = Router();
-
-notificationRouter.get("/", checkAuth(), AnnouncementController.getMyAnnouncements);
-// Its own endpoint because the badge is polled: counting by fetching the list
-// would pull every body text across the wire to render one number.
-notificationRouter.get("/unread-count", checkAuth(), AnnouncementController.getUnreadCount);
-notificationRouter.post("/read-all", checkAuth(), AnnouncementController.markAllRead);
-notificationRouter.post("/:id/read", checkAuth(), validateRequest({ params: idParams }), AnnouncementController.markRead);
-
-export const NotificationRoutes = notificationRouter;
-
-// ---------------------------------------------------------------------------
-// Public. Whoever opens the link has no account yet.
-// ---------------------------------------------------------------------------
-//
-// Its own token space, separate from the company join routes: the two never
-// mix, and a token for one can never be mistaken for the other.
-const publicRouter = Router();
-
-publicRouter.get("/:token", inviteTokenRateLimit, validateRequest({ params: tokenParams }), PlatformInviteController.getInviteByToken);
-publicRouter.post(
-    "/:token/accept",
-    inviteTokenRateLimit,
-    validateRequest({ params: tokenParams, body: acceptPlatformInviteZodSchema }),
-    PlatformInviteController.acceptInvite
-);
-
-export const PublicPlatformInviteRoutes = publicRouter;
-
-// ---------------------------------------------------------------------------
-// Public: opening an agency from an invite.
-// ---------------------------------------------------------------------------
-//
-// Its own token space again. A token for one flow can never be mistaken for a
-// token for another, which matters most here - these two links produce very
-// different accounts.
-const agencyRouter = Router();
-
-agencyRouter.get("/:token", inviteTokenRateLimit, validateRequest({ params: tokenParams }), AgencyInviteController.getInviteByToken);
-agencyRouter.post(
-    "/:token/accept",
-    inviteTokenRateLimit,
-    validateRequest({ params: tokenParams, body: acceptAgencyInviteZodSchema }),
-    AgencyInviteController.acceptInvite
-);
-
-export const PublicAgencyInviteRoutes = agencyRouter;

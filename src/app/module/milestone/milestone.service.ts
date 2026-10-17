@@ -14,21 +14,10 @@ import { toDateOnly } from "../../shared/dates.js";
 import { assertOwnProject } from "../../shared/ownership.js";
 
 /**
- * Dated promises inside a project.
- *
- * On-time delivery is counted over milestones rather than over projects. A
- * project whose final date lands on time after every interim date slipped is
- * not on time in any sense the client recognises, and a single end_date cannot
- * express the difference.
- *
- * Two dates, deliberately kept apart:
- *
- *   - `submitted_at` is when the work was handed over. This is the one
- *     on-time rate is measured against, because it is the only part the team
- *     controls.
- *   - `accepted_at` is when it was signed off. A milestone submitted on time
- *     and never accepted is delivered but not done, and reporting it as a
- *     clean delivery would hide the thing worth noticing.
+ * Dated promises inside a project; on-time delivery is counted over them, since
+ * one end date hides every interim slip. Two dates are kept apart:
+ * `submitted_at` (handed over, what on-time is measured on, because the team
+ * controls it) and `accepted_at` (signed off: submitted but unaccepted is not done).
  */
 
 const INCLUDE = {
@@ -177,11 +166,8 @@ const acceptMilestone = async (
 };
 
 /**
- * Undo a submission, and the acceptance with it.
- *
- * Leaving accepted_at set on a milestone that is no longer submitted would be a
- * milestone accepted before it was delivered - a state nothing downstream knows
- * how to read.
+ * Undo a submission and the acceptance with it, so no milestone is ever accepted
+ * without being delivered.
  */
 const reopenMilestone = async (id: string, user: IRequestUser) => {
     const existing = await findOwned(id, user);

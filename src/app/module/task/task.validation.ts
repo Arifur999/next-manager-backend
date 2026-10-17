@@ -20,39 +20,19 @@ export const createTaskZodSchema = z.object({
 export const updateTaskZodSchema = createTaskZodSchema.partial();
 
 /**
- * What operations may change about their own task.
- *
- * Tasks are already scoped to the assignee, so an operations user can only
- * reach their own - but within it the full update schema let them move
- * `due_date`, hand the work to somebody else via `assignee_id`, re-prioritise
- * it, or move it to another project. Every one of those edits the commitment
- * they are being measured against.
- *
- * That is the same hole the milestone due-date freeze already closed. Leaving
- * it open here while closing it there is worse than closing neither, because
- * the pattern looks handled.
- *
- * `.strict()` rather than stripping: somebody trying to move their own
- * deadline should be told no and who to ask, not have the field silently
- * dropped and the save reported as a success.
+ * What operations may change about their own task: its status and description.
+ * Due date, assignee, priority and project are the commitment they are measured
+ * against. `.strict()` so an attempt to move them is refused by name rather than
+ * silently dropped and reported as saved.
  */
 export const updateOwnTaskZodSchema = z
     .object({
-        // An id, not a word: the vocabulary belongs to the agency now. Absent means
-    // the board's default, which is what a new task lands on.
-    status_id: z.uuid("status_id must be a valid id").optional(),
+        status_id: z.uuid("status_id must be a valid id").optional(),
         description: z.string("Description must be string").optional(),
     })
     .strict();
 
-/**
- * The schema for whoever is asking.
- *
- * Resolved from the role rather than checked inside the service, so the
- * refusal happens at the edge with a message naming the field - and so the
- * allow-list is readable in one place instead of being spread through update
- * logic.
- */
+/** The update schema for the caller's role, so a refusal names the field at the edge. */
 export const taskUpdateSchemaFor = (role: Role) =>
     role === Role.operations ? updateOwnTaskZodSchema : updateTaskZodSchema;
 

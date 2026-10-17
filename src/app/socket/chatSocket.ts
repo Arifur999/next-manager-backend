@@ -9,34 +9,18 @@ import { isAllowedOrigin } from "../shared/allowedOrigins.js";
 import { readAccessToken } from "./readAccessToken.js";
 
 /**
- * The chat socket.
+ * The chat socket. A CLIENT CANNOT SUBSCRIBE TO ANYTHING: there is no join
+ * message and no conversation id this file accepts, because a socket that
+ * trusted one would be a cross-tenant read with no HTTP route to audit.
  *
- * The rule this whole file exists to enforce:
+ * A connection is a mailbox for ONE user id, proven on the handshake. Once a
+ * message is stored over HTTP, its members are read from the database and
+ * pushed to, so somebody removed from a group stops receiving it at once.
+ * Delivery is best-effort: a thread is always fetched over HTTP on open.
  *
- *   A CLIENT CANNOT SUBSCRIBE TO ANYTHING.
- *
- * There is no "join" message, no room name a browser can send, and no
- * conversation id this file will accept from a connection. A socket that
- * believed an id it was handed would be a cross-tenant read with no HTTP route
- * to audit - the worst kind, because nothing in the request log would show it.
- *
- * Instead the connection is only ever a mailbox for ONE user id, proven on the
- * handshake. When a message is persisted over HTTP, the service asks the
- * database who is in that conversation and pushes to exactly those people's
- * sockets. Membership is therefore re-read from the database on every push
- * rather than cached on the connection, so somebody removed from a group stops
- * receiving it immediately rather than until they reconnect.
- *
- * Delivery is best-effort by design. Messages are persisted over HTTP first and
- * broadcast second; a dropped socket loses nothing, because the thread is
- * fetched over HTTP when the page opens.
- *
- * The connections live in THIS process's memory, which is what makes the
- * process stateful. Behind more than one instance, a message posted to A would
- * reach nobody holding a socket on B - so the push goes out over the chat bus
- * (Postgres LISTEN/NOTIFY) and every instance delivers to its own sockets.
- * There is one delivery path, not a local one and a remote one that could
- * drift: the publisher hears its own notification like everybody else.
+ * Connections live in this process's memory, so pushes go out over the chat bus
+ * (Postgres LISTEN/NOTIFY) and every instance, the publisher included, delivers
+ * to its own sockets - one delivery path.
  */
 
 /** Every live connection, by the user it was proven to belong to. */
@@ -45,12 +29,9 @@ const sockets = new Map<string, Set<WebSocket>>();
 type Authenticated = { userId: string; organizationId: string };
 
 /**
- * The same proof checkAuth demands, on the handshake.
- *
- * Deliberately duplicated rather than reusing the Express middleware: that one
- * writes to `req.user` and calls `next()`, neither of which exists here. What
- * must not diverge is the SET of checks, so they are listed in the same order
- * and each says why it is here.
+ * The checks checkAuth makes, on the handshake and in the same order. Written
+ * out again because the middleware works through req.user and next(); what must
+ * not diverge is the set of checks.
  */
 const authenticate = async (cookieHeader?: string): Promise<Authenticated | null> => {
     const accessToken = readAccessToken(cookieHeader);
@@ -103,16 +84,10 @@ const forget = (userId: string, socket: WebSocket) => {
 };
 
 /**
- * Push to specific people, by user id, on THIS instance only.
- *
- * The only way anything leaves this server over a socket. Not exported to the
- * services any more: they publish to the bus instead, and every instance -
- * including the one that published - arrives here. Routing a push straight to
- * local sockets would work perfectly on one instance and silently drop half the
- * deliveries on two.
- *
- * It has no concept of a conversation and cannot be asked for one; the member
- * ids are read from the database a moment before publishing.
+ * Push to specific people on THIS instance; only the chat bus calls it. Services
+ * publish to the bus instead, because a direct local push would silently miss
+ * every socket held by another instance. It knows nothing of conversations: the
+ * member ids are read from the database before publishing.
  */
 export const deliverLocally = (userIds: string[], payload: unknown) => {
     const body = JSON.stringify(payload);

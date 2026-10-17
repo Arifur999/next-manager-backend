@@ -21,13 +21,9 @@ router.post("/", checkAuth(), requireCompany, validateRequest(createTimeEntryZod
 router.patch("/:id", checkAuth(), requireCompany, validateRequest({ params: idParams, body: updateTimeEntryZodSchema }), TimeEntryController.updateEntry);
 router.delete("/:id", checkAuth(), requireCompany, validateRequest({ params: idParams }), TimeEntryController.deleteEntry);
 
-// Capacity is the denominator every utilization figure divides by, so changing
-// it moves every one of those numbers. That belongs with the people who own
-// the team and the reporting.
-// Who is carrying what, and what is left of them. One endpoint behind both
-// readings: Workload is the hours side, Availability is the gap side, and
-// computing them apart is how two screens end up disagreeing about one
-// person's week.
+// Capacity is the denominator of every utilization figure, so it stays with the
+// people who own the team and the reporting. Workload and Availability read one
+// endpoint, so the two screens cannot disagree about a week.
 router.get("/workload", checkAuth(Role.admin, Role.project_manager), validateRequest({ query: listQuerySchema }), TimeEntryController.getWorkload);
 router.get("/capacity", checkAuth(Role.admin, Role.project_manager), TimeEntryController.getCapacities);
 router.patch("/capacity/:userId", checkAuth(Role.admin, Role.project_manager), validateRequest({ params: userIdParams, body: setCapacityZodSchema }), TimeEntryController.setCapacity);

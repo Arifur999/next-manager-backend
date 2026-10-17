@@ -10,18 +10,10 @@ import { type ListOptions } from "../../shared/listQuery.js";
 import { endOfDay, toDateOnly } from "../../shared/dates.js";
 
 /**
- * Reporting.
- *
- * Two rules run through all of it:
- *
- *   1. USD and BDT are never added together. Income arrives in USD, costs are
- *      BDT, and combining them needs a rate - a rate baked into a headline
- *      figure is a number nobody can later explain or reproduce.
- *
- *   2. The BDT side of income uses each payment's FROZEN reporting rate, not
- *      today's. A report for last March must read the same next year as it did
- *      the day it was run; reconverting at the current rate would quietly
- *      rewrite history every time the taka moves.
+ * Reporting. USD and BDT are never added together: combining them needs a rate,
+ * and a rate baked into a headline figure cannot be explained later. The BDT
+ * side of income uses each payment's FROZEN reporting rate, so a past period
+ * reads the same whenever it is run.
  */
 
 const rangeOf = (options: ListOptions) => {
@@ -36,22 +28,11 @@ const dateWhere = (options: ListOptions, column = "date") => {
 };
 
 /**
- * Profit and loss.
- *
- * An owner withdrawal is deliberately absent from costs: it is profit already
- * earned, leaving. Counting it as an expense would understate profit by exactly
- * the amount taken. A shareholder distribution is the same thing and is absent
- * for the same reason.
- *
- * A loan is the mirror image. Borrowed money arriving is not revenue, so it is
- * absent from the income side; but the INTEREST on it is a genuine cost of
- * doing business and is counted. The principal repaid is not - that settles a
- * liability - which is why the instalment carries the two as separate columns
- * and only one of them is read here.
- *
- * Employee-type expense categories are reported separately from operating
- * expenses so they can be read alongside team payouts without being
- * double-counted with them.
+ * Profit and loss. Owner withdrawals and shareholder distributions are not
+ * costs: they are earned profit leaving. Borrowed money is not income and
+ * repaid principal is not a cost, but loan interest is - which is why an
+ * instalment stores the two apart. Employee-type expenses are reported apart,
+ * so they read beside team payouts without being counted twice.
  */
 const getProfitAndLoss = async (user: IRequestUser, options: ListOptions = {}) => {
     const scope = { organization_id: user.organizationId, deleted_at: null, ...dateWhere(options) };
@@ -67,13 +48,8 @@ const getProfitAndLoss = async (user: IRequestUser, options: ListOptions = {}) =
             select: { amount_bdt: true, category: { select: { type: true } } },
         }),
         prisma.teamPayout.aggregate({ where: scope, _sum: { amount_bdt: true } }),
-        // Borrowing costs money, and that cost is the interest only.
-        // Repaying principal settles a liability rather than spending
-        // anything, so counting a whole instalment here would understate
-        // profit by the principal every single month.
-        //
-        // Dated by when it was PAID, not by when it fell due: an instalment
-        // sitting overdue has not cost anything yet.
+        // Interest only - repaid principal settles a liability - and dated by
+        // when it was paid, since an overdue instalment has cost nothing yet.
         prisma.loanInstalment.aggregate({
             where: {
                 organization_id: user.organizationId,
@@ -119,11 +95,8 @@ const getProfitAndLoss = async (user: IRequestUser, options: ListOptions = {}) =
 };
 
 /**
- * Cash flow, read straight off the ledger.
- *
- * The ledger is the only place that already knows about every movement,
- * whatever module caused it - so this cannot fall out of step with the modules
- * the way a report that re-queried each table would.
+ * Cash flow, read straight off the ledger: the one place that sees every
+ * movement whatever caused it, so it cannot fall out of step with the modules.
  */
 const getCashFlow = async (user: IRequestUser, options: ListOptions = {}) => {
     const grouped = await prisma.accountTransaction.groupBy({
@@ -162,19 +135,11 @@ const getCashFlow = async (user: IRequestUser, options: ListOptions = {}) => {
     };
 };
 
-/** Revenue per client, highest first. */
 /**
- * Revenue per client, highest first.
- *
- * `mine` narrows it to the clients the caller brought in, which is the ONLY
- * form a salesperson may ask for. The distinction is what keeps "no income for
- * sales" honest without making the role useless: they see what the
- * relationships they own are worth, and never the agency's total.
- *
- * The filter is applied to the PAYMENTS as well as to the client list. Doing it
- * only on the list would still group every payment in the agency and then drop
- * the names, which leaks nothing on screen but computes the whole book to throw
- * most of it away - and would put somebody else's revenue under a null client.
+ * Revenue per client, highest first. `mine` narrows it to the clients the caller
+ * brought in - the only form a salesperson may ask for - and filters the
+ * payments as well as the list, so nobody else's revenue is grouped under a null
+ * client.
  */
 const getClientRevenue = async (
     user: IRequestUser,
@@ -215,12 +180,7 @@ const getClientRevenue = async (
         .sort((a, b) => b.revenue_usd - a.revenue_usd);
 };
 
-/**
- * Profitability per project.
- *
- * Four grouped queries rather than a per-project loop, so a hundred projects
- * cost the same four round-trips as two do.
- */
+/** Profitability per project, in four grouped queries however many projects there are. */
 const getProjectProfitability = async (user: IRequestUser, options: ListOptions = {}) => {
     const scope = { organization_id: user.organizationId, deleted_at: null, ...dateWhere(options) };
 
@@ -288,13 +248,7 @@ const getProjectProfitability = async (user: IRequestUser, options: ListOptions 
         .sort((a, b) => b.profit_bdt - a.profit_bdt);
 };
 
-/**
- * Monthly revenue and cost, for the P&L chart.
- *
- * Grouped in SQL rather than by pulling every row and bucketing in JavaScript -
- * an agency with a few years of history would otherwise ship thousands of rows
- * to the server just to add them up.
- */
+/** Monthly revenue and cost for the P&L chart, grouped in SQL rather than row by row in JavaScript. */
 const getMonthlySeries = async (user: IRequestUser, months = 12) => {
     const start = new Date();
     start.setUTCMonth(start.getUTCMonth() - (months - 1), 1);

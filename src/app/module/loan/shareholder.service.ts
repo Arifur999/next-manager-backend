@@ -14,13 +14,9 @@ import {
 import { toDateOnly } from "../../shared/dates.js";
 
 /**
- * The people who own the agency, and profit paid out to them.
- *
- * A distribution is NOT an expense. It is profit being handed to owners, the
- * same way an owner withdrawal is - treating it as a cost would let an agency
- * reduce its own reported profit simply by paying itself. Profit and loss reads
- * expenses and team payouts, so nothing here reaches it; the ledger and the
- * account balances see all of it, because the money genuinely leaves.
+ * The people who own the agency, and profit paid out to them. A distribution is
+ * NOT an expense - like an owner withdrawal it is profit leaving - so profit and
+ * loss never sees it, while the ledger and balances do.
  */
 
 
@@ -29,14 +25,9 @@ const SHAREHOLDER_INCLUDE = {
 };
 
 /**
- * Shares cannot add up to more than the whole business.
- *
- * Checked across ACTIVE shareholders only, and with the row being edited
- * excluded so that changing somebody from 30 to 40 is measured against the
- * others rather than against their own old figure counted twice.
- *
- * A retired shareholder is left out because their share has gone somewhere -
- * counting it would block every legitimate reassignment.
+ * Shares cannot add up to more than the whole business. Counted over ACTIVE
+ * shareholders (a retired one's share has moved on), leaving out the row being
+ * edited so its old figure is not counted twice.
  */
 const assertShareTotal = async (
     tx: Prisma.TransactionClient | typeof prisma,

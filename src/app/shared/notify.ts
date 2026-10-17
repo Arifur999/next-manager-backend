@@ -3,26 +3,17 @@ import { NotificationEvent, Role, UserStatus } from "../../generated/prisma/enum
 import { IRequestUser } from "../interfaces/requestUser.interface.js";
 
 /**
- * Telling one person something happened.
- *
- * The whole point of putting this in one place is that "who should hear about
- * this" is decided once. Scattered through the modules it becomes seven
- * slightly different answers, and the one that forgets to exclude the actor
- * sends somebody a notification about their own click.
+ * Telling one person something happened. "Who should hear about this" is
+ * decided here once, so no module forgets to leave the actor out.
  */
 
 type Tx = Prisma.TransactionClient;
 
 /**
- * How each event finds its audience.
- *
- * `directed` events go to one named person — a task assignment goes to whoever
- * it was handed to, and no arrangement of roles expresses that. `broadcast`
- * events go to whichever roles the agency chose, defaulting to the roles below.
- *
- * The distinction is in code rather than in the settings row because it is a
- * property of the event, not a preference. Offering a role picker for a
- * directed event would be a control that silently does nothing.
+ * How each event finds its audience: `directed` events go to one named person
+ * (a task's assignee), `broadcast` events to the roles the agency chose,
+ * defaulting to those below. Kept in code, because it is a property of the
+ * event; a role picker on a directed event would do nothing.
  */
 export const EVENT_CATALOGUE: Record<
     NotificationEvent,
@@ -112,14 +103,9 @@ const ruleFor = async (tx: Tx, organizationId: string, event: NotificationEvent)
 };
 
 /**
- * Write the notification rows for one thing that happened.
- *
- * Called INSIDE the transaction that did the thing, like logActivity: a
- * notification about a payment that then failed to save is worse than none.
- *
- * The actor never hears about their own action. Telling somebody what they just
- * did is noise, and noise is what teaches people to ignore the bell — which
- * then hides the one notification that mattered.
+ * Write the notification rows for one thing that happened, INSIDE the
+ * transaction that did it, like logActivity. The actor never hears about their
+ * own action: that noise is what teaches people to ignore the bell.
  */
 export const notify = async (tx: Tx, actor: IRequestUser, input: NotifyInput) => {
     const rule = await ruleFor(tx, actor.organizationId, input.event);

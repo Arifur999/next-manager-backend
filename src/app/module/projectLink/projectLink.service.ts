@@ -10,13 +10,8 @@ import {
 } from "./projectLink.validation.js";
 
 /**
- * Pointers to where a project's work actually lives.
- *
- * The scoping is the same rule projects themselves follow: operations sees only
- * the projects they are a member of, so it sees only those projects' links.
- * Written the same way ClientLink writes it, deliberately - a project and a
- * client keep their material the same way, and one pattern is one thing to get
- * right.
+ * Pointers to where a project's work lives, scoped through the projects view
+ * scope the way client links follow the clients one.
  */
 
 const SELECT = {
@@ -30,13 +25,8 @@ const SELECT = {
 } as const;
 
 /**
- * How far this person's reach goes over projects, and therefore over the links
- * hanging off them.
- *
- * Read from the permission rows now rather than from `role === operations`, and
- * read from the PROJECTS module rather than a module of its own: a link is not
- * a thing somebody is given separate access to, it is a pointer that belongs to
- * a project. Two settings for one answer would be two things to keep in step.
+ * This person's reach over projects, and so over their links: the PROJECTS
+ * scope, because a link belongs to a project and is never granted separately.
  */
 const visibilityScope = async (user: IRequestUser): Promise<Prisma.ProjectWhereInput> => {
     const scope = await resolveScope(user, "projects", "view");
@@ -62,13 +52,7 @@ const linkScope = async (user: IRequestUser): Promise<Prisma.ProjectLinkWhereInp
     return Object.keys(project).length === 0 ? {} : { project };
 };
 
-/**
- * The project, if this person may see it at all.
- *
- * A 404 rather than a 403 for a project they cannot reach, matching every other
- * scoped read here: which of a company's projects exist is not information to
- * hand out.
- */
+/** The project, if this person may see it at all: 404 otherwise, like every scoped read. */
 const assertProject = async (projectId: string, user: IRequestUser) => {
     const project = await prisma.project.findFirst({
         where: {

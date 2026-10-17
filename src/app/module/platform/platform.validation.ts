@@ -39,11 +39,8 @@ export type ICreatePlanPayload = z.infer<typeof createPlanZodSchema>;
 export type IUpdatePlanPayload = z.infer<typeof updatePlanZodSchema>;
 
 /**
- * Putting a company on a plan.
- *
- * Everything is optional except the plan, because this one endpoint covers
- * every move the platform makes: starting a trial, converting to paid,
- * extending a period, suspending, restoring.
+ * Putting a company on a plan. Everything but the plan is optional, because one
+ * endpoint covers every move: trial, paid, extension, suspension and restore.
  */
 export const setSubscriptionZodSchema = z.object({
     plan_id: z.uuid("plan_id must be a valid id"),
@@ -59,11 +56,8 @@ export const setSubscriptionZodSchema = z.object({
 export type ISetSubscriptionPayload = z.infer<typeof setSubscriptionZodSchema>;
 
 /**
- * Creating a company from the platform side.
- *
- * The self-serve route makes a company and its first admin together; so does
- * this, because a company with no way in is not a company. The difference is
- * who decides the plan and the trial length.
+ * Creating a company from the platform side: like sign-up it creates the first
+ * admin too, but the operator decides the plan and the trial length.
  */
 export const createCompanyZodSchema = z.object({
     name: z.string("Company name must be a string").min(1, "Company name is required"),
@@ -91,11 +85,8 @@ export const createCompanyZodSchema = z.object({
 export type ICreateCompanyPayload = z.infer<typeof createCompanyZodSchema>;
 
 /**
- * Setting what a platform operator may do.
- *
- * The enum is the control. `User.permissions` has accepted any string since
- * the first week, and a typo stored there is a permission that grants nothing
- * while looking configured.
+ * Setting what a platform operator may do. The enum is the control: a typo in a
+ * free-text permission would grant nothing while looking configured.
  */
 export const setPlatformPermissionsZodSchema = z.object({
     permissions: z.array(z.enum(PLATFORM_PERMISSIONS, "Unknown permission")),
@@ -104,12 +95,9 @@ export const setPlatformPermissionsZodSchema = z.object({
 export type ISetPlatformPermissionsPayload = z.infer<typeof setPlatformPermissionsZodSchema>;
 
 /**
- * Inviting a platform operator.
- *
- * The permissions they will start with are chosen here rather than defaulting
- * to everything. An empty list means full access - the hatch in
- * requirePermission - so leaving it empty is a deliberate act, not the path of
- * least resistance.
+ * Inviting a platform operator, with their starting permissions chosen here. An
+ * empty list means full access (requirePermission's hatch), so leaving it empty
+ * has to be a deliberate act.
  */
 export const createPlatformInviteZodSchema = z.object({
     email: emailField(),
@@ -131,11 +119,8 @@ export const createPlatformInviteZodSchema = z.object({
 });
 
 /**
- * Accepting one.
- *
- * No email field: it comes from the invite. Taking it from the form would let
- * whoever holds a leaked link create a platform account under any address -
- * and a platform account can suspend every customer you have.
+ * Accepting one. No email field: it comes from the invite, or a leaked link could
+ * create a platform account - able to suspend any customer - under any address.
  */
 export const acceptPlatformInviteZodSchema = z.object({
     full_name: z.string("Name must be a string").min(1, "Your name is required"),
@@ -165,12 +150,8 @@ export type ICreatePlatformExpensePayload = z.infer<typeof createPlatformExpense
 export type IUpdatePlatformExpensePayload = z.infer<typeof updatePlatformExpenseZodSchema>;
 
 /**
- * A notice to customers.
- *
- * `send_email` is part of the draft rather than the publish call on purpose:
- * the decision to mail thousands of people should be made while writing, in
- * front of the audience picker, not as an afterthought on the button that
- * cannot be undone.
+ * A notice to customers. `send_email` belongs to the draft, so mailing every
+ * customer is decided while writing, not on the button that cannot be undone.
  */
 export const createAnnouncementZodSchema = z.object({
     title: z
@@ -188,15 +169,9 @@ export type ICreateAnnouncementPayload = z.infer<typeof createAnnouncementZodSch
 export type IUpdateAnnouncementPayload = z.infer<typeof updateAnnouncementZodSchema>;
 
 /**
- * The platform's own configuration.
- *
- * SMTP is absent on purpose: mail credentials belong in the environment, where
- * they can be rotated without a database write. The screen reads their status
- * back, never their values.
- *
- * `default_plan_id` accepts null explicitly - that is "leave new sign-ups
- * unprovisioned and set them up by hand", which is a real choice and the one
- * this installation started with.
+ * The platform's own configuration. No SMTP fields: mail credentials live in the
+ * environment, where they rotate without a database write. `default_plan_id`
+ * accepts null, meaning new sign-ups wait to be provisioned by hand.
  */
 export const updatePlatformSettingsZodSchema = z.object({
     product_name: z
@@ -221,14 +196,9 @@ export const updatePlatformSettingsZodSchema = z.object({
 export type IUpdatePlatformSettingsPayload = z.infer<typeof updatePlatformSettingsZodSchema>;
 
 /**
- * Inviting an agency owner.
- *
- * No role field. The whole point of this flow is that it produces an agency
- * admin and can never be edited into producing a platform operator, so the role
- * is fixed in the service rather than accepted from the request.
- *
- * `company_name` is optional: set it when the deal was agreed with a named
- * agency, leave it out and the owner types their own on the way in.
+ * Inviting an agency owner. No role field: the flow always produces an agency
+ * admin and can never be edited into a platform operator. Without `company_name`
+ * the owner types their own on the way in.
  */
 export const createAgencyInviteZodSchema = z.object({
     email: emailField("A valid email is required"),

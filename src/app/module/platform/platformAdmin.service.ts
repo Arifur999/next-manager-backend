@@ -7,11 +7,8 @@ import { logPlatformActivity } from "../../shared/platformActivity.js";
 import { ISetPlatformPermissionsPayload } from "./platform.validation.js";
 
 /**
- * What the platform team has been doing.
- *
- * Read-only, like the company audit log and for the same reason: a history
- * somebody can edit answers no question worth asking. There is no update and
- * no delete here, not even for the operator who wrote the entry.
+ * What the platform team has been doing. Read-only, like the company audit log:
+ * a history somebody can edit answers nothing.
  */
 export const getActivity = async (
     filters: { entityType?: string; actorId?: string },
@@ -58,14 +55,9 @@ export const getAdmins = async () =>
     });
 
 /**
- * Set what one operator may do.
- *
- * An empty list means "everything", not "nothing" - that is the hatch in
- * requirePermission, and it is what keeps the first operator from locking
- * themselves out on the day this shipped. The screen has to say so, because
- * the opposite reading is the obvious one.
- *
- * Two guards, both about not stranding the platform:
+ * Set what one operator may do. An empty list means everything, not nothing
+ * (requirePermission's hatch), and the screen has to say so. The change is
+ * refused if it would leave nobody active who can manage the platform team.
  */
 export const setPermissions = async (
     id: string,

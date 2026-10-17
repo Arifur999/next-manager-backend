@@ -9,8 +9,6 @@ interface IResponseData<T> {
         limit: number;
         total: number;
         totalPages: number;
-        /** @deprecated Same value as totalPages; removed once the web app has moved over. */
-        totalPage: number;
         /**
          * Sums that belong to the whole filtered list rather than the page of
          * it that came back - the transactions ledger uses this.

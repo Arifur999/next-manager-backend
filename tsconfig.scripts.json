@@ -1,0 +1,12 @@
+{
+  // The check scripts, which tsconfig.json leaves out (it covers src only).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["scripts/**/*.ts"],
+  // Reads every response as untyped JSON (94 errors): it needs typed response
+  // helpers before it can be checked.
+  "exclude": ["scripts/tenantIsolation.ts"]
+}

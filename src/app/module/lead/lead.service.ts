@@ -9,13 +9,7 @@ import { escapeLikeTerm, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateLeadPayload, IUpdateLeadPayload } from "./lead.validation.js";
 import { assertOwnMember } from "../../shared/ownership.js";
 
-/**
- * The sales pipeline.
- *
- * Returned grouped by stage rather than as a flat list, because the screen is a
- * kanban board - handing back one array and making the browser bucket it would
- * just move the same work somewhere slower.
- */
+/** The sales pipeline, grouped by stage for the kanban board rather than bucketed in the browser. */
 
 const getPipeline = async (
     user: IRequestUser,
@@ -72,12 +66,8 @@ const getPipeline = async (
 };
 
 /**
- * A source belongs to one company.
- *
- * The foreign key proves the row exists and says nothing about who owns it, so
- * without this a lead could be tagged with another agency's marketplace - and
- * that agency's dashboard would then be grouping on a row somebody else is
- * pointing at.
+ * A source must be this company's: the foreign key only proves it exists, and a
+ * lead tagged with another agency's marketplace would skew that agency's report.
  */
 const assertSource = async (
     tx: Prisma.TransactionClient,
@@ -164,14 +154,9 @@ const updateLead = async (id: string, payload: IUpdateLeadPayload, user: IReques
 };
 
 /**
- * Turn a won lead into a client.
- *
- * Both writes happen together: a lead marked converted with no client, or a
- * client with the lead still sitting open in the pipeline, are both states
- * somebody would have to notice and fix by hand.
- *
- * The lead is kept rather than deleted - where a client came from is worth
- * being able to answer later.
+ * Turn a won lead into a client, both writes together so neither half is left
+ * for somebody to fix by hand. The lead is kept, so where a client came from
+ * stays answerable.
  */
 const convertToClient = async (id: string, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {

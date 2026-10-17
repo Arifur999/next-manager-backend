@@ -1,21 +1,10 @@
 /**
- * Every KPI, as arithmetic and nothing else.
+ * Every KPI as arithmetic and nothing else - no Prisma, no request, no clock -
+ * so this is the part with tests.
  *
- * No Prisma, no request, no dates-from-now. The service gathers the numbers;
- * this file turns them into metrics, which is why it is the part with tests.
- * A ratio computed inline inside a query handler is a ratio nobody ever checks.
- *
- * Two rules run through all of it:
- *
- *   1. **An empty denominator returns null, never zero.** "No data" and "zero
- *      percent" are different answers, and collapsing them is how a dashboard
- *      tells somebody their utilization is 0% on the day they joined. Every
- *      caller has to handle null, which is the point.
- *
- *   2. **USD and BDT are never added.** Every figure here is USD, because that
- *      is the currency the agency bills in. BDT exists only through recorded
- *      exchanges at the rate actually received, and mixing the two would
- *      produce a total that is true in no currency at all.
+ * An empty denominator returns null, never zero: "no data" and "0%" are
+ * different answers. Every figure is USD, what the agency bills in; adding BDT
+ * would give a total that is true in no currency.
  */
 
 /** A metric that could not be computed, and why - so a screen can say so. */

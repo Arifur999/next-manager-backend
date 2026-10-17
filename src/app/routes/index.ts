@@ -24,12 +24,10 @@ import { LeadSourceRoutes } from "../module/leadSource/leadSource.route.js";
 import { LeadRoutes } from "../module/lead/lead.route.js";
 import { MilestoneRoutes } from "../module/milestone/milestone.route.js";
 import { OwnerWithdrawalRoutes } from "../module/ownerWithdrawal/ownerWithdrawal.route.js";
-import {
-    NotificationRoutes,
-    PublicAgencyInviteRoutes,
-    PlatformRoutes,
-    PublicPlatformInviteRoutes,
-} from "../module/platform/platform.route.js";
+import { PlatformRoutes } from "../module/platform/platform.route.js";
+import { PublicPlatformInviteRoutes } from "../module/platform/platformInvite.route.js";
+import { PublicAgencyInviteRoutes } from "../module/platform/agencyInvite.route.js";
+import { NotificationRoutes } from "../module/platform/notificationBell.route.js";
 import { PaymentRoutes } from "../module/payment/payment.route.js";
 import { ProjectRoutes } from "../module/project/project.route.js";
 import { ProjectMemberRoutes } from "../module/projectMember/projectMember.route.js";

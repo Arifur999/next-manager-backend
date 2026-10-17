@@ -9,12 +9,8 @@ import { LOAN_INCLUDE, summarise } from "./loan.schedule.js";
 import { IPayInstalmentPayload } from "./loan.validation.js";
 
 /**
- * Pay one instalment.
- *
- * The cash that leaves the account is principal + interest, and that is the one
- * ledger row. The split stays on the instalment, which is where profit and loss
- * reads the interest from - so there is exactly one money trail and exactly one
- * place the cost of borrowing is recorded.
+ * Pay one instalment: one ledger row for the cash that leaves (principal plus
+ * interest), while the split stays on the instalment for profit and loss.
  */
 const payInstalment = async (
     instalmentId: string,

@@ -1,16 +1,9 @@
 import z from "zod";
 import { endOfDay, toDateOnly } from "./dates.js";
 
-// Shared pieces for list endpoints that page, search and date-filter on the
-// server.
-//
-// Two decisions worth knowing before using these:
-//
-//   - a search is a plain case-insensitive "contains", NOT a LIKE pattern.
-//     Typing "50%" must look for those three characters, so the wildcards are
-//     escaped. Prisma's `contains` passes the term straight into LIKE.
-//   - paging is opt-in. Asking for no limit returns everything, so an endpoint
-//     that has not been moved over to paging keeps behaving exactly as before.
+// Shared pieces for list endpoints that page, search and date-filter. A search
+// is a literal case-insensitive "contains" ("50%" means those three characters,
+// so LIKE wildcards are escaped), and paging is opt-in: no limit returns all.
 
 export interface ListOptions {
     page?: number;
@@ -125,6 +118,5 @@ export const paginationMeta = (options: ListOptions, total: number) => {
     const limit = options.limit ?? total;
     const page = options.page ?? 1;
     const totalPages = limit > 0 ? Math.ceil(total / limit) : 1;
-    // totalPage is the old name, kept until the web app reads totalPages.
-    return { page, limit, total, totalPages, totalPage: totalPages };
+    return { page, limit, total, totalPages };
 };

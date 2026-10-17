@@ -10,32 +10,15 @@ import {
 } from "./permissionCatalogue.js";
 
 /**
- * How far this person's reach goes, for one module and one action.
+ * How far this person reaches for one module and action: their own override,
+ * else their role's row, else the catalogue default (only for an agency with no
+ * rows at all). It decides neither the tenant - organization_id is always in the
+ * query, and `all` means all of YOUR agency's - nor the route, which checkAuth
+ * already gated by role.
  *
- * Resolved user override → role template → the catalogue's own default, and the
- * catalogue's default is used only if the agency has no row at all, which after
- * the backfill means an agency created by a deploy that raced the migration.
- *
- * ── What this does NOT decide ──────────────────────────────────────────────
- *
- * The tenant. `organization_id` is on every query before this is consulted and
- * no value here can remove it. `all` means all of YOUR agency's, and there is
- * no scope that means anybody else's, because that question never reaches this
- * function.
- *
- * Nor the route. `checkAuth` has already refused anybody whose ROLE does not
- * carry the endpoint; this only narrows inside that. A row saying operations
- * may view accounts does not open the accounts route to them — it would simply
- * never be asked.
- *
- * ── Why it is cached on the user object ────────────────────────────────────
- *
- * A WeakMap keyed by the request's own IRequestUser, so a request that touches
- * three modules pays for one query and a request that touches none pays for
- * nothing. It is collected with the request; there is no TTL to get wrong and
- * no invalidation to forget, which is the failure mode a shared cache would
- * add — an admin changing a permission and it taking effect in five minutes is
- * worse than not caching at all.
+ * Cached in a WeakMap keyed by the request's user: one query however many
+ * modules a request touches, and no TTL, so a changed permission applies on the
+ * very next request.
  */
 
 type ResolvedPermissions = Map<string, PermissionScope>;

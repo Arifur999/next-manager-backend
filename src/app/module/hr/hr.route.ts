@@ -15,10 +15,8 @@ const approver = [Role.admin, Role.project_manager] as const;
 
 // ---------------------------------------------------------------- attendance
 //
-// Everybody clocks themselves in, and everybody can read attendance - but the
-// service narrows operations to their own rows. Being able to read when every
-// colleague arrived is a management view, and handing it to the whole company
-// turns a working record into something people manage their behaviour around.
+// Everybody clocks themselves in and can read attendance; the service narrows
+// anyone without the "all" attendance view to their own rows.
 router.get("/attendance", checkAuth(), requireCompany, validateRequest({ query: attendanceListQueryZodSchema }), HrController.getAttendance);
 router.post("/attendance/clock", checkAuth(), requireCompany, HrController.clock);
 
@@ -49,8 +47,8 @@ router.patch(
 );
 
 router.get("/leave", checkAuth(), requireCompany, validateRequest({ query: leaveListQueryZodSchema }), HrController.getLeaveRequests);
-// Somebody else's balance is a management view: the service answers with the
-// caller's own unless their leave view scope is "all".
+// Somebody else's balance is a management view: without the "all" leave view
+// the service answers 404 for anyone but the caller.
 router.get("/leave/balance", checkAuth(), requireCompany, validateRequest({ query: leaveBalanceQueryZodSchema }), HrController.getLeaveBalance);
 router.post(
     "/leave",

@@ -9,13 +9,9 @@ import { tokenParams, idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
 
-// ---------------------------------------------------------------------------
-// Public. Signed out by definition - the person has no account yet.
-// ---------------------------------------------------------------------------
-//
-// Both are behind the strict invite-token rate limit rather than the general one: an
-// unthrottled token lookup is somewhere to guess tokens, and the response
-// tells you whether one was right.
+// Public: the person has no account yet. Both sit behind the strict
+// invite-token rate limit, because the answer tells a guesser whether a token
+// was right.
 router.get("/:token", inviteTokenRateLimit, validateRequest({ params: tokenParams }), InviteController.getInviteByToken);
 router.post(
     "/:token/accept",

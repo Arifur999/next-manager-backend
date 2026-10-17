@@ -15,16 +15,9 @@ import {
 import { sameEmail } from "../../shared/emailField.js";
 
 /**
- * Growing the platform team.
- *
- * The same shape as the operations join flow, and deliberately no looser: an
- * invite is sent, the person sets their own password, they land `pending`, and
- * an existing operator approves.
- *
- * The two-step matters more here, not less. A platform admin sees every
- * customer and can suspend any of them, so a link that leaks must not by
- * itself create somebody able to cut off a paying company. Approval is the
- * step that happens after you can see who actually turned up.
+ * Growing the platform team, in the same two steps as a team invite: the person
+ * sets their own password and lands pending until an operator approves, so a
+ * leaked link alone cannot create somebody able to suspend paying companies.
  */
 
 const DEFAULT_EXPIRY_DAYS = 7;
@@ -159,11 +152,8 @@ const revokeInvite = async (id: string, user: IRequestUser) => {
 };
 
 /**
- * What the join page may know before anybody has signed in.
- *
- * The address it was sent to, and nothing else - not who sent it, not what
- * access it carries. Somebody guessing tokens learns only whether one was
- * right, which the single refusal message below already limits.
+ * What the join page may know before sign-in: the address the invite was sent
+ * to, and nothing else - not who sent it, not what access it carries.
  */
 const getInviteByToken = async (token: string) => {
     const invite = await prisma.platformInvite.findUnique({
@@ -298,11 +288,8 @@ const approveAdmin = async (id: string, user: IRequestUser) => {
 };
 
 /**
- * Remove an operator.
- *
- * Two guards, both about not stranding the platform: nobody removes
- * themselves, and the last active operator cannot be removed at all. Either
- * would leave the console with no way in and the fix would be a database edit.
+ * Remove an operator. Nobody removes themselves and the last active operator
+ * stays, or the console would have no way in short of a database edit.
  */
 const removeAdmin = async (id: string, user: IRequestUser) => {
     if (id === user.userId) {

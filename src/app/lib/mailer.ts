@@ -4,20 +4,12 @@ import type { PlatformBrand } from "../shared/platformSettings.js";
 import { logger } from "./logger.js";
 
 /**
- * Sending mail, with an honest answer when it cannot.
+ * Sending mail, with an honest answer when it cannot. SMTP rather than one
+ * provider's SDK, so changing provider is a few lines of .env.
  *
- * SMTP rather than one provider's SDK: Resend, SendGrid, Postmark, Mailgun and
- * a plain Gmail account all speak it, so choosing a provider later is four
- * lines of .env rather than a rewrite.
- *
- * **When SMTP is not configured the mail is logged instead of sent, and the
- * caller is told which happened.** That is not a silent fallback - a password
- * reset that reports success while going nowhere is the worst outcome
- * available, because the user waits for an email that was never sent. Every
- * caller gets `{ delivered: false, reason }` and decides what to say.
- *
- * In development the logged version prints the link, so the whole flow can be
- * exercised end to end before anybody buys a mail plan.
+ * Without SMTP the mail is logged instead of sent and the caller gets
+ * `{ delivered: false, reason }`, never a false success. In development the log
+ * shows the link, so every flow works end to end without a mail plan.
  */
 
 export type MailResult =
@@ -34,12 +26,8 @@ type Mail = {
 const isConfigured = () => Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD);
 
 /**
- * Whether mail works, without going near the credentials.
- *
- * The settings screen shows this so an operator can tell that email is dead
- * before a customer tells them. Host, port and the from-address only - the
- * password is never read back out of the process that holds it, and there is
- * no version of "let me just check the password on screen" worth building.
+ * Whether mail works, for the settings screen: host, port and from-address
+ * only. The password is never read back out of the process that holds it.
  */
 export const getMailerStatus = () => ({
     configured: isConfigured(),
@@ -106,12 +94,8 @@ export const sendMail = async (mail: Mail): Promise<MailResult> => {
 };
 
 /**
- * Free text on its way into an HTML body.
- *
- * The reset mail below interpolates URLs this server built. Announcements do
- * not: their title and body are typed by a person, and typing `<` into a
- * subject line should produce a `<`, not an unclosed tag that eats the rest of
- * the message.
+ * Free text on its way into an HTML body: announcements are typed by a person,
+ * and a `<` they type must arrive as a `<`, not as a tag.
  */
 const escapeHtml = (value: string) =>
     value
@@ -121,11 +105,8 @@ const escapeHtml = (value: string) =>
         .replace(/"/g, "&quot;");
 
 /**
- * The last line of every message.
- *
- * The support address is only mentioned when there is one. "Reply to  for
- * help" is worse than saying nothing, and an address invented to fill the gap
- * is worse still - somebody writes to it and nobody ever reads it.
+ * The last line of every message. The support address appears only when one is
+ * set; an invented one would be written to and never read.
  */
 const signOff = (brand: PlatformBrand) =>
     brand.supportEmail
@@ -133,11 +114,8 @@ const signOff = (brand: PlatformBrand) =>
         : `- The ${brand.productName} team`;
 
 /**
- * The reset email.
- *
- * Kept plain on purpose: a password-reset message that looks like marketing is
- * the one people have been trained to distrust, and it is also the one most
- * likely to be filtered.
+ * The reset email, plain on purpose: a reset that looks like marketing is the
+ * one people distrust and filters catch.
  */
 export const passwordResetMail = (
     resetUrl: string,
@@ -165,15 +143,9 @@ export const passwordResetMail = (
 });
 
 /**
- * The invite to join the platform team.
- *
- * Says the link is single-use and that approval still follows, because both
- * are true and both surprise people otherwise: somebody who accepts and then
- * cannot sign in has been left to guess whether it worked.
- *
- * The address is not repeated back as "click here to create an account for
- * you@example.com" - the link is already bound to it server-side, and printing
- * it only helps whoever the mail was misdelivered to.
+ * The invite to join the platform team. Says the link is single-use and that
+ * approval follows, so nobody who accepts is left guessing. The address is not
+ * printed: the link is bound to it, and printing it only helps a wrong recipient.
  */
 export const platformInviteMail = (
     joinUrl: string,
@@ -209,12 +181,8 @@ export const platformInviteMail = (
 };
 
 /**
- * The invite that brings an agency onto the platform.
- *
- * Different from the operator invite in what it promises: this one hands
- * somebody their own workspace, so it says what they are being put on before
- * they set a password. Somebody about to create an account is entitled to know
- * whether it costs money on Tuesday.
+ * The invite that brings an agency onto the platform. It hands over a
+ * workspace, so it says which plan they are being put on before they sign up.
  */
 export const agencyInviteMail = (
     joinUrl: string,
@@ -258,15 +226,8 @@ export const agencyInviteMail = (
 };
 
 /**
- * The invite to join an agency's team.
- *
- * Names the agency, because the person receiving it works with several and
- * "you have been invited to join the team" answers none of the questions they
- * will have.
- *
- * Says approval follows, for the same reason the operator invite does:
- * somebody who accepts and then cannot sign in is left guessing whether it
- * worked.
+ * The invite to join an agency's team. Names the agency, since people work with
+ * several, and says approval follows, like the operator invite.
  */
 export const teamInviteMail = (
     joinUrl: string,
@@ -303,12 +264,9 @@ export const teamInviteMail = (
 };
 
 /**
- * A platform announcement, emailed.
- *
- * Blank lines become paragraphs and nothing else does. A notice to customers is
- * written in a textarea by somebody who wants to say a thing, not compose a
- * layout, and every formatting feature added here is one more way for the
- * message to arrive looking broken.
+ * A platform announcement, emailed. Blank lines become paragraphs and nothing
+ * else does: it is written in a textarea, and every formatting rule is one more
+ * way for it to arrive broken.
  */
 export const announcementMail = (
     title: string,

@@ -19,28 +19,13 @@ import {
 import { sameEmail } from "../../shared/emailField.js";
 
 /**
- * Bringing an agency onto the platform.
+ * Bringing an agency onto the platform: the owner follows a link and arrives
+ * owning their own workspace, then builds their own team.
  *
- * This is the whole job of the console: hand an agency owner a link, and they
- * arrive owning their own workspace. Everything after that happens inside their
- * agency - they add their own sales people, project managers and operations
- * team, and the platform never touches those accounts.
- *
- * Three deliberate differences from the two invites that already existed.
- *
- * **Nothing is created until the link is accepted.** An invite that is never
- * taken up would otherwise leave an empty agency on the customers list, in
- * every total, belonging to nobody.
- *
- * **The owner arrives active, not pending.** The other two invites land people
- * as `pending` because somebody already inside can vouch for them. Here there
- * is nobody inside - they are the first person in their own company - so a
- * pending owner would be waiting on an approver who does not exist. Sending the
- * invite is the vetting step.
- *
- * **They are never a platform operator.** The role is fixed to `admin` in code,
- * not taken from the request, so a link cannot be edited into one that hands
- * out the run of the platform.
+ * Unlike the other invites: nothing is created until the link is accepted, so
+ * no empty agency sits in the totals; the owner arrives active, because nobody
+ * inside could approve them; and the role is fixed to admin in code, so a link
+ * can never make a platform operator.
  */
 
 const DEFAULT_EXPIRY_DAYS = 14;
@@ -190,11 +175,8 @@ const revokeInvite = async (id: string, user: IRequestUser) => {
 };
 
 /**
- * What the join page may know before anybody has signed in.
- *
- * The address, the agency name if one was agreed, and what they are being put
- * on - because somebody about to create an account is entitled to know what
- * they are agreeing to. Not who invited them, and not the token.
+ * What the join page may know before sign-in: the address, any agreed agency
+ * name and the plan they are agreeing to - never who invited them or the token.
  */
 const getInviteByToken = async (token: string) => {
     const invite = await prisma.agencyInvite.findUnique({

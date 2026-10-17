@@ -13,6 +13,13 @@
 import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "../src/app/lib/prisma.js";
 
+// This suite mails @agencio.test addresses, which bounce and hurt a real
+// sending domain. It runs only with a blank or local SMTP_HOST, or ALLOW_REAL_MAIL=1.
+if (!/^(|localhost|127\.\d+\.\d+\.\d+|::1|mailpit)$/i.test(process.env.SMTP_HOST ?? "") && process.env.ALLOW_REAL_MAIL !== "1") {
+    console.log("Refusing to run: SMTP_HOST is a real mail server. Run the API and this suite with SMTP_HOST empty (mail is only logged) or a local Mailpit, or set ALLOW_REAL_MAIL=1.");
+    process.exit(1);
+}
+
 const BASE = "http://localhost:5000/api/v1";
 let failures = 0;
 

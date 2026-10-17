@@ -10,13 +10,8 @@ import {
 } from "./clientLink.validation.js";
 
 /**
- * Pointers to where a client's work actually lives.
- *
- * The scoping is the same rule clients themselves follow: operations sees only
- * the clients whose projects they are on, so it sees only those clients'
- * links. Written by reusing the client visibility check rather than
- * reimplementing it - a second copy of that rule is a second thing to get
- * wrong later.
+ * Pointers to where a client's work lives, scoped through the clients view
+ * scope, so a person sees only the links of clients they can see.
  */
 
 const SELECT = {
@@ -30,19 +25,8 @@ const SELECT = {
 } as const;
 
 /**
- * The client, if this person may see it at all.
- *
- * A 404 rather than a 403 for a client they cannot reach, matching every other
- * scoped read here: which of a company's clients exist is not information to
- * hand out.
- */
-/**
- * How far this person's reach goes over clients, and therefore over the links
- * hanging off them.
- *
- * Resolves the CLIENTS module, not one of its own: a link is a pointer that
- * belongs to a client, not a thing somebody is granted separately, and two
- * settings for one answer would be two things to keep in step.
+ * This person's reach over clients, and so over their links: the CLIENTS scope,
+ * because a link belongs to a client and is never granted separately.
  */
 const clientScope = async (user: IRequestUser): Promise<Prisma.ClientWhereInput> => {
     const scope = await resolveScope(user, "clients", "view");
@@ -63,12 +47,12 @@ const clientScope = async (user: IRequestUser): Promise<Prisma.ClientWhereInput>
 /** The same reach, expressed against the link rows themselves. */
 const linkScope = async (user: IRequestUser): Promise<Prisma.ClientLinkWhereInput> => {
     const client = await clientScope(user);
-    // An empty clause means "everything", so it must NOT be nested. Wrapping
-    // {} gives { client: {} }, which is still everything - but wrapping the
-    // "none" case the same way would match every link instead of none.
+    // The "all" scope has no clause and adds nothing; any other scope filters
+    // the link's client.
     return Object.keys(client).length === 0 ? {} : { client };
 };
 
+/** The client, if this person may see it at all: 404 otherwise, like every scoped read. */
 const assertClient = async (clientId: string, user: IRequestUser) => {
     const client = await prisma.client.findFirst({
         where: {

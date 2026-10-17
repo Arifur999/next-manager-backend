@@ -2,23 +2,11 @@ import { Prisma } from "../../generated/prisma/client.js";
 import { InvoiceStatus } from "../../generated/prisma/enums.js";
 
 /**
- * Invoice status, derived from what has actually been paid against it.
- *
- * Status is recomputed from payments rather than set by hand, because the two
- * would otherwise drift the moment somebody edits or deletes a payment: an
- * invoice marked "paid" whose only payment was since removed is a lie the books
- * would carry forever.
- *
- * Two states are deliberately NOT derived:
- *   - `draft`     - a workflow state meaning "not sent yet". A draft with a
- *                   payment against it is odd but is the user's business, and
- *                   silently promoting it would send an invoice they had not
- *                   finished writing.
- *   - `cancelled` - an explicit decision that outlives any payment history.
- *
- * `overdue` is not stored at all. It is a function of today's date, so a stored
- * value would be wrong every morning until something happened to rewrite it -
- * see isOverdue() below, which the read paths apply instead.
+ * Invoice status, derived from what has been paid rather than set by hand, so a
+ * deleted payment cannot leave an invoice marked paid. Not derived: `draft` (not
+ * sent yet; a payment must not send it) and `cancelled` (a decision that
+ * outlives payments). `overdue` is never stored, since it depends on today:
+ * the read paths apply isOverdue() instead.
  */
 
 const PRESERVED: InvoiceStatus[] = [InvoiceStatus.draft, InvoiceStatus.cancelled];

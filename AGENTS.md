@@ -10,12 +10,13 @@ npm run dev                  # tsx watch, http://localhost:5000 (PORT in .env)
 npm test                     # unit tests: tsx --test "src/**/*.test.ts", no database needed
 npx tsx --test src/app/shared/listQuery.test.ts   # one file
 npx tsc --noEmit && npm run lint && npm test      # must pass before you say "done"
+npm run typecheck:scripts    # tsc over scripts/ (tenantIsolation.ts excluded until its responses are typed)
 npm run generate             # Prisma client into src/generated (git-ignored), after any schema change
 npm run migrate -- --name <name>   # new migration (prisma migrate dev), additive only
 npm run migrate:apply        # apply pending migrations without the Prisma schema engine
 ```
 
-DB-backed checks need the API running on port 5000 (`npm run dev` in another shell); they create their own throwaway companies: `npm run smoke`, `test:isolation`, `test:scope`, `test:api-matrix`, `test:leaks`, `test:ledger`, `test:reset`, `test:chat-bus` (starts a second instance on 5099), `ledger:drift` (read-only report). Run `smoke` plus the `test:*` script for the area you touched.
+DB-backed checks need the API running on port 5000 (`npm run dev` in another shell); they create their own throwaway companies: `npm run smoke`, `test:isolation`, `test:scope`, `test:api-matrix`, `test:leaks`, `test:ledger`, `test:reset`, `test:chat-bus` (starts a second instance on 5099), `ledger:drift` (read-only report). Run `smoke` plus the `test:*` script for the area you touched. `smoke` and `test:reset` send mail to addresses that bounce, so they refuse to start unless `SMTP_HOST` is blank (mail is only logged) or local such as Mailpit, for the API and the script alike; `ALLOW_REAL_MAIL=1` overrides.
 
 Env: copy `.env.example` to `.env`. `src/config/env.ts` validates it with zod at boot and exits on the first bad value. In production it also requires: both token secrets at least 32 characters and different, `FRONTEND_URL` set, `VAULT_ENCRYPTION_KEY` as 64 hex characters, `SUPER_ADMIN_PASSWORD` at least 12 characters. Unit tests that load env import `src/app/testing/testEnv.ts` first. If `prisma` cannot run its schema engine, point `PRISMA_SCHEMA_ENGINE_BINARY` at a working one or use `migrate:apply`.
 
@@ -36,7 +37,7 @@ Node 24 (Docker image), Express 5, TypeScript ESM (`.js` in import paths), Prism
 - Success: `{ success, message, data, meta? }`. Decimals become numbers and UTC-midnight dates become `YYYY-MM-DD` in `sendResponse`.
 - Error: `{ success: false, message, errorSource: [{ path, message }], requestId }`, always from `globalErrorHandler` (validation, 404 route, 429 included). `stack`/`error` only in development; unexpected 500s say "Internal Server Error" in production.
 - Every response has an `x-request-id` header; the error body's `requestId` matches it.
-- Lists: no `limit` returns everything (unpaged); `limit` is capped at 200. `meta` carries `page, limit, total, totalPages` and the deprecated `totalPage` (same value) until the web app stops reading it. Build pages with `findPage` from `shared/listQuery.ts`.
+- Lists: no `limit` returns everything (unpaged); `limit` is capped at 200. `meta` carries `page, limit, total, totalPages`. Build pages with `findPage` from `shared/listQuery.ts`.
 - Invalid enum or id filters are 400; empty filter values are ignored. A malformed `:id` is 400, a foreign or missing row is 404.
 - `GET /api/v1/public/plans` is unauthenticated: active plans only, a fixed field whitelist (`publicPlan.mapper.ts`), `Cache-Control: public, max-age=300`, 60 requests a minute per IP in production.
 
@@ -64,7 +65,7 @@ Node 24 (Docker image), Express 5, TypeScript ESM (`.js` in import paths), Prism
 
 - The web app reads `success`, `message`, `data`, `meta` (`next-manager/src/lib/actionError.ts`, `src/types/api.types.ts`) through `src/services/*.ts`. Any change to a response shape is paired with a change there in the same session.
 - `ACCESS_TOKEN_SECRET` must equal the web app's `JWT_ACCESS_SECRET`: `next-manager/src/proxy.ts` verifies access tokens itself.
-- `scripts/api-matrix.expected.txt` pins every route's role gate; `npm run test:api-matrix` fails when it drifts.
+- `scripts/api-matrix.expected.txt` pins which company roles each listed GET endpoint answers (reads only: writes and platform routes are not swept); `npm run test:api-matrix` fails when it drifts.
 
 ## Do
 
@@ -81,6 +82,7 @@ Node 24 (Docker image), Express 5, TypeScript ESM (`.js` in import paths), Prism
 ## Open follow-ups
 
 - Emails are compared case-insensitively in code; a unique index on `lower(email)` waits on a duplicate check of existing data.
-- Drop `totalPage` once next-manager reads only `totalPages`.
 - Refresh tokens are not rotated or revoked server-side on logout.
 - The chat NOTIFY payload carries the recipient list; conversations above about 200 members exceed Postgres' 8000-byte limit and lose live updates.
+- Some list services still `include` whole relations; moving them to `select` needs a check that every key the web reads survives.
+- `GET /services` is unpaged and sends no `meta`, so the web's sales dashboard counts its rows (`next-manager/src/components/modules/Dashboard/SalesOverview.tsx`).

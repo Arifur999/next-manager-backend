@@ -12,15 +12,9 @@ import {
 import { endOfDay, toDateOnly } from "../../shared/dates.js";
 
 /**
- * AGENCIO's own books.
- *
- * Nothing here reads a customer's money. Revenue is what the subscriptions
- * say, cost is what this platform spends, and the boundary asserted in the
- * smoke suite - no company balance, no company payment - holds unchanged.
- *
- * Everything is USD, because subscription prices are, and a net figure is
- * meaningless when the two sides are in different currencies. The company
- * books make the same call in the other direction and compute margin in BDT.
+ * AGENCIO's own books: revenue is what the subscriptions say and cost is what the
+ * platform spends; no customer's money is read. All USD, because subscription
+ * prices are, and a net across two currencies means nothing.
  */
 
 const num = (value: Prisma.Decimal | null | undefined) => value?.toNumber() ?? 0;
@@ -164,15 +158,9 @@ const deleteExpense = async (id: string, user: IRequestUser) => {
 // ---------------------------------------------------------------------------
 
 /**
- * Revenue, cost and what is left.
- *
- * `past_due` counts toward revenue: the money is owed, and writing it off the
- * day a card fails hides the thing worth chasing. `trialing` counts as zero,
- * because it is.
- *
- * The expense window defaults to the current month, so "net" compares a
- * monthly recurring figure against a month of costs rather than against
- * everything ever spent.
+ * Revenue, cost and what is left. past_due counts as revenue (it is owed) and
+ * trialing as zero. Expenses default to the current month, so net compares a
+ * monthly recurring figure with a month of costs.
  */
 const getReport = async (options: { from?: string; to?: string } = {}) => {
     const now = new Date();
@@ -262,16 +250,9 @@ const getReport = async (options: { from?: string; to?: string } = {}) => {
 // ---------------------------------------------------------------------------
 
 /**
- * Write down what today looks like.
- *
- * The only way an MRR trend can exist. Subscriptions carry no history, so
- * nothing here can be reconstructed backwards: deriving a line from
- * `created_at` and today's plan price would draw a curve that never dips,
- * because it cannot see anybody who cancelled or downgraded. A chart that
- * cannot go down is not a chart of a business.
- *
- * Upserted on the date, so a cron that fires twice corrects the day rather
- * than doubling it - and a manual run to fill a missed night is safe.
+ * Record today's figures: the only way an MRR trend can exist, since
+ * subscriptions keep no history and a curve rebuilt from today's prices could
+ * never dip. Upserted on the date, so a second run corrects the day.
  */
 const takeSnapshot = async (when: Date = new Date()) => {
     const date = new Date(Date.UTC(when.getUTCFullYear(), when.getUTCMonth(), when.getUTCDate()));
@@ -305,15 +286,9 @@ const takeSnapshot = async (when: Date = new Date()) => {
 };
 
 /**
- * The trend, and the two things drawn from data that does exist.
- *
- * `mrr` starts on the day snapshots began and is empty before that. Said
- * plainly in `snapshots_since` so the screen can explain an empty chart rather
- * than looking broken.
- *
- * `signups` and `revenue_by_plan` need no history: one is counted from
- * `Organization.created_at`, the other is today's split. Both are real from
- * the first render.
+ * The trend. `mrr` starts when snapshots began, and `snapshots_since` says when
+ * so the screen can explain an empty chart; `signups` and `revenue_by_plan`
+ * need no history.
  */
 const getTrend = async (days = 90) => {
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);

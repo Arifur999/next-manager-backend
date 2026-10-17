@@ -146,16 +146,10 @@ export const deliveryScope = async (user: IRequestUser, range: Range) => {
         baseline_hours: num(project.baseline_hours),
     }));
 
-    // Hours and cost per department, over the window.
-    //
-    // Grouped through the person rather than stored on the row: a department
-    // is a fact about somebody, and it moves when they move. Grouping in two
-    // steps because neither timeEntry nor teamPayout can group by a field on
-    // a relation.
-    //
-    // People with no department get a row of their own rather than being
-    // dropped. Silently omitting them would make the departments add up to
-    // less than the agency and give no clue why.
+    // Hours and cost per department over the window, grouped through the
+    // person (a department moves with somebody) in two steps, since neither
+    // table can group by a relation's field. People with no department get a
+    // row of their own, so the departments still add up to the agency.
     const [departments, hoursByUser, payoutsByUser] = await Promise.all([
         prisma.department.findMany({
             where: { organization_id: user.organizationId },

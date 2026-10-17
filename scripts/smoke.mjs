@@ -2,6 +2,13 @@
 // Walks the money path that matters: signup -> accounts -> client -> payment
 // (USD in) -> exchange (USD out, BDT in) -> balances -> dashboard.
 
+// This suite mails @agencio.test addresses, which bounce and hurt a real
+// sending domain. It runs only with a blank or local SMTP_HOST, or ALLOW_REAL_MAIL=1.
+if (!/^(|localhost|127\.\d+\.\d+\.\d+|::1|mailpit)$/i.test(process.env.SMTP_HOST ?? "") && process.env.ALLOW_REAL_MAIL !== "1") {
+  console.log("Refusing to run: SMTP_HOST is a real mail server. Run the API and this suite with SMTP_HOST empty (mail is only logged) or a local Mailpit, or set ALLOW_REAL_MAIL=1.");
+  process.exit(1);
+}
+
 const BASE = "http://localhost:5000/api/v1";
 let cookie = "";
 let failures = 0;
@@ -1677,7 +1684,8 @@ if (!superEmail || !superPassword) {
   check(
     "including whether email works at all",
     typeof r.json.data?.smtp?.configured === "boolean",
-    JSON.stringify(r.json.data?.smtp)
+    // The type only: the host, port and sender are not for the logs.
+    `configured is ${typeof r.json.data?.smtp?.configured}`
   );
   check(
     "without ever reading the password back",

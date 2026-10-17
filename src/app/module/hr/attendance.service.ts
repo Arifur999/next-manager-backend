@@ -8,16 +8,9 @@ import { IRecordAttendancePayload } from "./hr.validation.js";
 import { toDateOnly } from "../../shared/dates.js";
 
 /**
- * Who was here, and when.
- *
- * Deliberately not TimeEntry. Hours against a task and being present are
- * different facts: somebody can be in all day and log nothing, and somebody can
- * log four hours on a day they never came in. Reporting either as the other
- * makes both unusable.
- *
- * One row per person per day. A second check-in is a correction to the first,
- * not another day - which is why the write is an upsert against a unique key
- * rather than an insert somebody has to remember not to repeat.
+ * Who was here, and when - deliberately not TimeEntry, because being present and
+ * logging hours are different facts. One row per person per day, written as an
+ * upsert, so a second check-in corrects the day rather than adding one.
  */
 
 const SELECT = {
@@ -38,11 +31,8 @@ const today = () => {
 };
 
 /**
- * Everyone's attendance, or one person's.
- *
- * Operations sees only their own. Being able to read when every colleague
- * arrived is a management view, and handing it to everybody turns a working
- * record into something people manage their behaviour around.
+ * Everyone's attendance, or one person's. When every colleague arrived is a
+ * management view: without the "all" attendance view, only one's own rows.
  */
 const getAll = async (
     user: IRequestUser,
@@ -73,11 +63,8 @@ const getAll = async (
 };
 
 /**
- * Clocking in, or out.
- *
- * The same endpoint does both: the second call of the day sets the check-out,
- * because "am I starting or finishing" is answerable from what is already
- * stored and asking the caller to say invites the two to disagree.
+ * Clocking in, or out: the second call of the day sets the check-out, decided
+ * from what is stored rather than from the caller.
  */
 const clock = async (user: IRequestUser) => {
     const date = today();
@@ -115,11 +102,8 @@ const clock = async (user: IRequestUser) => {
 };
 
 /**
- * Recording somebody else's day.
- *
- * Marked `admin` rather than `self`, because "they clocked in" and "somebody
- * wrote it down for them" are different claims and only one of them is the
- * person's own. Keeping them apart is the whole reason the column exists.
+ * Recording somebody else's day, marked `admin` rather than `self`: "they clocked
+ * in" and "somebody wrote it down for them" are different claims.
  */
 const record = async (payload: IRecordAttendancePayload, user: IRequestUser) => {
     const member = await prisma.user.findFirst({

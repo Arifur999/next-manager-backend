@@ -112,5 +112,35 @@ for (const [label, res] of [
     }
 }
 
+// Operations delivers the work and never sees what it is worth. Checked on
+// every read that returns a whole project row, with admin as the control.
+const MONEY = ['"contract_value_usd"', '"baseline_value_usd"'];
+const project = JSON.parse(
+    (await call("POST", "/projects", { client_id: client.id, name: "Priced", code: `PR-${stamp}`, contract_value_usd: 1000 }, cookie)).text
+).data;
+const opsEmail = `leakops${stamp}@agencio.test`;
+const ops = JSON.parse(
+    (await call("POST", "/users", { full_name: "Leak Ops", email: opsEmail, password: "Passw0rd123", role: "operations" }, cookie)).text
+).data;
+await call("POST", "/project-members", { project_id: project.id, user_id: ops.id }, cookie);
+const opsCookie = (await call("POST", "/auth/login", { email: opsEmail, password: "Passw0rd123" })).cookie;
+
+const adminDetail = await call("GET", `/projects/${project.id}`, undefined, cookie);
+if (!adminDetail.text.includes('"contract_value_usd"')) {
+    bad += 1;
+    console.log("  FAIL  admin lost the contract value, so the operations check below proves nothing");
+}
+
+for (const path of ["/projects", "/projects?mine=true", `/projects/${project.id}`, `/clients/${client.id}`]) {
+    const res = await call("GET", path, undefined, opsCookie);
+    const hits = MONEY.filter((field) => res.text.includes(field));
+    if (res.status !== 200 || hits.length > 0) {
+        bad += 1;
+        console.log(`  LEAK  operations ${path} (${res.status}) ${hits.join(" ")}`);
+    } else {
+        console.log(`  clean operations ${path}`);
+    }
+}
+
 console.log(`\n${bad === 0 ? "NOTHING LEAKED" : `${bad} LEAK(S)`}`);
 process.exitCode = bad === 0 ? 0 : 1;

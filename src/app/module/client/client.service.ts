@@ -9,6 +9,7 @@ import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, findPage, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateClientPayload, IUpdateClientPayload } from "./client.validation.js";
 import { assertOwnMember } from "../../shared/ownership.js";
+import { projectMoneyOmit } from "../../shared/projectMoney.js";
 
 /**
  * Clients the caller may see, from the clients view scope. By default
@@ -85,6 +86,7 @@ const getSingleClient = async (id: string, user: IRequestUser) => {
             projects: {
                 where: { deleted_at: null },
                 orderBy: { created_at: "desc" },
+                omit: projectMoneyOmit(user),
                 // Status is a ROW now, not an enum column, so a bare include
                 // returns status_id and nothing a screen can print. The client
                 // page renders status.name, and without this it renders it on

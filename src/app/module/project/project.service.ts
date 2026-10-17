@@ -15,6 +15,7 @@ import {
     IUpdateProjectPayload,
 } from "./project.validation.js";
 import { toDateOnly } from "../../shared/dates.js";
+import { projectMoneyOmit } from "../../shared/projectMoney.js";
 import { assertOwnClient, assertOwnService, assertOwnStatus } from "../../shared/ownership.js";
 
 /**
@@ -89,7 +90,7 @@ const getAllProjects = async (
 
     const { rows, total } = await findPage(
         options,
-        (page) => prisma.project.findMany({ where, include, orderBy: { created_at: "desc" }, ...page }),
+        (page) => prisma.project.findMany({ where, include, omit: projectMoneyOmit(user), orderBy: { created_at: "desc" }, ...page }),
         () => prisma.project.count({ where })
     );
 
@@ -107,6 +108,7 @@ const getSingleProject = async (id: string, user: IRequestUser) => {
             deleted_at: null,
             ...(await visibilityScope(user)),
         },
+        omit: projectMoneyOmit(user),
         include: {
             status: { select: { id: true, name: true, category: true, sort_order: true } },
             client: { select: { id: true, name: true, company: true, email: true } },

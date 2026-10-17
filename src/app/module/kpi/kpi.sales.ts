@@ -7,23 +7,13 @@ import { attainment, averageDealSize, pipelineCoverage, pipelineVelocity, salesC
 import { dateColumn, num, loadTargets, targetOf } from "./kpi.loaders.js";
 
 /**
- * Selling: is enough work coming in, and how fast.
- *
- * Won and lost are counted from stage events rather than from the Lead's
- * current stage, so a deal won inside the window counts for the window even if
- * it has since been reopened or archived.
+ * Selling: is enough work coming in, and how fast. Won and lost come from stage
+ * events, so a deal won in the window counts for it even if reopened since.
  */
 /**
- * The sales numbers.
- *
- * `mine` narrows every one of them to the deals this person owns. It is not a
- * filter over a total that was computed anyway — each query carries the owner,
- * so a salesperson's win rate is theirs and not the agency's with their name on
- * it.
- *
- * Targets follow the same line: a personal view is measured against personal
- * targets, because holding one person to the whole agency's number would
- * report "off track" at somebody doing fine.
+ * The sales numbers. `mine` puts the owner into every query rather than
+ * filtering the agency's totals, and a personal view is scored against personal
+ * targets, not the agency's.
  */
 export const salesScope = async (user: IRequestUser, range: Range, mine = false) => {
     const targets = await loadTargets(user.organizationId, range, mine ? user.userId : null);
@@ -115,17 +105,9 @@ export const salesScope = async (user: IRequestUser, range: Range, mine = false)
     }
 
     /**
-     * Where the work came from.
-     *
-     * Grouped over every lead the company has, not the window: a marketplace's
-     * win rate over one month is three deals, which is noise. The question
-     * "which platform is actually paying" is answered by the whole history, so
-     * that is what this counts.
-     *
-     * Leads with no source are folded into one "not recorded" row rather than
-     * dropped. Hiding them would make the percentages add to 100 while being
-     * computed from a subset, which is exactly the kind of tidy report that
-     * misleads.
+     * Where the work came from, over every lead rather than the window: one
+     * month of a marketplace is noise. Leads with no source form a "not
+     * recorded" row, so the shares are not taken from a hidden subset.
      */
     const sourceGroups = await prisma.lead.groupBy({
         by: ["source_id", "stage"],

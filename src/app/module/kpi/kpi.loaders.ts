@@ -5,19 +5,12 @@ import { loadCapacityRows } from "../../shared/capacity.js";
 import { type Range } from "./kpi.range.js";
 
 /**
- * Gathering the numbers the formulas turn into metrics.
+ * Gathering the numbers kpi.formulas.ts turns into metrics. No arithmetic here,
+ * so every division stays in the tested file.
  *
- * Everything arithmetic lives in kpi.formulas.ts and is unit-tested. This file
- * only queries and hands over, which is why it has no ratios in it - a division
- * written here would be a division nobody checks.
- *
- * The one rule that shapes every query below: **USD and BDT are never added.**
- * Revenue exists in both (a payment records the USD received and the BDT it was
- * worth at the frozen reporting rate); costs - expenses and team payouts - are
- * BDT only. So margin is computed in BDT, because that is the one currency in
- * which both sides of the subtraction exist. Utilization and realization are
- * computed in USD, because that is what the agency bills in. Neither figure
- * quietly borrows a number from the other currency.
+ * USD and BDT are never added: margin is in BDT, the one currency both revenue
+ * (at its frozen reporting rate) and costs exist in; utilization and
+ * realization are in USD, what the agency bills in.
  */
 
 export const dateColumn = (range: Range) => ({ gte: range.from, lte: range.to });
@@ -25,12 +18,8 @@ export const dateColumn = (range: Range) => ({ gte: range.from, lte: range.to })
 export const num = (value: Prisma.Decimal | null | undefined): number => value?.toNumber() ?? 0;
 
 /**
- * Targets that cover this range, indexed by metric.
- *
- * A target's period_start has to fall inside the window being asked about. A
- * quarterly target scored against one week of it would report 8% attainment
- * and look like a catastrophe, so the caller decides the range and the target
- * has to belong to it.
+ * Targets for this range, by metric. A target's period_start must fall inside
+ * the window, or a quarterly target scored against one week would read as 8%.
  */
 export const loadTargets = async (
     organizationId: string,
@@ -69,11 +58,8 @@ export const targetOf = (targets: Map<KpiMetric, number>, metric: KpiMetric): nu
 // ---------------------------------------------------------------------------
 
 /**
- * Logged hours over a range, split billable / total.
- *
- * `approvedOnly` is the difference between "what the team says it did" and
- * "what somebody signed off". Realization uses approved hours, because
- * unapproved time has not been agreed to be worth anything yet.
+ * Logged hours over a range, billable and total. `approvedOnly` counts only
+ * signed-off time, which is what realization is measured on.
  */
 export const loadHours = async (
     organizationId: string,
@@ -104,11 +90,8 @@ export const loadHours = async (
 };
 
 /**
- * Capacity across the people being measured.
- *
- * Resolved through the shared helper so this and the capacity screen cannot
- * give different answers - they did, briefly, and a company saw a full team on
- * one screen and a null utilization on the other.
+ * Capacity across the people measured, through the shared helper so this and
+ * the capacity screen always give the same answer.
  */
 export const loadCapacity = async (organizationId: string, userId?: string) => {
     const rows = await loadCapacityRows(organizationId, userId);

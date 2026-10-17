@@ -6,11 +6,8 @@ import { attainment, availableHours, onTimeDelivery, utilization } from "./kpi.f
 import { loadTargets, targetOf, loadHours, loadCapacity } from "./kpi.loaders.js";
 
 /**
- * One person's own numbers.
- *
- * Deliberately narrow. Operations should see what they did and what they owe,
- * not the agency's margin - a number they cannot act on and were not given the
- * context to read.
+ * One person's own numbers: what they did and what they owe, not the agency's
+ * margin, which they can neither act on nor read in context.
  */
 export const meScope = async (user: IRequestUser, range: Range) => {
     const targets = await loadTargets(user.organizationId, range, user.userId);

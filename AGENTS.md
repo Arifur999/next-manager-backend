@@ -39,18 +39,21 @@ Node 24 (Docker image), Express 5, TypeScript ESM (`.js` in import paths), Prism
 - Every response has an `x-request-id` header; the error body's `requestId` matches it.
 - Lists: no `limit` returns everything (unpaged); `limit` is capped at 200. `meta` carries `page, limit, total, totalPages`. Build pages with `findPage` from `shared/listQuery.ts`.
 - Invalid enum or id filters are 400; empty filter values are ignored. A malformed `:id` is 400, a foreign or missing row is 404.
-- `GET /api/v1/public/plans` is unauthenticated: active plans only, a fixed field whitelist (`publicPlan.mapper.ts`), `Cache-Control: public, max-age=300`, 60 requests a minute per IP in production.
+- `GET /api/v1/public/plans` is unauthenticated: plans that are `is_active` AND `is_public` (by `sort_order`), a fixed field whitelist (`publicPlan.mapper.ts`), `Cache-Control: public, max-age=300`, 60 requests a minute per IP in production.
 
 ## Invariants
 
 - Tenant key is `organization_id`. Every query has it in `where`; a foreign row answers 404, never 403. Why: which records exist elsewhere is not the caller's to learn.
 - Ids in a payload are re-checked for ownership on create AND update with `shared/ownership.ts` (`assertOwnProject`, `assertOwnClient`, `assertOwnMember`, `assertOwnService`, `assertOwnStatus`). Why: a foreign key only proves the row exists; workflow statuses from another company were accepted until this was enforced.
-- A write route that maps to a square on the permission grid carries `requireScope(module, action)`, and its service applies the matching visibility scope (`resolveScope`). `permissionCatalogue.test.ts` scans the route files for unknown squares.
+- Every square on the permission grid is either read (`requireScope(module, action)` on the route, or `resolveScope` in the service, which then applies the matching visibility scope) or listed in `UNENFORCED_SQUARES` (admin-only deletes and team management, moot by design). `permissionCatalogue.test.ts` fails on an enforced square nothing reads, an unenforced one something reads, or an unknown square. Why: the audit found 26 of 50 squares were pickers that did nothing.
+- A visibility scope goes in `AND: [scope]` whenever a filter can touch the same column; a spread filter replaces it. Why: `?assignee_id=` and `?user_id=` let operations read anybody's tasks and hours.
+- Operations never receives what a project is worth: every read returning whole project rows passes `omit: projectMoneyOmit(user)` (`shared/projectMoney.ts`), so `contract_value_usd` and `baseline_value_usd` are not even selected for them.
 - Money: balances are derived from ledger rows only (`writeLedgerEntry`). Edits and deletes call `reverseLedgerEntries`, which nets earlier adjustments per account. Why: reversing the original amount twice skewed balances.
 - Check-then-write guards (seats, last admin, balance, payroll payout, instalment pay) run inside one transaction with `lockRow` or a conditional `updateMany` claim. No network calls inside a transaction.
 - Validation: `validateRequest(schema)` for the body, or `{ body, params, query }`. Params use `requestSchemas.ts`; controllers read typed query values with `queryOf(req, schema)` and the user with `requireUser(req)`.
-- Logging through `lib/logger.ts` only (`no-console` is a lint error). Never log tokens, cookies, passwords, bodies or query strings; log errors as fields, not raw `pg` objects. 5xx are always logged.
-- Cron jobs live in `jobs/scheduler.ts` and start from `server.ts`, so importing `app.ts` has no side effects.
+- Logging through `lib/logger.ts` only (`no-console` is a lint error). Never log tokens, cookies, passwords, bodies or query strings; log errors as fields, not raw `pg` objects. 5xx are always logged. Request paths go through `loggablePath`, which drops the query string and replaces link-token segments (invite and reset links carry the token in the path).
+- `notify()` writes bell rows inside the caller's transaction and returns the mail its rule asks for (`email: true`, active recipients, never the actor); the caller sends it with `sendNotificationMail` after the transaction commits. Email is off by default per rule.
+- Cron jobs live in `jobs/scheduler.ts` and start from `server.ts`, so importing `app.ts` has no side effects. All UTC: 00:30 rate sync, 01:15 overdue invoices (sent or partly paid, due yesterday, claimed once through `invoices.overdue_notified_at`), 01:30 subscription expiry, 01:45 platform snapshot, 02:15 login-event prune.
 - The chat socket handshake must never reject unhandled: it catches bad cookies and DB errors and refuses with 401/403. Origins outside the CORS allowlist are refused.
 - Migrations are additive. Why: a rollback restores code, not schema. The container runs `scripts/migrate.mjs` before the server starts.
 
@@ -65,6 +68,7 @@ Node 24 (Docker image), Express 5, TypeScript ESM (`.js` in import paths), Prism
 
 - The web app reads `success`, `message`, `data`, `meta` (`next-manager/src/lib/actionError.ts`, `src/types/api.types.ts`) through `src/services/*.ts`. Any change to a response shape is paired with a change there in the same session.
 - `ACCESS_TOKEN_SECRET` must equal the web app's `JWT_ACCESS_SECRET`: `next-manager/src/proxy.ts` verifies access tokens itself.
+- Endpoints and params the web reads beyond plain CRUD: `GET /permissions` returns `catalogue.squares: [{ module, action, enforced }]` (lock the `enforced: false` ones); `GET /tasks?unassigned=true` and `?status=<column name>` (case-insensitive); `GET /auth/reset-password/:token` answers `data: { valid: boolean }` only; `GET /platform/companies` takes opt-in `page`/`limit` (sends `meta`) and `status=<subscription status>|none`; plans carry `is_public`; `POST /hr/leave/:id/decide` takes an optional `note`, returned to the requester as `decision_note` with `decided_at`; operations' project rows have no `contract_value_usd` or `baseline_value_usd`.
 - `scripts/api-matrix.expected.txt` pins which company roles each listed GET endpoint answers (reads only: writes and platform routes are not swept); `npm run test:api-matrix` fails when it drifts.
 
 ## Do
@@ -85,4 +89,6 @@ Node 24 (Docker image), Express 5, TypeScript ESM (`.js` in import paths), Prism
 - Refresh tokens are not rotated or revoked server-side on logout.
 - The chat NOTIFY payload carries the recipient list; conversations above about 200 members exceed Postgres' 8000-byte limit and lose live updates.
 - Some list services still `include` whole relations; moving them to `select` needs a check that every key the web reads survives.
+- `GET /clients/:id` lists every project of the client, not only the ones the caller's projects scope reaches (money is omitted for operations, names are not).
+- Notifications are created only when a task is created with an assignee, not when it is reassigned.
 - `GET /services` is unpaged and sends no `meta`, so the web's sales dashboard counts its rows (`next-manager/src/components/modules/Dashboard/SalesOverview.tsx`).

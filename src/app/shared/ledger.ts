@@ -9,17 +9,10 @@ import { openPositions } from "./ledgerMath.js";
 type Tx = Prisma.TransactionClient;
 
 /**
- * The single way money is recorded against an account.
- *
- * Nothing anywhere increments a stored balance. Every movement writes one
- * AccountTransaction row with a SIGNED amount - positive in, negative out - and
- * a balance is opening_balance + SUM(amount). A stored balance drifts the first
- * time a multi-step write half-fails; a ledger cannot, and it can always
- * explain where a figure came from.
- *
- * Every helper here takes a transaction client, because a ledger row that is
- * not written in the same transaction as the record that caused it is exactly
- * the drift this design exists to prevent.
+ * The single way money is recorded against an account. Nothing increments a
+ * stored balance: every movement writes one AccountTransaction with a SIGNED
+ * amount, and a balance is opening_balance + SUM(amount), which cannot drift.
+ * Every helper takes the transaction of the record that caused the movement.
  */
 
 export interface LedgerEntryInput {
@@ -33,12 +26,8 @@ export interface LedgerEntryInput {
 }
 
 /**
- * Confirms the account belongs to the caller's agency AND holds the currency
- * the caller thinks it does.
- *
- * The currency check is the one that matters in practice: recording a BDT
- * expense against a USD PayPal account is an easy mistake to make from the UI,
- * and without this it would silently corrupt both balances at once.
+ * Confirms the account is the caller's agency's AND holds the expected
+ * currency: a BDT expense recorded against a USD account would corrupt both.
  */
 export const assertAccount = async (
     tx: Tx,
@@ -181,11 +170,8 @@ export const getAccountBalances = async (user: IRequestUser): Promise<AccountBal
 };
 
 /**
- * Totals per currency, for the dashboard's "Account Balances" tile.
- *
- * Deliberately NOT summed into one number: USD and BDT are different things,
- * and adding them would require a rate that would then be silently baked into
- * a headline figure. The UI shows both.
+ * Totals per currency for the dashboard's balances tile, never summed into one
+ * number, which would bake a rate into a headline figure.
  */
 export const getBalanceByCurrency = async (user: IRequestUser): Promise<Record<Currency, number>> => {
     const balances = await getAccountBalances(user);

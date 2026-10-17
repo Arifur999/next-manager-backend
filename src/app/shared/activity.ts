@@ -2,19 +2,10 @@ import { Prisma } from "../../generated/prisma/client.js";
 import { IRequestUser } from "../interfaces/requestUser.interface.js";
 
 /**
- * The dashboard's activity feed.
- *
- * `summary` is written at the time of the action and never recomputed, so the
- * feed still reads correctly after the thing it describes has been renamed or
- * deleted. That is the whole reason it is a stored sentence rather than a join.
- *
- * Two rules for callers:
- *
- *   1. Write it in the SAME transaction as the thing it describes. An entry for
- *      a payment that then failed to save is worse than no entry.
- *   2. Never put a figure in the summary that the row itself does not carry —
- *      the feed is a record of what happened, not a second place for money to
- *      be stated and drift.
+ * The dashboard's activity feed. `summary` is a sentence frozen at the time of
+ * the action, so the feed reads correctly after renames and deletes. Write it in
+ * the SAME transaction as the thing it describes, and never put a figure in it
+ * that the row itself does not carry.
  */
 
 type Tx = Prisma.TransactionClient;
@@ -40,11 +31,8 @@ export const logActivity = async (tx: Tx, entry: ActivityInput, user: IRequestUs
 };
 
 /**
- * Money amounts inside a summary sentence.
- *
- * Deliberately plain rather than Intl-formatted: this string is frozen into the
- * row, and a locale-dependent format would mean two entries written on
- * different machines read differently forever.
+ * Money inside a summary sentence, plain rather than Intl-formatted: the string
+ * is frozen into the row and must not depend on the writing machine's locale.
  */
 export const money = (amount: number | Prisma.Decimal, currency: "USD" | "BDT") => {
     const value = typeof amount === "number" ? amount : amount.toNumber();

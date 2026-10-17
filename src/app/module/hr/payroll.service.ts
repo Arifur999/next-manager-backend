@@ -21,17 +21,10 @@ import {
 import { toDateOnly } from "../../shared/dates.js";
 
 /**
- * A month's salaries.
- *
- * The rule the whole module is built around: **payroll does not record money of
- * its own.** Completing a run creates one TeamPayout per line, through the same
- * ledger path a payout entered by hand takes. Salary is therefore recorded in
- * exactly one place, and every profitability figure in the product - all of
- * which read TeamPayout - picks it up without knowing payroll exists.
- *
- * A second money trail would have been easier to write and impossible to
- * reconcile: the same salary would sit in two tables, and the first time
- * somebody corrected one the books would disagree with themselves forever.
+ * A month's salaries. Payroll records no money of its own: completing a run
+ * creates one TeamPayout per line through the same ledger path as a payout
+ * entered by hand, so salary lives in one place and every profitability figure
+ * picks it up. A second money trail could never be reconciled.
  */
 
 
@@ -66,11 +59,8 @@ const getRuns = async (user: IRequestUser) =>
     });
 
 /**
- * Opening a month.
- *
- * Starts with a line per active member at zero rather than an empty run:
- * payroll is a list somebody adjusts, not one they assemble from nothing, and
- * a missing person is the mistake this makes hardest to make.
+ * Opening a month, with a line per active member at zero rather than an empty
+ * run, so leaving somebody out is the hard mistake to make.
  */
 const createRun = async (payload: ICreatePayrollRunPayload, user: IRequestUser) => {
     const periodStart = toDateOnly(payload.period_start);
@@ -135,11 +125,8 @@ const createRun = async (payload: ICreatePayrollRunPayload, user: IRequestUser) 
 };
 
 /**
- * Setting the numbers.
- *
- * Only while the run is a draft. Editing a completed one would leave the
- * payouts it produced saying something different from the payroll that produced
- * them, and the ledger is the half that people are paid from.
+ * Setting the numbers, only while the run is a draft: a completed run's payouts
+ * are what people were paid, and must keep matching it.
  */
 const setItems = async (id: string, payload: ISetPayrollItemsPayload, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
@@ -194,15 +181,8 @@ const setItems = async (id: string, payload: ISetPayrollItemsPayload, user: IReq
 };
 
 /**
- * Paying it.
- *
- * One TeamPayout per line with a net above zero, each writing its own ledger
- * entry - the same path teamPayout.service takes, so the money exists in one
- * shape only.
- *
- * Lines at zero are skipped rather than producing a payout of nothing. Somebody
- * who joined mid-month and is not being paid yet is a real line; a zero payout
- * against them is not a real payment.
+ * Paying it: one TeamPayout, with its own ledger entry, per line with a net above
+ * zero. A zero line is a real line but not a real payment, so it is skipped.
  */
 const complete = async (id: string, payload: ICompletePayrollPayload, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
@@ -311,11 +291,8 @@ const complete = async (id: string, payload: ICompletePayrollPayload, user: IReq
 };
 
 /**
- * Removing a run.
- *
- * Only a draft. A completed run has produced payouts and moved the ledger, and
- * deleting it would leave the money with nothing explaining it - the payouts
- * themselves are what would have to be reversed, on the screen that owns them.
+ * Removing a run, only a draft: a completed one moved the ledger, and its
+ * payouts are what would have to be reversed, on their own screen.
  */
 const removeRun = async (id: string, user: IRequestUser) => {
     const run = await prisma.payrollRun.findFirst({

@@ -6,12 +6,11 @@ import { validateRequest } from "../../middleware/validateRequest.js";
 import { AgencyInviteRoutes } from "./agencyInvite.route.js";
 import { AnnouncementController } from "./announcement.controller.js";
 import { PlatformController } from "./platform.controller.js";
-import { PlatformFinanceController } from "./platformFinance.controller.js";
+import { PlatformFinanceRoutes } from "./platformFinance.route.js";
 import { PlatformInviteRoutes } from "./platformInvite.route.js";
 import { PlatformSettingsController } from "./platformSettings.controller.js";
-import { createAnnouncementZodSchema, createCompanyZodSchema, createPlatformExpenseZodSchema, createPlanZodSchema, setPlatformPermissionsZodSchema, setSubscriptionZodSchema, updateAnnouncementZodSchema, updatePlanZodSchema, updatePlatformSettingsZodSchema, updatePlatformExpenseZodSchema, companyListQueryZodSchema, platformActivityQueryZodSchema, platformTrendQueryZodSchema } from "./platform.validation.js";
+import { createAnnouncementZodSchema, createCompanyZodSchema, createPlanZodSchema, setPlatformPermissionsZodSchema, setSubscriptionZodSchema, updateAnnouncementZodSchema, updatePlanZodSchema, updatePlatformSettingsZodSchema, companyListQueryZodSchema, platformActivityQueryZodSchema } from "./platform.validation.js";
 import { idParams, organizationIdParams } from "../../shared/requestSchemas.js";
-import { listQuerySchema } from "../../shared/listQuery.js";
 
 const router = Router();
 
@@ -109,51 +108,7 @@ router.patch(
 
 router.use(PlatformInviteRoutes);
 
-// AGENCIO's own books. Reading the numbers and recording what is spent are
-// separate permissions: somebody can be shown how the business is doing
-// without being able to change what it says.
-router.get(
-    "/finance",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.finance.view"),
-    validateRequest({ query: listQuerySchema }),
-    PlatformFinanceController.getReport
-);
-router.get(
-    "/trend",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.companies.view"),
-    validateRequest({ query: platformTrendQueryZodSchema }),
-    PlatformFinanceController.getTrend
-);
-router.get(
-    "/expenses",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.finance.view", "platform.expenses.manage"),
-    validateRequest({ query: listQuerySchema }),
-    PlatformFinanceController.getExpenses
-);
-router.post(
-    "/expenses",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.expenses.manage"),
-    validateRequest(createPlatformExpenseZodSchema),
-    PlatformFinanceController.createExpense
-);
-router.patch(
-    "/expenses/:id",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.expenses.manage"),
-    validateRequest({ params: idParams, body: updatePlatformExpenseZodSchema }),
-    PlatformFinanceController.updateExpense
-);
-router.delete(
-    "/expenses/:id",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.expenses.manage"),
-    validateRequest({ params: idParams }),
-    PlatformFinanceController.deleteExpense
-);
+router.use(PlatformFinanceRoutes);
 
 // ---------------------------------------------------------------------------
 // Announcements

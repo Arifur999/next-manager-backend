@@ -15,7 +15,7 @@ import {
     IUpdateProjectPayload,
 } from "./project.validation.js";
 import { toDateOnly } from "../../shared/dates.js";
-import { assertOwnService, assertOwnStatus } from "../../shared/ownership.js";
+import { assertOwnClient, assertOwnService, assertOwnStatus } from "../../shared/ownership.js";
 
 /**
  * Projects the caller may see.
@@ -142,17 +142,9 @@ const getSingleProject = async (id: string, user: IRequestUser) => {
 };
 
 const createProject = async (payload: ICreateProjectPayload, user: IRequestUser) => {
-    const client = await prisma.client.findFirst({
-        where: { id: payload.client_id, organization_id: user.organizationId, deleted_at: null },
-        select: { id: true },
-    });
-
-    if (!client) {
-        throw new AppError(status.NOT_FOUND, "Client not found");
-    }
-
     // The project count and the insert share one transaction, under a lock.
     return prisma.$transaction(async (tx) => {
+        await assertOwnClient(tx, payload.client_id, user.organizationId);
         await assertProjectAvailable(tx, user.organizationId);
 
         const duplicate = await tx.project.findFirst({
@@ -218,14 +210,7 @@ const updateProject = async (id: string, payload: IUpdateProjectPayload, user: I
         throw new AppError(status.NOT_FOUND, "Project not found");
     }
 
-    if (payload.client_id) {
-        const client = await prisma.client.findFirst({
-            where: { id: payload.client_id, organization_id: user.organizationId, deleted_at: null },
-            select: { id: true },
-        });
-        if (!client) throw new AppError(status.NOT_FOUND, "Client not found");
-    }
-
+    await assertOwnClient(prisma, payload.client_id, user.organizationId);
     await assertOwnService(prisma, payload.service_id, user.organizationId);
 
     if (payload.status_id) {

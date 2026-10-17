@@ -282,6 +282,9 @@ model PlatformSetting {
   /// take a deliberate edit here rather than a delete somewhere else.
   default_plan Plan? @relation(fields: [default_plan_id], references: [id], onDelete: Restrict)
 
+  /// The FK, created by the platform_settings migration. Declared so a new
+  /// migration does not try to drop it.
+  @@index([default_plan_id])
   @@map("platform_settings")
 }
 

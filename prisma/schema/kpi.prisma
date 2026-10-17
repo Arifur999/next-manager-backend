@@ -42,7 +42,9 @@ model KpiTarget {
   /// Postgres treats NULLs as distinct, so this constraint does NOT stop two
   /// agency-wide targets for the same metric and period. The service checks
   /// for that case explicitly - do not rely on the database for it.
-  @@unique([organization_id, user_id, metric, period, period_start])
+  /// Named as Postgres stored it: the generated name is 64 characters and was
+  /// cut to 63, so without the map every new migration tried to rename it.
+  @@unique([organization_id, user_id, metric, period, period_start], map: "kpi_targets_organization_id_user_id_metric_period_period_sta_ke")
   @@index([organization_id, metric, period_start])
   @@index([user_id])
   @@map("kpi_targets")

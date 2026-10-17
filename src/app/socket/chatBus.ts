@@ -4,28 +4,15 @@ import { logger } from "../lib/logger.js";
 import { prisma } from "../lib/prisma.js";
 
 /**
- * How one instance tells the others that something happened.
+ * How one instance tells the others that something happened, so a message
+ * posted to instance A still reaches a socket held on instance B.
  *
- * The chat socket keeps its connections in memory, which makes the process
- * stateful: a message posted to instance A reaches nobody holding a socket on
- * instance B. Nothing is lost — messages are persisted over HTTP and the thread
- * is fetched when a page opens — but the live update silently stops working the
- * moment a second instance exists, which is the worst kind of scaling bug
- * because everything looks fine on one.
+ * Postgres LISTEN/NOTIFY rather than Redis: the database is already there. ONE
+ * dedicated connection, not the Prisma pool: a LISTEN belongs to a session, and
+ * a pooled connection can change hands and silently drop it.
  *
- * Postgres LISTEN/NOTIFY carries the hint between instances. Deliberately not
- * Redis: the database is already there, already has credentials, already has a
- * backup story, and adding a second piece of infrastructure to move one string
- * between processes is a cost this does not need to pay.
- *
- * ONE dedicated connection, not the Prisma pool. A LISTEN belongs to a session
- * and a pooled connection can be handed to somebody else between statements —
- * the listen would be silently dropped and nothing would ever arrive again.
- *
- * The payload is a HINT, never the message. Two reasons, and either alone would
- * decide it: a NOTIFY payload is capped at 8000 bytes while a message body may
- * be 4000 characters, and the browser already refetches rather than trusting
- * what a socket hands it — which is what makes a dropped connection harmless.
+ * The payload is a HINT, never the message: NOTIFY caps payloads at 8000 bytes
+ * while a body may be 4000 characters, and the browser refetches anyway.
  */
 
 const CHANNEL = "chat_events";
@@ -112,17 +99,10 @@ export const startChatBus = (onEvent: Handler) => {
 };
 
 /**
- * Tell every instance, including this one.
- *
- * Published through the Prisma pool rather than the listening connection, which
- * is busy being a listener. Postgres delivers a notification to every session
- * listening on the channel — the publisher's own listener included, since it is
- * a different session — so there is ONE delivery path rather than a local one
- * and a remote one that could drift apart.
- *
- * Failing to publish must never fail the request that caused it: the message is
- * already stored, and the worst case is that somebody's page updates when they
- * next open it instead of a second sooner.
+ * Tell every instance, this one included: published through the Prisma pool,
+ * Postgres delivers to the publisher's own listener too, so there is one
+ * delivery path. A failed publish never fails the request - the message is
+ * stored, and the page catches up when it is next opened.
  */
 export const publishChatEvent = async (
     event: ChatEvent,

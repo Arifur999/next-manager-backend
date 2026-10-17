@@ -7,24 +7,12 @@ import { IRequestUser } from "../interfaces/requestUser.interface.js";
 import { prisma } from "../lib/prisma.js";
 
 /**
- * Is this company still allowed in.
+ * May this company still write? Called at the end of checkAuth.
  *
- * Called from the end of checkAuth, which is the only place req.user exists
- * early enough to be useful. See enforceSubscription below for why it is not
- * an Express middleware.
- *
- * Two deliberate holes, each one a lockout waiting to happen if it were closed:
- *
- *   1. **super_admin passes.** They belong to no company, so there is nothing
- *      to check - and they are the person who fixes a suspended company.
- *   2. **Reads pass.** A company whose subscription lapsed can still look at
- *      its own books; what it loses is the ability to write. Locking somebody
- *      out of their own financial records over a card that expired is not a
- *      billing policy, it is holding data hostage. This is also what lets a
- *      suspended company open the screen explaining why it is suspended.
- *
- * `past_due` gets in. It exists precisely to be the grace window between the
- * period ending and access actually stopping.
+ * Deliberately open in three places, each a lockout if closed: super_admin
+ * belongs to no company and is the one who fixes a suspended one; reads always
+ * pass, so a lapsed company keeps its own books and can see why it is
+ * suspended; past_due gets in, because it is the grace window.
  */
 
 const ALLOWED: SubscriptionStatus[] = [
@@ -41,12 +29,9 @@ const REASONS: Record<string, string> = {
 };
 
 /**
- * Called at the end of checkAuth, once req.user exists.
- *
- * Not an Express middleware, because it cannot be mounted as one: checkAuth
- * runs inside each route definition, so anything wrapped around a sub-router
- * would run before it and have no user to check. Throwing from here lets
- * checkAuth's own catch pass it to the error handler.
+ * Not an Express middleware: checkAuth runs inside each route definition, so
+ * anything mounted around a router would run before req.user exists. Throwing
+ * lets checkAuth's own catch hand the error on.
  */
 export const enforceSubscription = async (req: Request): Promise<void> => {
     const user = req.user as IRequestUser | undefined;
@@ -66,10 +51,8 @@ export const enforceSubscription = async (req: Request): Promise<void> => {
         select: { status: true },
     });
 
-    // No subscription row at all means a company the platform has not set up
-    // yet. Allowed through rather than blocked: the failure mode of guessing
-    // wrong here is locking a paying customer out over a missing row, and the
-    // platform console is where that gets noticed instead.
+    // No row yet means a company the platform has not set up. Let through:
+    // guessing wrong would lock a paying customer out, and the console shows it.
     if (!subscription) return;
 
     if (!ALLOWED.includes(subscription.status)) {

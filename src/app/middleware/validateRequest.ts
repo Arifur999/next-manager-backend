@@ -61,16 +61,10 @@ export const validateRequest = (schemas: z.ZodType | RequestSchemas) =>
     };
 
 /**
- * The same validation, with the schema chosen by who is asking.
- *
- * Exists because what a person may CHANGE is not always what their role may
- * REACH. Operations can open their own task and must not be able to move its
- * due date, and that is a field-level rule - a route-level gate cannot express
- * it, and burying it in the service means the refusal arrives without naming
- * the field.
- *
- * Safe only after checkAuth, which is what puts req.user there. Without a user
- * it refuses rather than guessing a schema.
+ * The same validation, with the schema chosen by the caller's role, for
+ * field-level rules a route gate cannot express (operations may move their own
+ * task's status but not its due date), refused at the edge by field name.
+ * Only after checkAuth; without a user it refuses rather than guessing.
  */
 export const validateRequestBy = (pick: (role: Role) => z.ZodType) =>
     (req: Request, _res: Response, next: NextFunction) => {

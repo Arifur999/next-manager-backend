@@ -14,8 +14,8 @@ import { jwtUtils } from "../utils/jwt.js";
  *   checkAuth()                              any signed-in user
  *   checkAuth(Role.admin, Role.sales)        role allow-list
  *
- * Nothing downstream may widen what this allows - requirePermission only ever
- * narrows within the role decided here.
+ * Nothing downstream may widen what this allows - requireScope and
+ * requirePermission only ever narrow within the role decided here.
  */
 export const checkAuth = (...authRoles: Role[]) => async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -98,15 +98,9 @@ export const checkAuth = (...authRoles: Role[]) => async (req: Request, res: Res
             permissions: user.permissions ?? [],
         };
 
-        // Subscription is checked here rather than mounted alongside the
-        // routes, and the reason is ordering: checkAuth runs INSIDE each route
-        // definition, so any middleware mounted around a sub-router runs
-        // before it and would have no req.user to work with. Calling it as the
-        // last step of the gate gives every protected route the check for free
-        // and makes it impossible to add a route that forgets it.
-        //
-        // The logic itself stays in its own module, where its exemptions are
-        // written down and can be read without wading through auth.
+        // The last step of the gate rather than separate middleware: checkAuth
+        // runs inside each route, so every protected route gets the check and
+        // none can forget it.
         await enforceSubscription(req);
 
         next();

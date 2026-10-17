@@ -1,18 +1,15 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
-import { parseListOptions } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { LeadService } from "./lead.service.js";
 import { requireUser } from "../../shared/requireUser.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
+import { leadListQueryZodSchema } from "./lead.validation.js";
 
 const getPipeline = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const options = parseListOptions(query);
-    const result = await LeadService.getPipeline(requireUser(req), options, {
-        mine: query.mine === "true",
-    });
+    const { mine, ...options } = queryOf(req, leadListQueryZodSchema);
+    const result = await LeadService.getPipeline(requireUser(req), options, { mine });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

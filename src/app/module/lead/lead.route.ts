@@ -4,7 +4,7 @@ import { checkAuth } from "../../middleware/checkAuth.js";
 import { requireScope } from "../../middleware/requireScope.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { LeadController } from "./lead.controller.js";
-import { createLeadZodSchema, updateLeadZodSchema } from "./lead.validation.js";
+import { createLeadZodSchema, leadListQueryZodSchema, updateLeadZodSchema } from "./lead.validation.js";
 import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
@@ -12,7 +12,7 @@ const router = Router();
 // The pipeline is sales' own screen. Admin sees it too because pipeline
 // coverage is a company-health number, but delivery and operations have no
 // reason to see deals that may never happen.
-router.get("/", checkAuth(Role.admin, Role.sales), LeadController.getPipeline);
+router.get("/", checkAuth(Role.admin, Role.sales), validateRequest({ query: leadListQueryZodSchema }), LeadController.getPipeline);
 router.post("/", checkAuth(Role.admin, Role.sales), requireScope("leads", "create"), validateRequest(createLeadZodSchema), LeadController.createLead);
 
 // Dragging a card between columns is a PATCH of `stage`, so the board needs no

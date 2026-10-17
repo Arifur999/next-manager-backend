@@ -933,11 +933,14 @@ if (!superEmail || !superPassword) {
   // Squeeze the company onto a one-seat plan and confirm the next invite is
   // refused with the plan named — a limit with an anonymous message leaves the
   // reader nowhere to go.
+  // is_public: false on every plan this suite creates, so a run does not
+  // advertise test plans on the homepage.
   r = await call("POST", "/platform/plans", {
     code: `tiny${stamp}`,
     name: "Tiny",
     max_seats: 1,
     max_projects: 1,
+    is_public: false,
   });
   const tinyPlanId = r.json.data?.id;
   check("a plan can be created", r.status === 201, `${r.status} ${r.json.message}`);
@@ -1083,6 +1086,7 @@ if (!superEmail || !superPassword) {
     code: `hatch${stamp}`,
     name: "Hatch",
     max_seats: 3,
+    is_public: false,
   });
   check("and can still write", r.status === 201, `${r.status} ${r.json.message}`);
 
@@ -2302,7 +2306,7 @@ if (superEmail && superPassword) {
   cookie = "";
   await call("POST", "/auth/login", { email: superEmail, password: superPassword });
   const gateCompany = (await call("GET", "/platform/companies")).json.data?.find((row) => row.id === gateMe?.organization_id);
-  r = await call("POST", "/platform/plans", { code: `lastseat${stamp}`, name: "Last Seat", max_seats: gateSeatsUsed + 1 });
+  r = await call("POST", "/platform/plans", { code: `lastseat${stamp}`, name: "Last Seat", max_seats: gateSeatsUsed + 1, is_public: false });
   const lastSeatPlanId = r.json.data?.id;
   await call("PATCH", `/platform/companies/${gateMe?.organization_id}/subscription`, { plan_id: lastSeatPlanId, status: "active" });
 

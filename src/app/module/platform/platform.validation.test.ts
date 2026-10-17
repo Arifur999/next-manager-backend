@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { platformActivityQueryZodSchema, platformTrendQueryZodSchema } from "./platform.validation.js";
+import {
+    createPlanZodSchema,
+    platformActivityQueryZodSchema,
+    platformTrendQueryZodSchema,
+    updatePlanZodSchema,
+} from "./platform.validation.js";
 
 describe("platformTrendQueryZodSchema", () => {
     it("defaults to the last 90 days", () => {
@@ -37,5 +42,28 @@ describe("platformActivityQueryZodSchema", () => {
 
     it("refuses a malformed actor_id", () => {
         assert.equal(platformActivityQueryZodSchema.safeParse({ actor_id: "nobody" }).success, false);
+    });
+});
+
+describe("plan schemas", () => {
+    const plan = { code: "growth", name: "Growth" };
+
+    it("accept is_public, sort_order and features on create", () => {
+        const parsed = createPlanZodSchema.parse({ ...plan, is_public: false, sort_order: 2, features: ["Invoices"] });
+        assert.equal(parsed.is_public, false);
+        assert.equal(parsed.sort_order, 2);
+        assert.deepEqual(parsed.features, ["Invoices"]);
+    });
+
+    it("leave is_public out when it is not sent, so the column default shows the plan", () => {
+        assert.equal(createPlanZodSchema.parse(plan).is_public, undefined);
+    });
+
+    it("accept is_public alone on update", () => {
+        assert.deepEqual(updatePlanZodSchema.parse({ is_public: true }), { is_public: true });
+    });
+
+    it("refuse an is_public that is not a boolean", () => {
+        assert.equal(updatePlanZodSchema.safeParse({ is_public: "yes" }).success, false);
     });
 });

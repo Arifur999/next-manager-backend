@@ -1,5 +1,11 @@
 import { Prisma } from "../../../generated/prisma/client.js";
 
+/**
+ * The plans the pricing page shows: on sale AND marked public. A test or
+ * bespoke plan can be active for the company on it without being advertised.
+ */
+export const PUBLIC_PLAN_WHERE = { is_active: true, is_public: true } satisfies Prisma.PlanWhereInput;
+
 /** The plan columns the public endpoint reads. Nothing else is selected. */
 export const PUBLIC_PLAN_SELECT = {
     id: true,

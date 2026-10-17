@@ -15,6 +15,7 @@ export const PLAN_FIELDS = {
     max_projects: true,
     features: true,
     is_active: true,
+    is_public: true,
     sort_order: true,
 } as const;
 
@@ -46,6 +47,7 @@ export const createPlan = async (payload: ICreatePlanPayload, user: IRequestUser
                 max_projects: payload.max_projects ?? null,
                 features: payload.features ?? [],
                 is_active: payload.is_active ?? true,
+                is_public: payload.is_public ?? true,
                 sort_order: payload.sort_order ?? 0,
             },
             select: PLAN_FIELDS,
@@ -69,7 +71,7 @@ export const createPlan = async (payload: ICreatePlanPayload, user: IRequestUser
 export const updatePlan = async (id: string, payload: IUpdatePlanPayload, user: IRequestUser) => {
     const existing = await prisma.plan.findUnique({
         where: { id },
-        select: { id: true, name: true, price_usd: true, max_seats: true },
+        select: { id: true, name: true, price_usd: true, max_seats: true, is_public: true },
     });
 
     if (!existing) {
@@ -96,6 +98,10 @@ export const updatePlan = async (id: string, payload: IUpdatePlanPayload, user: 
 
         if (existing.name !== plan.name) {
             changes.push(`renamed from ${existing.name}`);
+        }
+
+        if (existing.is_public !== plan.is_public) {
+            changes.push(plan.is_public ? "shown on the pricing page" : "hidden from the pricing page");
         }
 
         await logPlatformActivity(

@@ -32,6 +32,9 @@ model Plan {
   /// with pricing decisions, and each change should not need a migration.
   features    String[] @default([])
   is_active   Boolean  @default(true)
+  /// Shown on the public pricing page. Apart from is_active: a test or
+  /// bespoke plan can be sold to one company without being advertised.
+  is_public   Boolean  @default(true)
   sort_order  Int      @default(0)
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt

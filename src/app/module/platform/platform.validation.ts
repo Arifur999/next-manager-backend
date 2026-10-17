@@ -29,6 +29,8 @@ export const createPlanZodSchema = z.object({
         .nullable(),
     features: z.array(z.string("Each feature must be a string")).optional(),
     is_active: z.boolean("is_active must be a boolean").optional(),
+    // On the public pricing page. Absent on create means shown, like before.
+    is_public: z.boolean("is_public must be a boolean").optional(),
     sort_order: z.number("Sort order must be a number").int().optional(),
 });
 

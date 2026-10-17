@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Prisma } from "../../../generated/prisma/client.js";
-import { PublicPlanRow, toPublicPlan } from "./publicPlan.mapper.js";
+import { PUBLIC_PLAN_SELECT, PUBLIC_PLAN_WHERE, PublicPlanRow, toPublicPlan } from "./publicPlan.mapper.js";
 
 const row = (overrides: Partial<PublicPlanRow> = {}): PublicPlanRow => ({
     id: "plan-1",
@@ -63,5 +63,16 @@ describe("toPublicPlan", () => {
         const plan = toPublicPlan(source, signup);
         plan.features.push("Extra");
         assert.deepEqual(source.features, ["Time tracking", "Invoices"]);
+    });
+});
+
+describe("the public plan query", () => {
+    it("lists only plans that are both on sale and public", () => {
+        assert.deepEqual(PUBLIC_PLAN_WHERE, { is_active: true, is_public: true });
+    });
+
+    it("never selects the visibility flags themselves", () => {
+        assert.equal("is_public" in PUBLIC_PLAN_SELECT, false);
+        assert.equal("is_active" in PUBLIC_PLAN_SELECT, false);
     });
 });

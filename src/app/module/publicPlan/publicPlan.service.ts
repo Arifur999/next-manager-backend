@@ -1,12 +1,12 @@
 import { prisma } from "../../lib/prisma.js";
 import { getPlatformSettings } from "../../shared/platformSettings.js";
-import { PUBLIC_PLAN_SELECT, PublicPlan, toPublicPlan } from "./publicPlan.mapper.js";
+import { PUBLIC_PLAN_SELECT, PUBLIC_PLAN_WHERE, PublicPlan, toPublicPlan } from "./publicPlan.mapper.js";
 
-/** Plans on sale, in the order the platform team arranged them. */
+/** Plans on sale and public, in the order the platform team arranged them. */
 const getActivePlans = async (): Promise<PublicPlan[]> => {
     const [plans, settings] = await Promise.all([
         prisma.plan.findMany({
-            where: { is_active: true },
+            where: PUBLIC_PLAN_WHERE,
             select: PUBLIC_PLAN_SELECT,
             orderBy: [{ sort_order: "asc" }, { price_usd: "asc" }],
         }),

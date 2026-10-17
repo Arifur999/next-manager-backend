@@ -1,25 +1,19 @@
 import { Request, Response } from "express";
 import status from "http-status";
-import { LoanStatus } from "../../../generated/prisma/enums.js";
 import catchAsync from "../../shared/catchAsync.js";
-import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
+import { paginationMeta } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { LoanService } from "./loan.service.js";
 import { ShareholderService } from "./shareholder.service.js";
-import { idOf, paramsOf, instalmentIdParams } from "../../shared/requestSchemas.js";
+import { idOf, paramsOf, instalmentIdParams, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
+import { distributionListQueryZodSchema, loanListQueryZodSchema } from "./loan.validation.js";
 
 // ---------------------------------------------------------------- loans
 
 const getAllLoans = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const options = parseListOptions(query);
-    const { rows, total } = await LoanService.getAll(requireUser(req), options, {
-        status:
-            typeof query.status === "string" && query.status in LoanStatus
-                ? (query.status as LoanStatus)
-                : undefined,
-    });
+    const { status: loanStatus, ...options } = queryOf(req, loanListQueryZodSchema);
+    const { rows, total } = await LoanService.getAll(requireUser(req), options, { status: loanStatus });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -174,13 +168,8 @@ const deleteShareholder = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getDistributions = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const options = parseListOptions(query);
-    const { rows, total } = await ShareholderService.getDistributions(
-        requireUser(req),
-        typeof query.shareholder_id === "string" ? query.shareholder_id : undefined,
-        options
-    );
+    const { shareholder_id, ...options } = queryOf(req, distributionListQueryZodSchema);
+    const { rows, total } = await ShareholderService.getDistributions(requireUser(req), shareholder_id, options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

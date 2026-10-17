@@ -1,5 +1,6 @@
 import z from "zod";
 import { LeadStage } from "../../../generated/prisma/enums.js";
+import { listQuerySchema, queryFlag } from "../../shared/listQuery.js";
 
 export const createLeadZodSchema = z.object({
     name: z.string("Name must be string").min(1, "Name is required"),
@@ -23,3 +24,7 @@ export const updateLeadZodSchema = createLeadZodSchema.partial();
 
 export type ICreateLeadPayload = z.infer<typeof createLeadZodSchema>;
 export type IUpdateLeadPayload = z.infer<typeof updateLeadZodSchema>;
+
+export const leadListQueryZodSchema = listQuerySchema.extend({
+    mine: queryFlag,
+});

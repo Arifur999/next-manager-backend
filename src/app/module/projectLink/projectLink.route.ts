@@ -6,6 +6,7 @@ import { validateRequest } from "../../middleware/validateRequest.js";
 import { ProjectLinkController } from "./projectLink.controller.js";
 import {
     createProjectLinkZodSchema,
+    projectLinkListQueryZodSchema,
     updateProjectLinkZodSchema,
 } from "./projectLink.validation.js";
 import { idParams } from "../../shared/requestSchemas.js";
@@ -15,7 +16,7 @@ const router = Router();
 // Readable by everyone signed in - operations needs to open the Figma file it
 // is working from. The service scopes it to the projects they are actually on,
 // so "everyone" means everyone's own projects.
-router.get("/", checkAuth(), requireCompany, ProjectLinkController.getAll);
+router.get("/", checkAuth(), requireCompany, validateRequest({ query: projectLinkListQueryZodSchema }), ProjectLinkController.getAll);
 
 // Whoever runs the project curates its material. Sales is not on this list:
 // they watch a project, they do not set it up - the same line every other write

@@ -5,6 +5,7 @@ import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { PermissionController } from "./permission.controller.js";
 import {
+    permissionGridQueryZodSchema,
     setRolePermissionZodSchema,
     setUserPermissionZodSchema,
     userPermissionParams,
@@ -18,7 +19,7 @@ const router = Router();
 // permission system must never allow.
 const admin = [checkAuth(Role.admin), requireCompany] as const;
 
-router.get("/", ...admin, PermissionController.getGrid);
+router.get("/", ...admin, validateRequest({ query: permissionGridQueryZodSchema }), PermissionController.getGrid);
 
 router.patch(
     "/roles",

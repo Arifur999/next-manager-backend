@@ -3,16 +3,13 @@ import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { PermissionService } from "./permission.service.js";
-import { paramsOf, userIdParams } from "../../shared/requestSchemas.js";
+import { paramsOf, queryOf, userIdParams } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
-import { userPermissionParams } from "./permission.validation.js";
+import { permissionGridQueryZodSchema, userPermissionParams } from "./permission.validation.js";
 
 const getGrid = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const result = await PermissionService.getGrid(
-        requireUser(req),
-        typeof query.user_id === "string" ? query.user_id : undefined
-    );
+    const { user_id } = queryOf(req, permissionGridQueryZodSchema);
+    const result = await PermissionService.getGrid(requireUser(req), user_id);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

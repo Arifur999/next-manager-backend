@@ -3,16 +3,13 @@ import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { PlatformFinanceService } from "./platformFinance.service.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
-
-const range = (query: Record<string, unknown>) => ({
-    from: typeof query.from === "string" ? query.from : undefined,
-    to: typeof query.to === "string" ? query.to : undefined,
-});
+import { listQuerySchema } from "../../shared/listQuery.js";
+import { platformTrendQueryZodSchema } from "./platform.validation.js";
 
 const getReport = catchAsync(async (req: Request, res: Response) => {
-    const result = await PlatformFinanceService.getReport(range(req.query as Record<string, unknown>));
+    const result = await PlatformFinanceService.getReport(queryOf(req, listQuerySchema));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -22,9 +19,7 @@ const getReport = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getExpenses = catchAsync(async (req: Request, res: Response) => {
-    const result = await PlatformFinanceService.getExpenses(
-        range(req.query as Record<string, unknown>)
-    );
+    const result = await PlatformFinanceService.getExpenses(queryOf(req, listQuerySchema));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -71,10 +66,8 @@ const deleteExpense = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getTrend = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const result = await PlatformFinanceService.getTrend(
-        typeof query.days === "string" ? Number(query.days) || 90 : 90
-    );
+    const { days } = queryOf(req, platformTrendQueryZodSchema);
+    const result = await PlatformFinanceService.getTrend(days);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

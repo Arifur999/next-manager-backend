@@ -4,13 +4,12 @@ import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ClientLinkService } from "./clientLink.service.js";
 import { requireUser } from "../../shared/requireUser.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
+import { clientLinkListQueryZodSchema } from "./clientLink.validation.js";
 
 const getAll = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const result = await ClientLinkService.getAll(requireUser(req), {
-        clientId: typeof query.client_id === "string" ? query.client_id : undefined,
-    });
+    const { client_id } = queryOf(req, clientLinkListQueryZodSchema);
+    const result = await ClientLinkService.getAll(requireUser(req), { clientId: client_id });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

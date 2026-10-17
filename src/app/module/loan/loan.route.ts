@@ -8,6 +8,8 @@ import {
     createDistributionZodSchema,
     createLoanZodSchema,
     createShareholderZodSchema,
+    distributionListQueryZodSchema,
+    loanListQueryZodSchema,
     payInstalmentZodSchema,
     setInstalmentsZodSchema,
     updateLoanZodSchema,
@@ -30,7 +32,7 @@ const admin = [checkAuth(Role.admin), requireCompany] as const;
 // swallow them.
 router.get("/summary", ...admin, LoanController.getLoanSummary);
 
-router.get("/", ...admin, LoanController.getAllLoans);
+router.get("/", ...admin, validateRequest({ query: loanListQueryZodSchema }), LoanController.getAllLoans);
 router.post("/", ...admin, validateRequest(createLoanZodSchema), LoanController.createLoan);
 
 router.patch(
@@ -59,7 +61,7 @@ export const LoanRoutes = router;
 
 const shareholderRouter = Router();
 
-shareholderRouter.get("/distributions", ...admin, LoanController.getDistributions);
+shareholderRouter.get("/distributions", ...admin, validateRequest({ query: distributionListQueryZodSchema }), LoanController.getDistributions);
 shareholderRouter.post(
     "/distributions",
     ...admin,

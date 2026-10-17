@@ -5,6 +5,7 @@ import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { ClientLinkController } from "./clientLink.controller.js";
 import {
+    clientLinkListQueryZodSchema,
     createClientLinkZodSchema,
     updateClientLinkZodSchema,
 } from "./clientLink.validation.js";
@@ -15,7 +16,7 @@ const router = Router();
 // Readable by everyone signed in - operations needs to open the Figma file it
 // is working from. The service scopes it to the clients they are actually on,
 // so "everyone" means everyone's own clients.
-router.get("/", checkAuth(), requireCompany, ClientLinkController.getAll);
+router.get("/", checkAuth(), requireCompany, validateRequest({ query: clientLinkListQueryZodSchema }), ClientLinkController.getAll);
 
 // Sales keeps a client's material together, and delivery adds what it sets up
 // along the way. Operations reads but does not curate.

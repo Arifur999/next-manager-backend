@@ -1,25 +1,19 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
-import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
+import { paginationMeta } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { SecurityService } from "./security.service.js";
 import { requireUser } from "../../shared/requireUser.js";
+import { queryOf } from "../../shared/requestSchemas.js";
+import { loginEventListQueryZodSchema } from "./security.validation.js";
 
 const getLoginEvents = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const options = parseListOptions(query);
-
+    const { success: outcome, user_id, ...options } = queryOf(req, loginEventListQueryZodSchema);
     const { rows, total, failed_last_24h, retention_days } = await SecurityService.getLoginEvents(
         requireUser(req),
         options,
-        {
-            // Only the two real answers. Anything else is ignored rather than
-            // refused, so a stale bookmark shows everything.
-            success:
-                query.success === "true" ? true : query.success === "false" ? false : undefined,
-            userId: typeof query.user_id === "string" ? query.user_id : undefined,
-        }
+        { success: outcome, userId: user_id }
     );
 
     sendResponse(res, {

@@ -1,5 +1,5 @@
 import z from "zod";
-import { optionalFilter, queryFlag } from "../../shared/listQuery.js";
+import { lenient, optionalFilter, queryFlag } from "../../shared/listQuery.js";
 import { LeaveStatus } from "../../../generated/prisma/enums.js";
 
 // ---------------------------------------------------------------- attendance
@@ -111,4 +111,10 @@ export const leaveListQueryZodSchema = z.object({
     status: optionalFilter(z.enum(LeaveStatus, "Choose a valid leave status")),
     user_id: optionalFilter(z.uuid("user_id must be a valid id")),
     mine: queryFlag,
+});
+
+export const leaveBalanceQueryZodSchema = z.object({
+    user_id: optionalFilter(z.uuid("user_id must be a valid id")),
+    // A year that is not a positive whole number means this year.
+    year: lenient(z.coerce.number().int().positive()),
 });

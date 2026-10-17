@@ -1,19 +1,16 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
-import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
+import { paginationMeta } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ProjectService } from "./project.service.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
+import { projectListQueryZodSchema } from "./project.validation.js";
 
 const getAllProjects = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const options = parseListOptions(query);
-    const { rows, total } = await ProjectService.getAllProjects(requireUser(req), options, {
-        statusName: typeof query.status === "string" ? query.status : undefined,
-        mine: query.mine === "true",
-    });
+    const { status: statusName, mine, ...options } = queryOf(req, projectListQueryZodSchema);
+    const { rows, total } = await ProjectService.getAllProjects(requireUser(req), options, { statusName, mine });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

@@ -10,8 +10,9 @@ import { PlatformController } from "./platform.controller.js";
 import { PlatformFinanceController } from "./platformFinance.controller.js";
 import { PlatformInviteController } from "./platformInvite.controller.js";
 import { PlatformSettingsController } from "./platformSettings.controller.js";
-import { acceptAgencyInviteZodSchema, acceptPlatformInviteZodSchema, createAgencyInviteZodSchema, createAnnouncementZodSchema, createCompanyZodSchema, createPlatformExpenseZodSchema, createPlatformInviteZodSchema, createPlanZodSchema, setPlatformPermissionsZodSchema, setSubscriptionZodSchema, updateAnnouncementZodSchema, updatePlanZodSchema, updatePlatformSettingsZodSchema, updatePlatformExpenseZodSchema, companyListQueryZodSchema, platformActivityQueryZodSchema } from "./platform.validation.js";
+import { acceptAgencyInviteZodSchema, acceptPlatformInviteZodSchema, createAgencyInviteZodSchema, createAnnouncementZodSchema, createCompanyZodSchema, createPlatformExpenseZodSchema, createPlatformInviteZodSchema, createPlanZodSchema, setPlatformPermissionsZodSchema, setSubscriptionZodSchema, updateAnnouncementZodSchema, updatePlanZodSchema, updatePlatformSettingsZodSchema, updatePlatformExpenseZodSchema, companyListQueryZodSchema, platformActivityQueryZodSchema, platformTrendQueryZodSchema } from "./platform.validation.js";
 import { idParams, tokenParams, organizationIdParams } from "../../shared/requestSchemas.js";
+import { listQuerySchema } from "../../shared/listQuery.js";
 
 const router = Router();
 
@@ -152,18 +153,21 @@ router.get(
     "/finance",
     checkAuth(Role.super_admin),
     requirePermission("platform.finance.view"),
+    validateRequest({ query: listQuerySchema }),
     PlatformFinanceController.getReport
 );
 router.get(
     "/trend",
     checkAuth(Role.super_admin),
     requirePermission("platform.companies.view"),
+    validateRequest({ query: platformTrendQueryZodSchema }),
     PlatformFinanceController.getTrend
 );
 router.get(
     "/expenses",
     checkAuth(Role.super_admin),
     requirePermission("platform.finance.view", "platform.expenses.manage"),
+    validateRequest({ query: listQuerySchema }),
     PlatformFinanceController.getExpenses
 );
 router.post(

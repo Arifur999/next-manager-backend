@@ -296,3 +296,8 @@ export const platformActivityQueryZodSchema = z.object({
         .catch(100)
         .default(100),
 });
+
+export const platformTrendQueryZodSchema = z.object({
+    // A span that is not a positive whole number of days means the last 90.
+    days: z.coerce.number().int().positive().catch(90).default(90),
+});

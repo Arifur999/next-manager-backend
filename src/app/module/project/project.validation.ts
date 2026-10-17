@@ -1,4 +1,5 @@
 import z from "zod";
+import { listQuerySchema, optionalFilter, queryFlag } from "../../shared/listQuery.js";
 
 export const createProjectZodSchema = z.object({
     client_id: z.uuid("client_id must be a valid id"),
@@ -45,3 +46,9 @@ export const setBaselineZodSchema = z.object({
 });
 
 export type ISetBaselinePayload = z.infer<typeof setBaselineZodSchema>;
+
+export const projectListQueryZodSchema = listQuerySchema.extend({
+    // A workflow status name, matched case-insensitively by the service.
+    status: optionalFilter(z.string().max(60)),
+    mine: queryFlag,
+});

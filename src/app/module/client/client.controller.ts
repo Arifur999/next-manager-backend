@@ -1,23 +1,16 @@
 import { Request, Response } from "express";
-import { ClientStatus } from "../../../generated/prisma/enums.js";
 import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
-import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
+import { paginationMeta } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ClientService } from "./client.service.js";
 import { requireUser } from "../../shared/requireUser.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
+import { clientListQueryZodSchema } from "./client.validation.js";
 
 const getAllClients = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const options = parseListOptions(query);
-    const { rows, total } = await ClientService.getAllClients(requireUser(req), options, {
-        status:
-            typeof query.status === "string" && query.status in ClientStatus
-                ? (query.status as ClientStatus)
-                : undefined,
-        mine: query.mine === "true",
-    });
+    const { status: clientStatus, mine, ...options } = queryOf(req, clientListQueryZodSchema);
+    const { rows, total } = await ClientService.getAllClients(requireUser(req), options, { status: clientStatus, mine });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

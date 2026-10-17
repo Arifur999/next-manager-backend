@@ -42,7 +42,13 @@ await call("POST", "/auth/register", {
     email,
     password: "Passw0rd123",
 });
-const cookie = (await call("POST", "/auth/login", { email, password: "Passw0rd123" })).cookie;
+const login = await call("POST", "/auth/login", { email, password: "Passw0rd123" });
+// Signed out, every body below is a 401 and reads clean, so that is a hard stop.
+if (login.status !== 200 || !login.cookie.includes("accessToken")) {
+    console.log(`  FAIL  sign-in answered ${login.status}${login.cookie ? "" : " with no cookie"}; nothing below would be checked`);
+    process.exit(1);
+}
+const cookie = login.cookie;
 
 const client = JSON.parse((await call("POST", "/clients", { name: "LC" }, cookie)).text).data;
 await call("POST", "/vault", { label: "Server", username: "root", password: "hunter2secret", client_id: client.id }, cookie);
@@ -107,3 +113,4 @@ for (const [label, res] of [
 }
 
 console.log(`\n${bad === 0 ? "NOTHING LEAKED" : `${bad} LEAK(S)`}`);
+process.exitCode = bad === 0 ? 0 : 1;

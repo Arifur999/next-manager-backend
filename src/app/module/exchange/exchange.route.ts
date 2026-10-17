@@ -5,6 +5,7 @@ import { validateRequest } from "../../middleware/validateRequest.js";
 import { ExchangeController } from "./exchange.controller.js";
 import { createExchangeZodSchema } from "./exchange.validation.js";
 import { idParams } from "../../shared/requestSchemas.js";
+import { listQuerySchema } from "../../shared/listQuery.js";
 
 const router = Router();
 
@@ -12,7 +13,7 @@ const router = Router();
 // rows; editing it in place would mean unpicking both, and the honest record of
 // "we exchanged at the wrong rate, then corrected it" is a reversal plus a new
 // entry - which is exactly delete-then-create.
-router.get("/", checkAuth(Role.admin), ExchangeController.getAllExchanges);
+router.get("/", checkAuth(Role.admin), validateRequest({ query: listQuerySchema }), ExchangeController.getAllExchanges);
 router.post("/", checkAuth(Role.admin), validateRequest(createExchangeZodSchema), ExchangeController.createExchange);
 router.delete("/:id", checkAuth(Role.admin), validateRequest({ params: idParams }), ExchangeController.deleteExchange);
 

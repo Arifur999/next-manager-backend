@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { LoanStatus } from "../../../generated/prisma/enums.js";
+import { listQuerySchema, optionalFilter } from "../../shared/listQuery.js";
 
 // A schedule is generated when a loan is created, but the numbers stay the
 // agency's: a bank's own EMI table rarely matches a formula exactly, and a
@@ -101,3 +103,11 @@ export type IPayInstalmentPayload = z.infer<typeof payInstalmentZodSchema>;
 export type ICreateShareholderPayload = z.infer<typeof createShareholderZodSchema>;
 export type IUpdateShareholderPayload = z.infer<typeof updateShareholderZodSchema>;
 export type ICreateDistributionPayload = z.infer<typeof createDistributionZodSchema>;
+
+export const loanListQueryZodSchema = listQuerySchema.extend({
+    status: optionalFilter(z.enum(LoanStatus, "Choose a valid loan status")),
+});
+
+export const distributionListQueryZodSchema = listQuerySchema.extend({
+    shareholder_id: optionalFilter(z.uuid("shareholder_id must be a valid id")),
+});

@@ -1,16 +1,12 @@
 import status from "http-status";
-import {
-    AnnouncementAudience,
-    Role,
-    SubscriptionStatus,
-    UserStatus,
-} from "../../../generated/prisma/enums.js";
+import { AnnouncementAudience, Role, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { announcementMail, sendMail } from "../../lib/mailer.js";
 import { prisma } from "../../lib/prisma.js";
 import { logPlatformActivity } from "../../shared/platformActivity.js";
 import { getBrand } from "../../shared/platformSettings.js";
+import { AUDIENCE_STATUSES, matchesAudience } from "./announcement.audience.js";
 import {
     ICreateAnnouncementPayload,
     IUpdateAnnouncementPayload,
@@ -46,31 +42,6 @@ const ANNOUNCEMENT_FIELDS = {
     created_at: true,
     updated_at: true,
 } as const;
-
-/**
- * Which subscription states each audience covers.
- *
- * `active` includes `past_due` for the same reason the MRR figure does: a
- * company inside its grace window is still a paying customer, and it is the one
- * most worth reaching before it stops being one.
- */
-const AUDIENCE_STATUSES: Record<AnnouncementAudience, SubscriptionStatus[] | null> = {
-    all: null,
-    trialing: [SubscriptionStatus.trialing],
-    active: [SubscriptionStatus.active, SubscriptionStatus.past_due],
-};
-
-/** Does this company fall inside that audience right now? */
-const matchesAudience = (
-    audience: AnnouncementAudience,
-    subscriptionStatus: SubscriptionStatus | null
-) => {
-    const wanted = AUDIENCE_STATUSES[audience];
-    if (wanted === null) return true;
-    if (subscriptionStatus === null) return false;
-
-    return wanted.includes(subscriptionStatus);
-};
 
 // ---------------------------------------------------------------- console
 

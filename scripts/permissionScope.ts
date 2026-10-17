@@ -305,6 +305,95 @@ const otherAdmin = await prisma.user.findFirst({ where: { email: otherEmail }, s
 balance = await balanceOf(otherAdmin?.id ?? "", admin);
 check("even 'all' cannot read another agency's member", balance.status === 404, `${balance.status}`);
 
+console.log("\n--- a personal 'none' empties the reads that used to ignore it ---");
+// The audit's four: each square set to Nothing on one salesperson, while the
+// list kept coming back whole. An override rather than the role row, because
+// that is the path the screen uses for one person.
+const setOverride = (userId: string, module: string, action: string, scope: string) =>
+    prisma.userPermission.upsert({
+        where: { user_id_module_action: { user_id: userId, module, action } },
+        create: { user_id: userId, module, action, scope },
+        update: { scope },
+    });
+const clearOverride = (userId: string, module: string, action: string) =>
+    prisma.userPermission.deleteMany({ where: { user_id: userId, module, action } });
+
+type Pipeline = { total: number };
+const leadCount = async () =>
+    ((await call("GET", "/leads", undefined, salesCookie)).json as unknown as { data?: Pipeline }).data?.total ?? -1;
+const rowCount = async (path: string) => {
+    const res = await call("GET", path, undefined, salesCookie);
+    return Array.isArray(res.json.data) ? res.json.data.length : -1;
+};
+
+const lead = await call("POST", "/leads", { name: `Scoped lead ${stamp}` }, admin);
+const leadId = (lead.json as unknown as { data: { id: string } }).data?.id;
+const invoice = await call(
+    "POST",
+    "/invoices",
+    { client_id: clientId, issue_date: "2026-03-01", due_date: "2026-03-31", items: [{ description: "Work", unit_price: 100 }] },
+    admin
+);
+const invoiceId = (invoice.json as unknown as { data: { id: string } }).data?.id;
+const service = await call("POST", "/services", { name: `Scoped service ${stamp}` }, admin);
+const serviceId = (service.json as unknown as { data: { id: string } }).data?.id;
+check("a lead, an invoice and a service to hide", Boolean(leadId && invoiceId && serviceId));
+
+check("by default sales sees the pipeline", (await leadCount()) > 0, `${await leadCount()} leads`);
+await setOverride(salesId, "leads", "view", "none");
+check("leads view 'none' empties the pipeline", (await leadCount()) === 0, `${await leadCount()} leads`);
+const leadById = await call("GET", `/leads/${leadId}/stage-events`, undefined, salesCookie);
+check("and a lead's history is a 404", leadById.status === 404, `${leadById.status}`);
+await clearOverride(salesId, "leads", "view");
+
+check("by default sales sees invoices", (await rowCount("/invoices")) > 0);
+await setOverride(salesId, "invoices", "view", "none");
+check("invoices view 'none' empties the list", (await rowCount("/invoices")) === 0, `${await rowCount("/invoices")} rows`);
+const invoiceById = await call("GET", `/invoices/${invoiceId}`, undefined, salesCookie);
+check("and an invoice by id is a 404", invoiceById.status === 404, `${invoiceById.status}`);
+await setOverride(salesId, "invoices", "view", "own");
+check("invoices view 'own' hides a client somebody else brought in", (await rowCount("/invoices")) === 0, `${await rowCount("/invoices")} rows`);
+await clearOverride(salesId, "invoices", "view");
+
+check("by default sales sees the catalogue", (await rowCount("/services")) > 0);
+await setOverride(salesId, "services", "view", "none");
+check("services view 'none' empties the catalogue", (await rowCount("/services")) === 0, `${await rowCount("/services")} rows`);
+const serviceById = await call("GET", `/services/${serviceId}`, undefined, salesCookie);
+check("and a service by id is a 404", serviceById.status === 404, `${serviceById.status}`);
+await clearOverride(salesId, "services", "view");
+
+check("by default sales sees the team", (await rowCount("/users")) > 1);
+await setOverride(salesId, "team", "view", "own");
+check("team view 'own' is only themselves", (await rowCount("/users")) === 1, `${await rowCount("/users")} rows`);
+await setOverride(salesId, "team", "view", "none");
+check("team view 'none' empties the directory", (await rowCount("/users")) === 0, `${await rowCount("/users")} rows`);
+await clearOverride(salesId, "team", "view");
+
+console.log("\n--- the squares that gate writes and reports now answer too ---");
+await setOverride(salesId, "reports", "view", "none");
+check("reports view 'none' empties client revenue", (await rowCount("/reports/client-revenue")) === 0);
+await clearOverride(salesId, "reports", "view");
+
+await setOverride(salesId, "chat", "view", "none");
+check("chat view 'none' empties the conversation list", (await rowCount("/chat")) === 0);
+await clearOverride(salesId, "chat", "view");
+await setOverride(salesId, "chat", "create", "none");
+const chatRefused = await call("POST", "/chat", { type: "group", name: "Refused", member_ids: [workerId] }, salesCookie);
+check("chat create 'none' refuses a new conversation", chatRefused.status === 403, `${chatRefused.status}`);
+await clearOverride(salesId, "chat", "create");
+
+await setOverride(workerId, "time", "create", "none");
+const timeRefused = await call("POST", "/time-entries", { project_id: mineId, date: "2026-03-02", hours: 1 }, workerCookie);
+check("time create 'none' refuses logging hours", timeRefused.status === 403, `${timeRefused.status}`);
+await clearOverride(workerId, "time", "create");
+
+await setScope(Role.project_manager, "tasks", "assign", "none");
+const assignTaskRefused = await call("PATCH", `/tasks/${taskId}`, { assignee_id: workerId }, pmCookie);
+check("tasks assign 'none' refuses handing a task over", assignTaskRefused.status === 403, `${assignTaskRefused.status}`);
+const titleOnly = await call("PATCH", `/tasks/${taskId}`, { title: "Renamed, not reassigned" }, pmCookie);
+check("but still edits a task without moving it", titleOnly.status === 200, `${titleOnly.status}`);
+await setScope(Role.project_manager, "tasks", "assign", "all");
+
 await setRoleScope("assigned");
 await prisma.$disconnect();
 

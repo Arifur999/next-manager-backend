@@ -1,42 +1,19 @@
 import { Role } from "../../generated/prisma/enums.js";
 
 /**
- * What a permission can even SAY.
+ * What a permission can say: Module + Action + Scope. Module and action name the
+ * door; scope says how much of the room is yours - all of the agency's, what is
+ * assigned to you, what is your own, or none of it.
  *
- * Module + Action + Scope. The first two say which door; the third says how
- * much of the room is yours once you are through it — all of the agency's, only
- * what is assigned to you, only what is your own, or none of it.
+ * TENANT ISOLATION IS NOT A SCOPE. organization_id is applied before any
+ * permission is consulted and nothing here can remove it, so an agency cannot
+ * configure itself into a cross-tenant leak. checkAuth's role gate also runs
+ * first, so nothing configured here opens a route a role does not carry.
  *
- * ── The rule that makes this safe to hand to a customer ────────────────────
- *
- *   TENANT ISOLATION IS NOT A SCOPE.
- *
- * `organization_id` is applied unconditionally, before any permission is
- * consulted, and nothing in this file can remove it. Scope decides how much of
- * YOUR OWN agency you see; it is never asked whether you see another one,
- * because that question does not reach here. Without that line, "a business can
- * customise its permissions" would become "a business can misconfigure itself
- * into a cross-tenant leak", and the isolation suite would stop meaning
- * anything.
- *
- * The role gate keeps its place too. `checkAuth` runs first and this only
- * narrows within it — exactly as the older `requirePermission` layer does — so
- * nothing configured here can hand somebody a route their role does not carry.
- *
- * ── Why the module list is longer than eight ───────────────────────────────
- *
- * The plan named clients, services, projects, tasks, team, chat, accounts and
- * reports. But scope is hard-coded in nine services, and four of them are not
- * on that list: the vault, attendance, leave and time entries all narrow
- * operations to their own rows today. Leaving them out would mean the data
- * could never replace the code in those four, which is the whole point — so
- * they are here.
- *
- * Leads and invoices joined them when the old flat permission list retired.
- * Both had a name on that list, and neither could be folded into a module
- * that already existed: invoices are not the accounts module (sales bills a
- * client but never opens the ledger), and leads are not the clients module
- * (turning off client editing would silently stop the pipeline).
+ * vault, attendance, leave and time are modules because their services narrow
+ * operations to their own rows. Leads and invoices stand apart from clients and
+ * accounts: sales bills a client without opening the ledger, and switching off
+ * client edits must not stop the pipeline.
  */
 
 export const MODULES = [
@@ -101,16 +78,10 @@ export const MODULE_ACTIONS: Record<PermissionModule, readonly PermissionAction[
 };
 
 /**
- * What a company role starts with.
- *
- * Transcribed from what the services do TODAY, not from what would be tidy.
- * This is the seed every existing agency is backfilled with, so an upgrade must
- * land them in the product they already had — the two permission matrices are
- * the proof of that, and neither is allowed to move in P1 to P3.
- *
- * Read `none` as "the API refuses this today", `all` as "sees the whole
- * agency's", `assigned` as "only what they are a member of", `own` as "only
- * rows that are theirs".
+ * What a company role starts with: what the services enforced before the grid
+ * existed, so a backfilled agency keeps the product it had (the API and page
+ * matrices pin it). `none` is refused, `all` is the whole agency's, `assigned`
+ * is what they are a member of, `own` is rows that are theirs.
  */
 type RoleDefaults = Partial<Record<PermissionModule, Partial<Record<PermissionAction, PermissionScope>>>>;
 

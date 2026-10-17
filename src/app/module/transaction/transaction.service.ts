@@ -8,6 +8,7 @@ import {
     pageSlice,
     type ListOptions,
 } from "../../shared/listQuery.js";
+import { type TransactionKind } from "./transaction.validation.js";
 
 /**
  * The ledger, read as a ledger.
@@ -19,10 +20,6 @@ import {
  *
  * Nothing new is recorded here. This is a view.
  */
-
-export const TRANSACTION_KINDS = ["income", "expense", "transfer"] as const;
-
-export type TransactionKind = (typeof TRANSACTION_KINDS)[number];
 
 /**
  * What each kind of ledger row means to the business.

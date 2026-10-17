@@ -9,6 +9,7 @@ import {
     MODULE_ACTIONS,
     ROLE_DEFAULTS,
     SCOPES,
+    isEnforced,
     type PermissionAction,
     type PermissionModule,
     type PermissionScope,
@@ -38,6 +39,11 @@ const CATALOGUE = {
     modules: MODULES.map((module) => ({ module, actions: MODULE_ACTIONS[module] })),
     actions: ACTIONS,
     scopes: SCOPES,
+    // Every square with whether anything reads it, so the screen can lock the
+    // ones that are moot by design instead of offering a picker that does nothing.
+    squares: MODULES.flatMap((module) =>
+        MODULE_ACTIONS[module].map((action) => ({ module, action, enforced: isEnforced(module, action) }))
+    ),
 } as const;
 
 /** The roles an agency can configure. A platform operator is not one of them. */

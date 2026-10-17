@@ -77,6 +77,33 @@ export const MODULE_ACTIONS: Record<PermissionModule, readonly PermissionAction[
     time: ["view", "create", "edit"],
 };
 
+/** One square on the grid, as "module.action". */
+export type PermissionSquare = `${PermissionModule}.${PermissionAction}`;
+
+/**
+ * Squares that are moot by design, so no route or service reads them. Deleting
+ * is admin-only throughout: the role gate is the rule and no other role's
+ * default reaches it. Adding, changing and removing colleagues is the admin's
+ * own administration, which the permissions screen itself sits inside. The
+ * grid shows these locked rather than as a picker that changes nothing, and
+ * permissionCatalogue.test.ts fails if one is read or any other square is not.
+ */
+export const UNENFORCED_SQUARES: readonly PermissionSquare[] = [
+    "clients.delete",
+    "leads.delete",
+    "invoices.delete",
+    "services.delete",
+    "projects.delete",
+    "team.create",
+    "team.edit",
+    "team.delete",
+    "accounts.delete",
+    "vault.delete",
+];
+
+export const isEnforced = (module: PermissionModule, action: PermissionAction) =>
+    !UNENFORCED_SQUARES.includes(`${module}.${action}`);
+
 /**
  * What a company role starts with: what the services enforced before the grid
  * existed, so a backfilled agency keeps the product it had (the API and page

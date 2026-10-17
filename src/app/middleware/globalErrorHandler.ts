@@ -14,6 +14,7 @@ import {
 import { handleZodError } from "../errorHelpers/handleZodError.js";
 import { IError, IErrorResponse } from "../interfaces/error.interfaces.js";
 import { logger } from "../lib/logger.js";
+import { loggablePath } from "../shared/loggablePath.js";
 
 // express.json() rejects with a 4xx `status` and a string `type` such as
 // entity.parse.failed or entity.too.large.
@@ -96,11 +97,12 @@ export const globalErrorHandler = async (err: unknown, req: Request, res: Respon
     // 5xx is always logged, so a production failure leaves a trace. 4xx is
     // routine and only logged while developing. Path only: a query string can
     // carry a search term or a token.
-    const fields = { requestId: req.id, method: req.method, path: req.path, status: statusCode, error: err };
+    const path = loggablePath(req.path);
+    const fields = { requestId: req.id, method: req.method, path, status: statusCode, error: err };
     if (statusCode >= 500) {
         logger.error("Request failed", fields);
     } else if (env.NODE_ENV === "development") {
-        logger.warn("Request rejected", { requestId: req.id, method: req.method, path: req.path, status: statusCode, reason: message });
+        logger.warn("Request rejected", { requestId: req.id, method: req.method, path, status: statusCode, reason: message });
     }
 
     const errorResponse: IErrorResponse = {

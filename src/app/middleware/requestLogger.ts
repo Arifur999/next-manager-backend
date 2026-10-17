@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextFunction, Request, Response } from "express";
 import { logger } from "../lib/logger.js";
+import { loggablePath } from "../shared/loggablePath.js";
 
 // An inbound id is kept only if it is short and boring: log fields never carry
 // whatever a client felt like sending.
@@ -17,8 +18,8 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
         const fields = {
             requestId: req.id,
             method: req.method,
-            // Path only: a query string can hold a search term or a reset token.
-            path: req.originalUrl.split("?")[0],
+            // No query string or link token: either can hold a search term or a bearer token.
+            path: loggablePath(req.originalUrl),
             status: res.statusCode,
             ms: Math.round(performance.now() - startedAt),
             ...(req.user ? { userId: req.user.userId, organizationId: req.user.organizationId } : {}),

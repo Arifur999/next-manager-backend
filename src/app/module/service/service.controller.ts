@@ -6,7 +6,8 @@ import { ServiceCategoryService } from "./serviceCategory.service.js";
 import { ServiceService } from "./service.service.js";
 import { ServiceTemplateService } from "./serviceTemplate.service.js";
 import { requireUser } from "../../shared/requireUser.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
+import { serviceListQueryZodSchema } from "./service.validation.js";
 
 // One controller for the three, because they are one screen with three tabs and
 // splitting them would be three files of the same eight lines.
@@ -15,10 +16,8 @@ const ok = (res: Response, message: string, data: unknown, httpStatus: number = 
     sendResponse(res, { success: true, httpStatus, message, data });
 
 const getServices = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const result = await ServiceService.getAll(requireUser(req), {
-        categoryId: typeof query.category_id === "string" ? query.category_id : undefined,
-    });
+    const { category_id } = queryOf(req, serviceListQueryZodSchema);
+    const result = await ServiceService.getAll(requireUser(req), { categoryId: category_id });
     ok(res, "Services retrieved successfully", result);
 });
 

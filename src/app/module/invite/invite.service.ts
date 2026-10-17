@@ -7,7 +7,7 @@ import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
 import { createLinkToken, hashLinkToken, isOpenInvite, webAppUrl } from "../../shared/oneTimeLink.js";
 import { getBrand } from "../../shared/platformSettings.js";
-import { notify } from "../../shared/notify.js";
+import { notify, sendNotificationMail } from "../../shared/notify.js";
 import { passwordUtils } from "../../utils/password.js";
 import { IAcceptInvitePayload, ICreateInvitePayload } from "./invite.validation.js";
 import { sameEmail } from "../../shared/emailField.js";
@@ -178,7 +178,7 @@ const getInviteByToken = async (token: string) => {
 const acceptInvite = async (token: string, payload: IAcceptInvitePayload) => {
     const tokenHash = hashLinkToken(token);
 
-    return prisma.$transaction(async (tx) => {
+    const { member, mail } = await prisma.$transaction(async (tx) => {
         const invite = await tx.teamInvite.findUnique({
             where: { token_hash: tokenHash },
             select: {
@@ -252,7 +252,7 @@ const acceptInvite = async (token: string, payload: IAcceptInvitePayload) => {
         // and this reaches whoever can actually approve it. Without it a
         // pending member is invisible until an admin happens to open the team
         // screen, and somebody who cannot sign in will not chase it.
-        await notify(
+        const mail = await notify(
             tx,
             {
                 userId: member.id,
@@ -272,8 +272,11 @@ const acceptInvite = async (token: string, payload: IAcceptInvitePayload) => {
             }
         );
 
-        return member;
+        return { member, mail };
     });
+
+    await sendNotificationMail(mail);
+    return member;
 };
 
 export const InviteService = {

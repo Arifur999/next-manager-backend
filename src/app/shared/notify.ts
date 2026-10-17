@@ -1,6 +1,10 @@
 import { Prisma } from "../../generated/prisma/client.js";
 import { NotificationEvent, Role, UserStatus } from "../../generated/prisma/enums.js";
 import { IRequestUser } from "../interfaces/requestUser.interface.js";
+import { logger } from "../lib/logger.js";
+import { notificationMail, sendMail } from "../lib/mailer.js";
+import { webAppUrl } from "./oneTimeLink.js";
+import { getBrand } from "./platformSettings.js";
 
 /**
  * Telling one person something happened. "Who should hear about this" is
@@ -82,13 +86,20 @@ interface NotifyInput {
     userId?: string;
 }
 
+type Rule = { in_app: boolean; email: boolean; roles: Role[] };
+
+/** Somebody an event can reach. */
+export type NotifyPerson = { id: string; email: string; full_name: string; status: UserStatus };
+
+const PERSON = { id: true, email: true, full_name: true, status: true } as const;
+
 /**
  * The rule for one event, or the built-in default.
  *
  * Rules are created on demand, so an agency that never opens the settings
  * screen still gets the notifications that matter. An absent row is not "off".
  */
-const ruleFor = async (tx: Tx, organizationId: string, event: NotificationEvent) => {
+const ruleFor = async (tx: Tx, organizationId: string, event: NotificationEvent): Promise<Rule> => {
     const stored = await tx.notificationRule.findUnique({
         where: { organization_id_event: { organization_id: organizationId, event } },
     });
@@ -102,50 +113,132 @@ const ruleFor = async (tx: Tx, organizationId: string, event: NotificationEvent)
     };
 };
 
+/** Everybody the event is addressed to, before the actor is taken out. */
+const audienceOf = async (tx: Tx, organizationId: string, input: NotifyInput, rule: Rule): Promise<NotifyPerson[]> => {
+    if (EVENT_CATALOGUE[input.event].kind === "directed") {
+        if (!input.userId) return [];
+
+        return tx.user.findMany({
+            where: { id: input.userId, organization_id: organizationId, deleted_at: null },
+            select: PERSON,
+        });
+    }
+
+    return tx.user.findMany({
+        where: {
+            organization_id: organizationId,
+            deleted_at: null,
+            status: UserStatus.active,
+            role: { in: rule.roles },
+        },
+        select: PERSON,
+    });
+};
+
+/**
+ * Who hears about it, and how. The actor never hears about their own action:
+ * that noise is what teaches people to ignore the bell. Mail goes only where
+ * the agency turned it on, and only to people who can still sign in.
+ */
+export const planDelivery = (
+    rule: Pick<Rule, "in_app" | "email">,
+    audience: NotifyPerson[],
+    actorId: string
+): { inApp: NotifyPerson[]; mail: NotifyPerson[] } => {
+    const reached = audience.filter((person) => person.id !== actorId);
+
+    return {
+        inApp: rule.in_app ? reached : [],
+        mail: rule.email ? reached.filter((person) => person.status === UserStatus.active) : [],
+    };
+};
+
+/** Mail notify() composed inside a transaction, for sendNotificationMail once it commits. */
+export interface PendingNotificationMail {
+    recipients: Array<{ email: string; full_name: string }>;
+    title: string;
+    body: string;
+    eventLabel: string;
+    agencyName: string;
+}
+
 /**
  * Write the notification rows for one thing that happened, INSIDE the
- * transaction that did it, like logActivity. The actor never hears about their
- * own action: that noise is what teaches people to ignore the bell.
+ * transaction that did it, like logActivity. Returns the mail to send once the
+ * transaction commits (or null): mail is a network call, and one sent for work
+ * that then rolled back cannot be unsent.
  */
-export const notify = async (tx: Tx, actor: IRequestUser, input: NotifyInput) => {
+export const notify = async (
+    tx: Tx,
+    actor: IRequestUser,
+    input: NotifyInput
+): Promise<PendingNotificationMail | null> => {
     const rule = await ruleFor(tx, actor.organizationId, input.event);
 
-    if (!rule.in_app) return [];
+    if (!rule.in_app && !rule.email) return null;
 
-    const catalogue = EVENT_CATALOGUE[input.event];
+    const audience = await audienceOf(tx, actor.organizationId, input, rule);
+    const plan = planDelivery(rule, audience, actor.userId);
 
-    const recipients =
-        catalogue.kind === "directed"
-            ? input.userId
-                ? [input.userId]
-                : []
-            : (
-                  await tx.user.findMany({
-                      where: {
-                          organization_id: actor.organizationId,
-                          deleted_at: null,
-                          status: UserStatus.active,
-                          role: { in: rule.roles },
-                      },
-                      select: { id: true },
-                  })
-              ).map((row) => row.id);
+    if (plan.inApp.length > 0) {
+        await tx.notification.createMany({
+            data: plan.inApp.map((person) => ({
+                organization_id: actor.organizationId,
+                user_id: person.id,
+                event: input.event,
+                title: input.title,
+                body: input.body ?? "",
+                entity_type: input.entityType ?? "",
+                entity_id: input.entityId ?? null,
+            })),
+        });
+    }
 
-    const audience = recipients.filter((id) => id !== actor.userId);
+    if (plan.mail.length === 0) return null;
 
-    if (audience.length === 0) return [];
-
-    await tx.notification.createMany({
-        data: audience.map((userId) => ({
-            organization_id: actor.organizationId,
-            user_id: userId,
-            event: input.event,
-            title: input.title,
-            body: input.body ?? "",
-            entity_type: input.entityType ?? "",
-            entity_id: input.entityId ?? null,
-        })),
+    const organization = await tx.organization.findUnique({
+        where: { id: actor.organizationId },
+        select: { name: true },
     });
 
-    return audience;
+    return {
+        recipients: plan.mail.map((person) => ({ email: person.email, full_name: person.full_name })),
+        title: input.title,
+        body: input.body ?? "",
+        eventLabel: EVENT_CATALOGUE[input.event].label,
+        agencyName: organization?.name ?? "",
+    };
+};
+
+/**
+ * Send what notify() composed, after its transaction committed. Never throws:
+ * the work it reports on is already saved, and a mail server being down must
+ * not turn that into an error. Failures are logged without addresses.
+ */
+export const sendNotificationMail = async (pending: PendingNotificationMail | null): Promise<void> => {
+    if (!pending) return;
+
+    try {
+        const brand = await getBrand();
+        const link = webAppUrl("/login");
+        const results = await Promise.all(
+            pending.recipients.map((recipient) =>
+                sendMail({
+                    to: recipient.email,
+                    ...notificationMail({ ...pending, recipientName: recipient.full_name, link }, brand),
+                })
+            )
+        );
+
+        const undelivered = results.filter((result) => !result.delivered).length;
+        if (undelivered > 0) {
+            logger.warn("Notification mail was not delivered", {
+                event: pending.eventLabel,
+                undelivered,
+                total: results.length,
+            });
+        }
+    } catch (error) {
+        logger.error("Notification mail failed", { error });
+    }
 };

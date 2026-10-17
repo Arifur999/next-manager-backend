@@ -5,7 +5,7 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { resolveScope } from "../../shared/resolveScope.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
-import { notify } from "../../shared/notify.js";
+import { notify, sendNotificationMail } from "../../shared/notify.js";
 import {
     ICreateLeaveTypePayload,
     IDecideLeavePayload,
@@ -218,7 +218,7 @@ const request = async (payload: IRequestLeavePayload, user: IRequestUser) => {
         );
     }
 
-    return prisma.$transaction(async (tx) => {
+    const { created, mail } = await prisma.$transaction(async (tx) => {
         const created = await tx.leaveRequest.create({
             data: {
                 organization_id: user.organizationId,
@@ -245,7 +245,7 @@ const request = async (payload: IRequestLeavePayload, user: IRequestUser) => {
 
         // The queue is invisible otherwise: somebody waiting on an answer will
         // not chase it, and the people who can answer have no reason to look.
-        await notify(tx, user, {
+        const mail = await notify(tx, user, {
             event: NotificationEvent.leave_requested,
             title: `${user.name} asked for ${payload.days} days of ${type.name}`,
             body: payload.reason || "No reason given.",
@@ -253,8 +253,11 @@ const request = async (payload: IRequestLeavePayload, user: IRequestUser) => {
             entityId: created.id,
         });
 
-        return created;
+        return { created, mail };
     });
+
+    await sendNotificationMail(mail);
+    return created;
 };
 
 /** Withdrawing your own, before anybody has decided. */
@@ -318,7 +321,7 @@ const decide = async (id: string, payload: IDecideLeavePayload, user: IRequestUs
         );
     }
 
-    return prisma.$transaction(async (tx) => {
+    const { decided, mail } = await prisma.$transaction(async (tx) => {
         const decided = await tx.leaveRequest.update({
             where: { id },
             data: {
@@ -341,7 +344,7 @@ const decide = async (id: string, payload: IDecideLeavePayload, user: IRequestUs
             user
         );
 
-        await notify(tx, user, {
+        const mail = await notify(tx, user, {
             event: NotificationEvent.leave_decided,
             userId: existing.user_id,
             title: `Your ${existing.leave_type.name} was ${payload.approve ? "approved" : "turned down"}`,
@@ -350,8 +353,11 @@ const decide = async (id: string, payload: IDecideLeavePayload, user: IRequestUs
             entityId: id,
         });
 
-        return decided;
+        return { decided, mail };
     });
+
+    await sendNotificationMail(mail);
+    return decided;
 };
 
 export const LeaveService = {

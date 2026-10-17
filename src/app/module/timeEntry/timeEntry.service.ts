@@ -5,7 +5,7 @@ import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { resolveScope } from "../../shared/resolveScope.js";
 import { prisma } from "../../lib/prisma.js";
-import { notify } from "../../shared/notify.js";
+import { notify, sendNotificationMail } from "../../shared/notify.js";
 import { dateRangeWhere, findPage, type ListOptions } from "../../shared/listQuery.js";
 import {
     ICreateTimeEntryPayload,
@@ -213,7 +213,7 @@ const getSummary = async (
 const createEntry = async (payload: ICreateTimeEntryPayload, user: IRequestUser) => {
     assertHours(payload.hours);
 
-    return prisma.$transaction(async (tx) => {
+    const { entry, mail } = await prisma.$transaction(async (tx) => {
         await assertReferences(tx, payload, user);
 
         const entry = await tx.timeEntry.create({
@@ -237,17 +237,21 @@ const createEntry = async (payload: ICreateTimeEntryPayload, user: IRequestUser)
         // approved - or one an approver logged for themselves - is not a
         // queue item, and telling people about it is the noise that teaches
         // them to stop looking at the bell.
-        if (!entry.approved_at) {
-            await notify(tx, user, {
-                event: NotificationEvent.time_awaiting_approval,
-                title: `${user.name} logged ${entry.hours} hours on ${entry.project.name}`,
-                body: entry.notes || "No note left.",
-                entityType: "time_entry",
-                entityId: entry.id,
-            });
-        }
+        const mail = entry.approved_at
+            ? null
+            : await notify(tx, user, {
+                  event: NotificationEvent.time_awaiting_approval,
+                  title: `${user.name} logged ${entry.hours} hours on ${entry.project.name}`,
+                  body: entry.notes || "No note left.",
+                  entityType: "time_entry",
+                  entityId: entry.id,
+              });
 
-        return entry;    });
+        return { entry, mail };
+    });
+
+    await sendNotificationMail(mail);
+    return entry;
 };
 
 const updateEntry = async (id: string, payload: IUpdateTimeEntryPayload, user: IRequestUser) => {

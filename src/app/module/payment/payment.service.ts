@@ -7,7 +7,7 @@ import { prisma } from "../../lib/prisma.js";
 import { logActivity, money } from "../../shared/activity.js";
 import { recalcInvoiceStatus } from "../../shared/invoiceStatus.js";
 import { assertAccount, reverseLedgerEntries, writeLedgerEntry } from "../../shared/ledger.js";
-import { notify } from "../../shared/notify.js";
+import { notify, sendNotificationMail } from "../../shared/notify.js";
 import { dateRangeWhere, escapeLikeTerm, findPage, type ListOptions } from "../../shared/listQuery.js";
 import { getReportingRate } from "../../utils/currencyRate.js";
 import { ICreatePaymentPayload, IUpdatePaymentPayload } from "./payment.validation.js";
@@ -93,7 +93,7 @@ const createPayment = async (payload: ICreatePaymentPayload, user: IRequestUser)
         );
     }
 
-    return prisma.$transaction(async (tx) => {
+    const { payment, mail } = await prisma.$transaction(async (tx) => {
         await assertReferences(tx, payload, user);
         // A payment is USD by definition; recording one against a BDT wallet
         // would corrupt both balances at once.
@@ -149,7 +149,7 @@ const createPayment = async (payload: ICreatePaymentPayload, user: IRequestUser)
             summary: `Recorded ${money(payload.amount_usd, "USD")} from ${client?.name ?? "a client"}`,
         }, user);
 
-        await notify(tx, user, {
+        const mail = await notify(tx, user, {
             event: NotificationEvent.payment_recorded,
             title: `${money(payload.amount_usd, "USD")} from ${client?.name ?? "a client"}`,
             body: "Recorded against the account it landed in.",
@@ -157,8 +157,11 @@ const createPayment = async (payload: ICreatePaymentPayload, user: IRequestUser)
             entityId: payment.id,
         });
 
-        return payment;
+        return { payment, mail };
     });
+
+    await sendNotificationMail(mail);
+    return payment;
 };
 
 /**

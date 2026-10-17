@@ -286,3 +286,51 @@ export const announcementMail = (
         <p style="color:#666;font-size:13px">${escapeHtml(signOff(brand))}</p>
     `,
 });
+
+/** What a notification email says, beside the brand. */
+export interface NotificationNotice {
+    title: string;
+    body: string;
+    /** The catalogue's sentence for the event, such as "An invoice goes overdue". */
+    eventLabel: string;
+    agencyName: string;
+    recipientName: string;
+    /** Where "Open" goes: the web app's sign-in, which forwards a signed-in person home. */
+    link: string;
+}
+
+/**
+ * A bell notification, emailed because the agency turned email on for its
+ * event. It says why it arrived and who can switch it off, so it reads as the
+ * agency's own message rather than marketing. The subject is folded onto one
+ * line: titles carry what people typed.
+ */
+export const notificationMail = (notice: NotificationNotice, brand: PlatformBrand): Omit<Mail, "to"> => {
+    const agency = notice.agencyName || "Your agency";
+    const why = `${agency} emails this when: ${notice.eventLabel}. An admin can switch it off in the notification settings.`;
+    const bodyLines = notice.body ? ["", notice.body] : [];
+
+    return {
+        subject: notice.title.replace(/\s+/g, " ").trim(),
+        text: [
+            `Hi ${notice.recipientName},`,
+            "",
+            notice.title,
+            ...bodyLines,
+            "",
+            `Open ${brand.productName}: ${notice.link}`,
+            "",
+            why,
+            "",
+            signOff(brand),
+        ].join("\n"),
+        html: `
+        <p>Hi ${escapeHtml(notice.recipientName)},</p>
+        <p><strong>${escapeHtml(notice.title)}</strong></p>
+        ${notice.body ? `<p>${escapeHtml(notice.body).replace(/\n/g, "<br />")}</p>` : ""}
+        <p><a href="${escapeHtml(notice.link)}">Open ${escapeHtml(brand.productName)}</a></p>
+        <p style="color:#666;font-size:13px">${escapeHtml(why)}</p>
+        <p style="color:#666;font-size:13px">${escapeHtml(signOff(brand))}</p>
+    `,
+    };
+};

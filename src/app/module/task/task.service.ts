@@ -11,7 +11,7 @@ import { resolveScope } from "../../shared/resolveScope.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
 import { defaultStatusId } from "../../shared/defaultWorkflowStatuses.js";
-import { notify } from "../../shared/notify.js";
+import { notify, sendNotificationMail } from "../../shared/notify.js";
 import {
     dateRangeWhere,
     escapeLikeTerm,
@@ -158,8 +158,26 @@ const getAllTasks = async (
     return { rows, total };
 };
 
+/** Tells whoever now holds a task, or nobody when it has no assignee. */
+const notifyAssignee = async (
+    tx: Prisma.TransactionClient,
+    user: IRequestUser,
+    task: { id: string; title: string; assignee_id: string | null; due_date: Date | null }
+) => {
+    if (!task.assignee_id) return null;
+
+    return notify(tx, user, {
+        event: NotificationEvent.task_assigned,
+        userId: task.assignee_id,
+        title: `You were given "${task.title}"`,
+        body: task.due_date ? `Due ${task.due_date.toISOString().slice(0, 10)}` : "No due date set",
+        entityType: "task",
+        entityId: task.id,
+    });
+};
+
 const createTask = async (payload: ICreateTaskPayload, user: IRequestUser) => {
-    return prisma.$transaction(async (tx) => {
+    const { task, mail } = await prisma.$transaction(async (tx) => {
         await assertReferences(tx, payload, user);
 
         if (payload.assignee_id) {
@@ -199,21 +217,11 @@ const createTask = async (payload: ICreateTaskPayload, user: IRequestUser) => {
             include: INCLUDE,
         });
 
-        if (task.assignee_id) {
-            await notify(tx, user, {
-                event: NotificationEvent.task_assigned,
-                userId: task.assignee_id,
-                title: `You were given "${task.title}"`,
-                body: task.due_date
-                    ? `Due ${task.due_date.toISOString().slice(0, 10)}`
-                    : "No due date set",
-                entityType: "task",
-                entityId: task.id,
-            });
-        }
-
-        return task;
+        return { task, mail: await notifyAssignee(tx, user, task) };
     });
+
+    await sendNotificationMail(mail);
+    return task;
 };
 
 const updateTask = async (id: string, payload: IUpdateTaskPayload, user: IRequestUser) => {

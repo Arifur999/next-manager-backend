@@ -1,8 +1,10 @@
 import status from "http-status";
+import { Prisma } from "../../../generated/prisma/client.js";
 import { InvoiceStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { resolveScope } from "../../shared/resolveScope.js";
 import { logActivity } from "../../shared/activity.js";
 import { ICreateServicePayload, IUpdateServicePayload } from "./service.validation.js";
 
@@ -29,10 +31,32 @@ const SELECT = {
     category: { select: { id: true, name: true } },
 } as const;
 
+/**
+ * Catalogue entries the caller may see, from the services view scope. A
+ * service has no owner, so the narrower reach is what is sold on the projects
+ * they are on. organization_id always sits above this.
+ */
+const visibilityScope = async (user: IRequestUser): Promise<Prisma.ServiceWhereInput> => {
+    const scope = await resolveScope(user, "services", "view");
+
+    switch (scope) {
+        case "all":
+            return {};
+        case "assigned":
+        case "own":
+            return { projects: { some: { deleted_at: null, members: { some: { user_id: user.userId } } } } };
+        case "none":
+        default:
+            // Matches nothing, so the by-id read and the edit 404 as well.
+            return { id: { in: [] } };
+    }
+};
+
 const getAll = async (user: IRequestUser, filters: { categoryId?: string } = {}) =>
     prisma.service.findMany({
         where: {
             organization_id: user.organizationId,
+            ...(await visibilityScope(user)),
             ...(filters.categoryId ? { category_id: filters.categoryId } : {}),
         },
         select: {
@@ -57,7 +81,7 @@ const getAll = async (user: IRequestUser, filters: { categoryId?: string } = {})
  */
 const getOne = async (id: string, user: IRequestUser) => {
     const service = await prisma.service.findFirst({
-        where: { id, organization_id: user.organizationId },
+        where: { id, organization_id: user.organizationId, ...(await visibilityScope(user)) },
         select: {
             ...SELECT,
             _count: { select: { invoice_items: true, projects: true, template_items: true } },
@@ -167,7 +191,7 @@ const create = async (payload: ICreateServicePayload, user: IRequestUser) => {
 
 const update = async (id: string, payload: IUpdateServicePayload, user: IRequestUser) => {
     const existing = await prisma.service.findFirst({
-        where: { id, organization_id: user.organizationId },
+        where: { id, organization_id: user.organizationId, ...(await visibilityScope(user)) },
         select: { id: true, name: true },
     });
 

@@ -6,6 +6,7 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { assertSeatAvailable } from "../../shared/planLimits.js";
 import { lockRow } from "../../utils/rowLock.js";
 import { prisma } from "../../lib/prisma.js";
+import { resolveScope } from "../../shared/resolveScope.js";
 import { logActivity } from "../../shared/activity.js";
 import { escapeLikeTerm, findPage, type ListOptions } from "../../shared/listQuery.js";
 import { passwordUtils } from "../../utils/password.js";
@@ -53,7 +54,34 @@ const PUBLIC_USER_FIELDS = {
     updated_at: true,
 } as const;
 
-// Everyone in the caller's agency.
+/**
+ * Colleagues the caller may see, from the team view scope. "assigned" is the
+ * people they share a project with, "own" is only themselves, and both keep
+ * the caller in the list. organization_id always sits above this.
+ */
+const visibilityScope = async (user: IRequestUser): Promise<Prisma.UserWhereInput> => {
+    const scope = await resolveScope(user, "team", "view");
+
+    switch (scope) {
+        case "all":
+            return {};
+        case "assigned":
+            return {
+                OR: [
+                    { id: user.userId },
+                    { project_memberships: { some: { project: { deleted_at: null, members: { some: { user_id: user.userId } } } } } },
+                ],
+            };
+        case "own":
+            return { id: user.userId };
+        case "none":
+        default:
+            // Matches nothing, so a colleague's id 404s as well.
+            return { id: { in: [] } };
+    }
+};
+
+// Everyone in the caller's agency the team view reaches.
 const getAllUsers = async (
     user: IRequestUser,
     filters: { status?: UserStatus; departmentId?: string } = {},
@@ -62,6 +90,8 @@ const getAllUsers = async (
     const where: Prisma.UserWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
+        // In AND rather than spread: the scope and the search both need an OR.
+        AND: [await visibilityScope(user)],
         // Unfiltered still means everybody, pending included - the team screen
         // shows them so nobody is invisible while they wait.
         ...(filters.status ? { status: filters.status } : {}),
@@ -95,7 +125,7 @@ const getAllUsers = async (
 
 const getSingleUser = async (id: string, user: IRequestUser) => {
     const found = await prisma.user.findFirst({
-        where: { id, organization_id: user.organizationId, deleted_at: null },
+        where: { id, organization_id: user.organizationId, deleted_at: null, AND: [await visibilityScope(user)] },
         select: PUBLIC_USER_FIELDS,
     });
 

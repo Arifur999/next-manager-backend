@@ -4,6 +4,7 @@ import { InvoiceStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { resolveScope } from "../../shared/resolveScope.js";
 import { logActivity, money } from "../../shared/activity.js";
 import { isOverdue, recalcInvoiceStatus } from "../../shared/invoiceStatus.js";
 import { dateRangeWhere, escapeLikeTerm, findPage, type ListOptions } from "../../shared/listQuery.js";
@@ -56,6 +57,28 @@ const nextInvoiceNumber = async (tx: Prisma.TransactionClient, organizationId: s
     return formatInvoiceNumber(row?.seq ?? null);
 };
 
+/**
+ * Invoices the caller may see, from the invoices view scope. "own" is their
+ * book of clients, the same reach the sales reports use; "assigned" is the
+ * billing on projects they are on. organization_id always sits above this.
+ */
+const visibilityScope = async (user: IRequestUser): Promise<Prisma.InvoiceWhereInput> => {
+    const scope = await resolveScope(user, "invoices", "view");
+
+    switch (scope) {
+        case "all":
+            return {};
+        case "assigned":
+            return { project: { members: { some: { user_id: user.userId } } } };
+        case "own":
+            return { client: { owner_id: user.userId } };
+        case "none":
+        default:
+            // Matches nothing, so the by-id reads and writes 404 as well.
+            return { id: { in: [] } };
+    }
+};
+
 const decorate = <T extends { status: InvoiceStatus; due_date: Date }>(invoice: T) => ({
     ...invoice,
     is_overdue: isOverdue(invoice),
@@ -65,6 +88,7 @@ const getAllInvoices = async (user: IRequestUser, options: ListOptions = {}) => 
     const where: Prisma.InvoiceWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
+        ...(await visibilityScope(user)),
         ...dateRangeWhere(options, "issue_date"),
         ...(options.search
             ? {
@@ -93,7 +117,7 @@ const getAllInvoices = async (user: IRequestUser, options: ListOptions = {}) => 
 
 const getSingleInvoice = async (id: string, user: IRequestUser) => {
     const invoice = await prisma.invoice.findFirst({
-        where: { id, organization_id: user.organizationId, deleted_at: null },
+        where: { id, organization_id: user.organizationId, deleted_at: null, ...(await visibilityScope(user)) },
         include: {
             client: { select: { id: true, name: true, company: true, email: true, phone: true } },
             project: { select: { id: true, name: true, code: true } },
@@ -179,7 +203,7 @@ const createInvoice = async (payload: ICreateInvoicePayload, user: IRequestUser)
 const updateInvoice = async (id: string, payload: IUpdateInvoicePayload, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
         const existing = await tx.invoice.findFirst({
-            where: { id, organization_id: user.organizationId, deleted_at: null },
+            where: { id, organization_id: user.organizationId, deleted_at: null, ...(await visibilityScope(user)) },
         });
 
         if (!existing) {

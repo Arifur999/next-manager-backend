@@ -4,10 +4,45 @@ import { ClientStatus, LeadStage } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { resolveScope } from "../../shared/resolveScope.js";
 import { OPEN_LEAD_STAGES, recordStageMove } from "../../shared/leadStage.js";
 import { escapeLikeTerm, type ListOptions } from "../../shared/listQuery.js";
 import { ICreateLeadPayload, IUpdateLeadPayload } from "./lead.validation.js";
 import { assertOwnMember } from "../../shared/ownership.js";
+
+/**
+ * Leads the caller may see, from the leads view scope. A lead has one owner,
+ * so "assigned" and "own" both mean the deals they hold. organization_id
+ * always sits above this.
+ */
+const visibilityScope = async (user: IRequestUser): Promise<Prisma.LeadWhereInput> => {
+    const scope = await resolveScope(user, "leads", "view");
+
+    switch (scope) {
+        case "all":
+            return {};
+        case "assigned":
+        case "own":
+            return { owner_id: user.userId };
+        case "none":
+        default:
+            // Matches nothing, so the by-id paths below 404 as well.
+            return { id: { in: [] } };
+    }
+};
+
+/** One lead the caller may see, or a 404 for every other answer. */
+const findVisibleLead = async (db: Prisma.TransactionClient | typeof prisma, id: string, user: IRequestUser) => {
+    const lead = await db.lead.findFirst({
+        where: { id, organization_id: user.organizationId, deleted_at: null, ...(await visibilityScope(user)) },
+    });
+
+    if (!lead) {
+        throw new AppError(status.NOT_FOUND, "Lead not found");
+    }
+
+    return lead;
+};
 
 /** The sales pipeline, grouped by stage for the kanban board rather than bucketed in the browser. */
 
@@ -19,6 +54,7 @@ const getPipeline = async (
     const where: Prisma.LeadWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
+        ...(await visibilityScope(user)),
         // Their own board rather than the agency's, when they ask for it.
         ...(filters.mine ? { owner_id: user.userId } : {}),
         ...(options.search
@@ -123,13 +159,7 @@ const createLead = async (payload: ICreateLeadPayload, user: IRequestUser) => {
 
 const updateLead = async (id: string, payload: IUpdateLeadPayload, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
-        const existing = await tx.lead.findFirst({
-            where: { id, organization_id: user.organizationId, deleted_at: null },
-        });
-
-        if (!existing) {
-            throw new AppError(status.NOT_FOUND, "Lead not found");
-        }
+        const existing = await findVisibleLead(tx, id, user);
 
         await assertSource(tx, payload.source_id, user);
         await assertOwnMember(tx, payload.owner_id, user.organizationId, "That person is not on your team");
@@ -160,13 +190,7 @@ const updateLead = async (id: string, payload: IUpdateLeadPayload, user: IReques
  */
 const convertToClient = async (id: string, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
-        const lead = await tx.lead.findFirst({
-            where: { id, organization_id: user.organizationId, deleted_at: null },
-        });
-
-        if (!lead) {
-            throw new AppError(status.NOT_FOUND, "Lead not found");
-        }
+        const lead = await findVisibleLead(tx, id, user);
 
         if (lead.converted_client_id) {
             throw new AppError(status.CONFLICT, "This lead has already been converted");
@@ -221,14 +245,7 @@ const convertToClient = async (id: string, user: IRequestUser) => {
  * each step take", which is what cycle length and velocity are made of.
  */
 const getStageEvents = async (id: string, user: IRequestUser) => {
-    const lead = await prisma.lead.findFirst({
-        where: { id, organization_id: user.organizationId, deleted_at: null },
-        select: { id: true },
-    });
-
-    if (!lead) {
-        throw new AppError(status.NOT_FOUND, "Lead not found");
-    }
+    await findVisibleLead(prisma, id, user);
 
     return prisma.leadStageEvent.findMany({
         where: { lead_id: id },
@@ -237,13 +254,7 @@ const getStageEvents = async (id: string, user: IRequestUser) => {
 };
 
 const deleteLead = async (id: string, user: IRequestUser) => {
-    const existing = await prisma.lead.findFirst({
-        where: { id, organization_id: user.organizationId, deleted_at: null },
-    });
-
-    if (!existing) {
-        throw new AppError(status.NOT_FOUND, "Lead not found");
-    }
+    await findVisibleLead(prisma, id, user);
 
     await prisma.lead.update({ where: { id }, data: { deleted_at: new Date() } });
 

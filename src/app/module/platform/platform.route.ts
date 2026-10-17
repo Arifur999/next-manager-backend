@@ -3,15 +3,14 @@ import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
-import { inviteTokenRateLimit } from "../../middleware/rateLimit.js";
 import { AgencyInviteRoutes } from "./agencyInvite.route.js";
 import { AnnouncementController } from "./announcement.controller.js";
 import { PlatformController } from "./platform.controller.js";
 import { PlatformFinanceController } from "./platformFinance.controller.js";
-import { PlatformInviteController } from "./platformInvite.controller.js";
+import { PlatformInviteRoutes } from "./platformInvite.route.js";
 import { PlatformSettingsController } from "./platformSettings.controller.js";
-import { acceptPlatformInviteZodSchema, createAnnouncementZodSchema, createCompanyZodSchema, createPlatformExpenseZodSchema, createPlatformInviteZodSchema, createPlanZodSchema, setPlatformPermissionsZodSchema, setSubscriptionZodSchema, updateAnnouncementZodSchema, updatePlanZodSchema, updatePlatformSettingsZodSchema, updatePlatformExpenseZodSchema, companyListQueryZodSchema, platformActivityQueryZodSchema, platformTrendQueryZodSchema } from "./platform.validation.js";
-import { idParams, tokenParams, organizationIdParams } from "../../shared/requestSchemas.js";
+import { createAnnouncementZodSchema, createCompanyZodSchema, createPlatformExpenseZodSchema, createPlanZodSchema, setPlatformPermissionsZodSchema, setSubscriptionZodSchema, updateAnnouncementZodSchema, updatePlanZodSchema, updatePlatformSettingsZodSchema, updatePlatformExpenseZodSchema, companyListQueryZodSchema, platformActivityQueryZodSchema, platformTrendQueryZodSchema } from "./platform.validation.js";
+import { idParams, organizationIdParams } from "../../shared/requestSchemas.js";
 import { listQuerySchema } from "../../shared/listQuery.js";
 
 const router = Router();
@@ -108,43 +107,7 @@ router.patch(
     PlatformController.setPermissions
 );
 
-// Growing the team. Every one of these is behind platform.admins.manage - the
-// permission that can grant every other, including itself.
-router.get(
-    "/invites",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.admins.manage"),
-    PlatformInviteController.getInvites
-);
-router.post(
-    "/invites",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.admins.manage"),
-    validateRequest(createPlatformInviteZodSchema),
-    PlatformInviteController.createInvite
-);
-router.delete(
-    "/invites/:id",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.admins.manage"),
-    validateRequest({ params: idParams }),
-    PlatformInviteController.revokeInvite
-);
-
-router.post(
-    "/admins/:id/approve",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.admins.manage"),
-    validateRequest({ params: idParams }),
-    PlatformInviteController.approveAdmin
-);
-router.delete(
-    "/admins/:id",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.admins.manage"),
-    validateRequest({ params: idParams }),
-    PlatformInviteController.removeAdmin
-);
+router.use(PlatformInviteRoutes);
 
 // AGENCIO's own books. Reading the numbers and recording what is spent are
 // separate permissions: somebody can be shown how the business is doing
@@ -259,21 +222,3 @@ router.patch(
 router.use(AgencyInviteRoutes);
 
 export const PlatformRoutes = router;
-
-// ---------------------------------------------------------------------------
-// Public. Whoever opens the link has no account yet.
-// ---------------------------------------------------------------------------
-//
-// Its own token space, separate from the company join routes: the two never
-// mix, and a token for one can never be mistaken for the other.
-const publicRouter = Router();
-
-publicRouter.get("/:token", inviteTokenRateLimit, validateRequest({ params: tokenParams }), PlatformInviteController.getInviteByToken);
-publicRouter.post(
-    "/:token/accept",
-    inviteTokenRateLimit,
-    validateRequest({ params: tokenParams, body: acceptPlatformInviteZodSchema }),
-    PlatformInviteController.acceptInvite
-);
-
-export const PublicPlatformInviteRoutes = publicRouter;

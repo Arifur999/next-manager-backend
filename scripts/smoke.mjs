@@ -2801,6 +2801,15 @@ check(
   `${r.status} with ${(r.json.data ?? []).length} of ${ledger.length}`
 );
 
+// Every object inherits "constructor"; matching kinds with `in` let it through
+// and the ledger answered 500.
+r = await call("GET", "/transactions?kind=constructor");
+check(
+  "and so does a name every object inherits",
+  r.status === 200 && (r.json.data ?? []).length === ledger.length,
+  `${r.status} with ${(r.json.data ?? []).length} of ${ledger.length}`
+);
+
 r = await call("GET", `/transactions?account_id=${usdAccount}`);
 check(
   "the ledger can be narrowed to one account",

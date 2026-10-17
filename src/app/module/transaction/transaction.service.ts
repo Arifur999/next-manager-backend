@@ -53,8 +53,9 @@ const KINDS = {
 
 export type TransactionKind = keyof typeof KINDS;
 
+// Own keys only: `in` also accepts inherited names such as "constructor".
 export const isTransactionKind = (value: string): value is TransactionKind =>
-    value in KINDS;
+    Object.hasOwn(KINDS, value);
 
 const SELECT = {
     id: true,

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
+import { requireScope } from "../../middleware/requireScope.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { HrController } from "./hr.controller.js";
 import { completePayrollZodSchema, createLeaveTypeZodSchema, createPayrollRunZodSchema, decideLeaveZodSchema, recordAttendanceZodSchema, requestLeaveZodSchema, setPayrollItemsZodSchema, updateLeaveTypeZodSchema, attendanceListQueryZodSchema, leaveBalanceQueryZodSchema, leaveListQueryZodSchema } from "./hr.validation.js";
@@ -18,13 +19,14 @@ const approver = [Role.admin, Role.project_manager] as const;
 // Everybody clocks themselves in and can read attendance; the service narrows
 // anyone without the "all" attendance view to their own rows.
 router.get("/attendance", checkAuth(), requireCompany, validateRequest({ query: attendanceListQueryZodSchema }), HrController.getAttendance);
-router.post("/attendance/clock", checkAuth(), requireCompany, HrController.clock);
+router.post("/attendance/clock", checkAuth(), requireCompany, requireScope("attendance", "create"), HrController.clock);
 
 // Writing somebody else's day is a different claim from clocking your own, and
-// is recorded as such.
+// is recorded as such: it corrects the register, so it is the edit square.
 router.post(
     "/attendance",
     checkAuth(...approver),
+    requireScope("attendance", "edit"),
     validateRequest(recordAttendanceZodSchema),
     HrController.recordAttendance
 );
@@ -54,13 +56,16 @@ router.post(
     "/leave",
     checkAuth(),
     requireCompany,
+    requireScope("leave", "create"),
     validateRequest(requestLeaveZodSchema),
     HrController.requestLeave
 );
 router.post("/leave/:id/cancel", checkAuth(), requireCompany, validateRequest({ params: idParams }), HrController.cancelLeave);
+// Deciding is the leave edit square; `note` is optional and shown to the requester.
 router.post(
     "/leave/:id/decide",
     checkAuth(...approver),
+    requireScope("leave", "edit"),
     validateRequest({ params: idParams, body: decideLeaveZodSchema }),
     HrController.decideLeave
 );

@@ -284,6 +284,12 @@ const cancel = async (id: string, user: IRequestUser) => {
 
 /** Deciding, only a pending request, so a second decision cannot overwrite who made the first. */
 const decide = async (id: string, payload: IDecideLeavePayload, user: IRequestUser) => {
+    // Every decision is about somebody else, and only "all" reaches them - the
+    // same line the leave view draws. 404, so it confirms nothing.
+    if ((await resolveScope(user, "leave", "edit")) !== "all") {
+        throw new AppError(status.NOT_FOUND, "Request not found");
+    }
+
     const existing = await prisma.leaveRequest.findFirst({
         where: { id, organization_id: user.organizationId },
         select: {

@@ -106,6 +106,12 @@ const clock = async (user: IRequestUser) => {
  * in" and "somebody wrote it down for them" are different claims.
  */
 const record = async (payload: IRecordAttendancePayload, user: IRequestUser) => {
+    // Somebody else's day needs the "all" edit; anything narrower reaches only
+    // your own. The same 404 as a stranger, so it confirms nobody exists.
+    if (payload.user_id !== user.userId && (await resolveScope(user, "attendance", "edit")) !== "all") {
+        throw new AppError(status.NOT_FOUND, "That person is not on your team");
+    }
+
     const member = await prisma.user.findFirst({
         where: { id: payload.user_id, organization_id: user.organizationId, deleted_at: null },
         select: { id: true },

@@ -17,8 +17,8 @@ const router = Router();
 // else's entry reads as "not found" rather than as a refusal.
 router.get("/", checkAuth(), requireCompany, validateRequest({ query: timeEntryListQueryZodSchema }), TimeEntryController.getAllEntries);
 router.get("/summary", checkAuth(), requireCompany, validateRequest({ query: timeSummaryQueryZodSchema }), TimeEntryController.getSummary);
-router.post("/", checkAuth(), requireCompany, validateRequest(createTimeEntryZodSchema), TimeEntryController.createEntry);
-router.patch("/:id", checkAuth(), requireCompany, validateRequest({ params: idParams, body: updateTimeEntryZodSchema }), TimeEntryController.updateEntry);
+router.post("/", checkAuth(), requireCompany, requireScope("time", "create"), validateRequest(createTimeEntryZodSchema), TimeEntryController.createEntry);
+router.patch("/:id", checkAuth(), requireCompany, requireScope("time", "edit"), validateRequest({ params: idParams, body: updateTimeEntryZodSchema }), TimeEntryController.updateEntry);
 router.delete("/:id", checkAuth(), requireCompany, validateRequest({ params: idParams }), TimeEntryController.deleteEntry);
 
 // Capacity is the denominator of every utilization figure, so it stays with the

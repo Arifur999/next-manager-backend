@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { dateRangeWhere, escapeLikeTerm, findPage, listQuerySchema, pageSlice, paginationMeta } from "./listQuery.js";
+import z from "zod";
+import {
+    dateRangeWhere,
+    escapeLikeTerm,
+    findPage,
+    lenient,
+    listQuerySchema,
+    optionalFilter,
+    pageSlice,
+    paginationMeta,
+    queryBoolean,
+    queryFlag,
+} from "./listQuery.js";
 
 describe("listQuerySchema", () => {
     it("reads page, limit, search and dates", () => {
@@ -31,6 +43,59 @@ describe("listQuerySchema", () => {
 
     it("treats a blank search as none", () => {
         assert.equal(listQuerySchema.parse({ search: "   " }).search, undefined);
+    });
+});
+
+describe("optionalFilter", () => {
+    const status = z.object({ status: optionalFilter(z.enum(["open", "closed"])) });
+
+    it("passes a valid value through", () => {
+        assert.equal(status.parse({ status: "open" }).status, "open");
+    });
+
+    it("treats an empty value as no filter", () => {
+        assert.equal(status.parse({ status: "" }).status, undefined);
+        assert.equal(status.parse({}).status, undefined);
+    });
+
+    it("refuses an invalid value", () => {
+        assert.equal(status.safeParse({ status: "pending" }).success, false);
+    });
+});
+
+describe("lenient", () => {
+    const status = z.object({ status: lenient(z.enum(["open", "closed"])) });
+
+    it("passes a valid value through", () => {
+        assert.equal(status.parse({ status: "closed" }).status, "closed");
+    });
+
+    it("ignores an invalid value instead of refusing it", () => {
+        assert.equal(status.parse({ status: "pending" }).status, undefined);
+    });
+});
+
+describe("queryFlag", () => {
+    const flags = z.object({ mine: queryFlag });
+
+    it("is true only for the string true", () => {
+        assert.equal(flags.parse({ mine: "true" }).mine, true);
+        assert.equal(flags.parse({ mine: "1" }).mine, false);
+        assert.equal(flags.parse({}).mine, false);
+    });
+});
+
+describe("queryBoolean", () => {
+    const filters = z.object({ success: queryBoolean });
+
+    it("reads true and false", () => {
+        assert.equal(filters.parse({ success: "true" }).success, true);
+        assert.equal(filters.parse({ success: "false" }).success, false);
+    });
+
+    it("means no filter for anything else", () => {
+        assert.equal(filters.parse({ success: "maybe" }).success, undefined);
+        assert.equal(filters.parse({}).success, undefined);
     });
 });
 

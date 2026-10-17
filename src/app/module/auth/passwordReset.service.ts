@@ -83,6 +83,24 @@ const forgotPassword = async (
     return sameAnswer;
 };
 
+/** A reset link works while it is unused and in date - the same test the reset itself claims with. */
+export const isUsableResetLink = (link: { used_at: Date | null; expires_at: Date } | null, now: Date) =>
+    link !== null && link.used_at === null && link.expires_at.getTime() > now.getTime();
+
+/**
+ * Whether a reset link still works, so the page can say it expired before
+ * anybody types a password. Answers that and nothing else: not whose it is,
+ * and not whether it expired or was used, for the reason resetPassword gives.
+ */
+const checkResetLink = async (token: string) => {
+    const link = await prisma.passwordResetToken.findUnique({
+        where: { token_hash: hashLinkToken(token) },
+        select: { used_at: true, expires_at: true },
+    });
+
+    return { valid: isUsableResetLink(link, new Date()) };
+};
+
 /**
  * Finish a reset.
  *
@@ -136,5 +154,6 @@ const resetPassword = async (payload: IResetPasswordPayload) => {
 
 export const PasswordResetService = {
     forgotPassword,
+    checkResetLink,
     resetPassword,
 };

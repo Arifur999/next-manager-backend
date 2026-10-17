@@ -9,6 +9,10 @@
  *
  * Run:  npm run test:leaks   (with the server up)
  */
+import { createHash, randomBytes } from "node:crypto";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../src/generated/prisma/client.js";
+
 const BASE = "http://localhost:5000/api/v1";
 const stamp = Date.now();
 let bad = 0;
@@ -141,6 +145,49 @@ for (const path of ["/projects", "/projects?mine=true", `/projects/${project.id}
         console.log(`  clean operations ${path}`);
     }
 }
+
+// The reset-link check answers whether a link works and nothing else. The
+// link rows are written straight to the database, so no mail is ever sent.
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
+const resetUser = await prisma.user.findFirst({ where: { email }, select: { id: true } });
+const linkToken = randomBytes(32).toString("hex");
+const linkRow = await prisma.passwordResetToken.create({
+    data: {
+        user_id: resetUser?.id ?? "",
+        token_hash: createHash("sha256").update(linkToken).digest("hex"),
+        expires_at: new Date(Date.now() + 30 * 60 * 1000),
+    },
+    select: { id: true },
+});
+
+const checkLink = async (token: string) => {
+    const res = await call("GET", `/auth/reset-password/${token}`);
+    return { status: res.status, data: (JSON.parse(res.text) as { data?: Record<string, unknown> }).data ?? {} };
+};
+const onlyValid = (data: Record<string, unknown>) => Object.keys(data).join(",") === "valid";
+
+for (const [label, token, expected] of [
+    ["a fresh reset link", linkToken, true],
+    ["an unknown reset link", randomBytes(32).toString("hex"), false],
+] as const) {
+    const res = await checkLink(token);
+    if (res.status !== 200 || res.data.valid !== expected || !onlyValid(res.data)) {
+        bad += 1;
+        console.log(`  LEAK  ${label}: ${res.status} ${JSON.stringify(res.data)}`);
+    } else {
+        console.log(`  clean ${label} answers valid=${expected} and nothing else`);
+    }
+}
+
+await prisma.passwordResetToken.update({ where: { id: linkRow.id }, data: { used_at: new Date() } });
+const spent = await checkLink(linkToken);
+if (spent.data.valid !== false || !onlyValid(spent.data)) {
+    bad += 1;
+    console.log(`  LEAK  a used reset link still answers ${JSON.stringify(spent.data)}`);
+} else {
+    console.log("  clean a used reset link answers valid=false");
+}
+await prisma.$disconnect();
 
 console.log(`\n${bad === 0 ? "NOTHING LEAKED" : `${bad} LEAK(S)`}`);
 process.exitCode = bad === 0 ? 0 : 1;

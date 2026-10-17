@@ -6,6 +6,7 @@ import { cookieUtils } from "../../utils/cookie.js";
 import { AuthService } from "./auth.service.js";
 import { PasswordResetService } from "./passwordReset.service.js";
 import { requireUser } from "../../shared/requireUser.js";
+import { paramsOf, tokenParams } from "../../shared/requestSchemas.js";
 
 const register = catchAsync(async (req: Request, res: Response) => {
     const result = await AuthService.register(req.body);
@@ -123,6 +124,18 @@ const forgotPassword = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const checkResetLink = catchAsync(async (req: Request, res: Response) => {
+    const result = await PasswordResetService.checkResetLink(paramsOf(req, tokenParams).token);
+    sendResponse(res, {
+        success: true,
+        httpStatus: status.OK,
+        message: result.valid
+            ? "This reset link can be used"
+            : "That reset link is no longer valid. Ask for a new one.",
+        data: result,
+    });
+});
+
 const resetPassword = catchAsync(async (req: Request, res: Response) => {
     const result = await PasswordResetService.resetPassword(req.body);
     sendResponse(res, {
@@ -142,5 +155,6 @@ export const AuthController = {
     updateMe,
     changePassword,
     forgotPassword,
+    checkResetLink,
     resetPassword,
 };

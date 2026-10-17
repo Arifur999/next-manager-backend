@@ -2,6 +2,7 @@ import { Router } from "express";
 import { checkAuth } from "../../middleware/checkAuth.js";
 import { authRateLimit, refreshRateLimit } from "../../middleware/rateLimit.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
+import { tokenParams } from "../../shared/requestSchemas.js";
 import { AuthController } from "./auth.controller.js";
 import {
     changePasswordZodSchema,
@@ -28,6 +29,14 @@ router.post(
     authRateLimit,
     validateRequest(forgotPasswordZodSchema),
     AuthController.forgotPassword
+);
+// Whether a link still works, before the form is filled in. The same limit as
+// the reset itself: the answer tells a guesser whether a token was right.
+router.get(
+    "/reset-password/:token",
+    authRateLimit,
+    validateRequest({ params: tokenParams }),
+    AuthController.checkResetLink
 );
 router.post(
     "/reset-password",

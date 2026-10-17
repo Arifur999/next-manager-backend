@@ -26,11 +26,8 @@ const findPendingMember = async (id: string, user: IRequestUser) => {
 };
 
 /**
- * Let somebody in.
- *
- * **This is where the seat is charged**, not at invite time. A pending person
- * has no access, so billing for them would be billing for nothing - and it
- * would let anybody holding a link exhaust the company's plan.
+ * Let somebody in. The seat is charged here, not at invite time: a pending
+ * person has no access, and charging earlier would let a link exhaust the plan.
  */
 const approveMember = async (id: string, user: IRequestUser) => {
     const member = await findPendingMember(id, user);
@@ -60,12 +57,9 @@ const approveMember = async (id: string, user: IRequestUser) => {
 };
 
 /**
- * Turn somebody down.
- *
- * Soft-deleted and suspended together, the same as removing a member: a row
- * flagged deleted but still active would keep passing checkAuth. The account
- * is kept rather than erased so a second request from the same person is
- * visibly a second request.
+ * Turn somebody down: soft-deleted and suspended together, as when removing a
+ * member, since a deleted but active row would still pass checkAuth. Kept, so
+ * a second request from the same person shows as one.
  */
 const rejectMember = async (id: string, payload: IRejectMemberPayload, user: IRequestUser) => {
     const member = await findPendingMember(id, user);

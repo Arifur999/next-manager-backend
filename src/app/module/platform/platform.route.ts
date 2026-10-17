@@ -4,13 +4,13 @@ import { checkAuth } from "../../middleware/checkAuth.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { inviteTokenRateLimit } from "../../middleware/rateLimit.js";
-import { AgencyInviteController } from "./agencyInvite.controller.js";
+import { AgencyInviteRoutes } from "./agencyInvite.route.js";
 import { AnnouncementController } from "./announcement.controller.js";
 import { PlatformController } from "./platform.controller.js";
 import { PlatformFinanceController } from "./platformFinance.controller.js";
 import { PlatformInviteController } from "./platformInvite.controller.js";
 import { PlatformSettingsController } from "./platformSettings.controller.js";
-import { acceptAgencyInviteZodSchema, acceptPlatformInviteZodSchema, createAgencyInviteZodSchema, createAnnouncementZodSchema, createCompanyZodSchema, createPlatformExpenseZodSchema, createPlatformInviteZodSchema, createPlanZodSchema, setPlatformPermissionsZodSchema, setSubscriptionZodSchema, updateAnnouncementZodSchema, updatePlanZodSchema, updatePlatformSettingsZodSchema, updatePlatformExpenseZodSchema, companyListQueryZodSchema, platformActivityQueryZodSchema, platformTrendQueryZodSchema } from "./platform.validation.js";
+import { acceptPlatformInviteZodSchema, createAnnouncementZodSchema, createCompanyZodSchema, createPlatformExpenseZodSchema, createPlatformInviteZodSchema, createPlanZodSchema, setPlatformPermissionsZodSchema, setSubscriptionZodSchema, updateAnnouncementZodSchema, updatePlanZodSchema, updatePlatformSettingsZodSchema, updatePlatformExpenseZodSchema, companyListQueryZodSchema, platformActivityQueryZodSchema, platformTrendQueryZodSchema } from "./platform.validation.js";
 import { idParams, tokenParams, organizationIdParams } from "../../shared/requestSchemas.js";
 import { listQuerySchema } from "../../shared/listQuery.js";
 
@@ -256,33 +256,7 @@ router.patch(
     PlatformSettingsController.updateSettings
 );
 
-// ---------------------------------------------------------------------------
-// Bringing an agency on
-// ---------------------------------------------------------------------------
-//
-// The console's actual job. Gated by companies.manage, the same permission as
-// creating one by hand - this is the same act with the password step handed
-// back to the person it belongs to.
-router.get(
-    "/agency-invites",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.companies.view"),
-    AgencyInviteController.getInvites
-);
-router.post(
-    "/agency-invites",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.companies.manage"),
-    validateRequest(createAgencyInviteZodSchema),
-    AgencyInviteController.createInvite
-);
-router.delete(
-    "/agency-invites/:id",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.companies.manage"),
-    validateRequest({ params: idParams }),
-    AgencyInviteController.revokeInvite
-);
+router.use(AgencyInviteRoutes);
 
 export const PlatformRoutes = router;
 
@@ -303,22 +277,3 @@ publicRouter.post(
 );
 
 export const PublicPlatformInviteRoutes = publicRouter;
-
-// ---------------------------------------------------------------------------
-// Public: opening an agency from an invite.
-// ---------------------------------------------------------------------------
-//
-// Its own token space again. A token for one flow can never be mistaken for a
-// token for another, which matters most here - these two links produce very
-// different accounts.
-const agencyRouter = Router();
-
-agencyRouter.get("/:token", inviteTokenRateLimit, validateRequest({ params: tokenParams }), AgencyInviteController.getInviteByToken);
-agencyRouter.post(
-    "/:token/accept",
-    inviteTokenRateLimit,
-    validateRequest({ params: tokenParams, body: acceptAgencyInviteZodSchema }),
-    AgencyInviteController.acceptInvite
-);
-
-export const PublicAgencyInviteRoutes = agencyRouter;

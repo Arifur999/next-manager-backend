@@ -14,19 +14,10 @@ import {
 import { toDateOnly } from "../../shared/dates.js";
 
 /**
- * Logged hours.
- *
- * Two rules run through the whole module:
- *
- *   1. **Operations only ever touches their own time.** Not a UI courtesy - the
- *      scope is applied to the where clause, so an id belonging to someone else
- *      reads as "not found" rather than as a permission error. Which of a
- *      colleague's rows exist is not information to hand out.
- *
- *   2. **Approved entries are frozen.** Approval is what makes an hour
- *      billable; letting it be edited afterwards means the number a report was
- *      built from can change under it. Correcting an approved entry means
- *      un-approving it first, which is a deliberate act by someone senior.
+ * Logged hours. Without the "all" time view a person touches only their own
+ * entries, applied in the where clause so a colleague's id reads as not found.
+ * Approved entries are frozen: approval makes an hour billable, so correcting
+ * one means un-approving it first.
  */
 
 
@@ -42,11 +33,8 @@ const INCLUDE = {
 } as const;
 
 /**
- * Whose hours this person may read.
- *
- * From the permission rows now rather than `role === operations`. A time entry
- * belongs to exactly one person, so there is nothing between "mine" and
- * "everybody": only `all` sees the company's.
+ * Whose hours this person may read. An entry belongs to one person, so there is
+ * nothing between "mine" and "everybody": only `all` sees the company's.
  */
 const seesOnlyOwn = async (user: IRequestUser) =>
     (await resolveScope(user, "time", "view")) !== "all";
@@ -55,11 +43,8 @@ const visibilityScope = async (user: IRequestUser): Promise<Prisma.TimeEntryWher
     (await seesOnlyOwn(user)) ? { user_id: user.userId } : {};
 
 /**
- * The projects somebody may log against.
- *
- * Deliberately the PROJECTS scope, not the time one. Logging hours against a
- * project you cannot see is the hole this closes, and the two questions have
- * one answer: if the project list would not show it to you, you cannot bill it.
+ * The projects somebody may log against: the PROJECTS view scope, not the time
+ * one, so nobody bills hours to a project their project list would not show.
  */
 const loggableProjectScope = async (user: IRequestUser): Promise<Prisma.ProjectWhereInput> => {
     const scope = await resolveScope(user, "projects", "view");

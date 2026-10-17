@@ -12,11 +12,8 @@ import { availableHours } from "../kpi/kpi.formulas.js";
 import { ISetCapacityPayload } from "./timeEntry.validation.js";
 
 /**
- * Everyone's weekly capacity, defaulted for anyone who has never had one set.
- *
- * Returning a row for every active person rather than only those with a stored
- * capacity is what lets utilization be computed for the whole team without the
- * caller having to know who is missing.
+ * Everyone's weekly capacity, with a default row for anybody never set, so
+ * utilization covers the whole team.
  */
 const getCapacities = async (user: IRequestUser) => {
     const [members, rows] = await Promise.all([
@@ -80,22 +77,10 @@ const setCapacity = async (
 };
 
 /**
- * What each person is carrying, and what is left of them.
- *
- * ONE query behind both readings. Workload is the hours side, Availability is
- * the gap side, and computing them apart is how two screens end up disagreeing
- * about one person's week - which is the mistake `loadCapacityRows` already
- * exists to have fixed once.
- *
- * Capacity DEFAULTS to 40 rather than staying null, following the decision that
- * helper documents: a company that has never opened the capacity screen still
- * gets a figure. What it also gets is `is_default` on every row, so the screen
- * can say which denominators are an assumption rather than a decision.
- *
- * Hours are counted as LOGGED, not as approved. A project manager deciding who
- * to give work to next needs what people are actually doing this week, and
- * approval happens days later - waiting for it would show a team as idle right
- * up until the moment it was too late to act on.
+ * What each person is carrying and what is left: one query behind both the
+ * Workload and Availability screens, so they cannot disagree. Capacity defaults
+ * to 40 with `is_default` on the row, and hours count as LOGGED, not approved,
+ * because approval lands days after the week it describes.
  */
 const getWorkload = async (user: IRequestUser, options: ListOptions = {}) => {
     // Defaults to the current week, because "who is free right now" is the

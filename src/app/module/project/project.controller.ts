@@ -4,6 +4,7 @@ import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ProjectService } from "./project.service.js";
+import { ProjectFinancialsService } from "./projectFinancials.service.js";
 import { idOf, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
 import { projectListQueryZodSchema } from "./project.validation.js";
@@ -31,7 +32,7 @@ const getSingleProject = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getProjectFinancials = catchAsync(async (req: Request, res: Response) => {
-    const result = await ProjectService.getProjectFinancials(idOf(req), requireUser(req));
+    const result = await ProjectFinancialsService.getProjectFinancials(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { checkAuth } from "../../middleware/checkAuth.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
+import { requireScope } from "../../middleware/requireScope.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { ChatController } from "./chat.controller.js";
 import { addMembersZodSchema, createConversationZodSchema, sendMessageZodSchema, conversationListQueryZodSchema } from "./chat.validation.js";
@@ -22,9 +23,12 @@ const member = [checkAuth(), requireCompany] as const;
 router.get("/unread", ...member, ChatController.getUnreadTotal);
 
 router.get("/", ...member, validateRequest({ query: conversationListQueryZodSchema }), ChatController.getConversations);
+// Starting a conversation and sending into one are the chat create square;
+// reading is the view square, checked in the service with the membership.
 router.post(
     "/",
     ...member,
+    requireScope("chat", "create"),
     validateRequest(createConversationZodSchema),
     ChatController.createConversation
 );
@@ -35,6 +39,7 @@ router.get("/:id/messages", ...member, validateRequest({ params: idParams, query
 router.post(
     "/:id/messages",
     ...member,
+    requireScope("chat", "create"),
     validateRequest({ params: idParams, body: sendMessageZodSchema }),
     ChatController.sendMessage
 );

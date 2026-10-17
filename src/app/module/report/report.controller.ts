@@ -1,5 +1,4 @@
 import { Request, Response } from "express";
-import { Role } from "../../../generated/prisma/enums.js";
 import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
 import { listQuerySchema } from "../../shared/listQuery.js";
@@ -32,16 +31,11 @@ const getCashFlow = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getClientRevenue = catchAsync(async (req: Request, res: Response) => {
-    const { mine: askedForMine, ...options } = queryOf(req, clientRevenueQueryZodSchema);
-    const user = requireUser(req);
+    const { mine, ...options } = queryOf(req, clientRevenueQueryZodSchema);
 
-    // Sales is FORCED into their own book, never asked. Reading it from the
-    // query would mean the whole agency's revenue was one dropped parameter
-    // away - and a parameter that has to be present for a rule to hold is not
-    // a rule. An admin may narrow to their own; they are just not made to.
-    const mine = user.role === Role.sales || askedForMine;
-
-    const result = await ReportService.getClientRevenue(user, options, { mine });
+    // Sales is forced into their own book by the reports scope in the service;
+    // `mine` only lets somebody with the whole view narrow it themselves.
+    const result = await ReportService.getClientRevenue(requireUser(req), options, { mine });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

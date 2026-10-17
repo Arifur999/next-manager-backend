@@ -1,11 +1,14 @@
+import status from "http-status";
 import { Prisma } from "../../../generated/prisma/client.js";
 import {
     Currency,
     ExpenseCategoryType,
     LedgerSource,
 } from "../../../generated/prisma/enums.js";
+import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { resolveScope } from "../../shared/resolveScope.js";
 import { type ListOptions } from "../../shared/listQuery.js";
 import { endOfDay, toDateOnly } from "../../shared/dates.js";
 
@@ -27,6 +30,22 @@ const dateWhere = (options: ListOptions, column = "date") => {
     return range ? { [column]: range } : {};
 };
 
+/** How far this caller's reports reach, from the reports view square. */
+const reportScope = (user: IRequestUser) => resolveScope(user, "reports", "view");
+
+/**
+ * Profit and loss, cash flow and the monthly series are agency totals: there
+ * is no "your share" of them, so anything short of "all" is refused.
+ */
+const assertWholeAgency = async (user: IRequestUser) => {
+    if ((await reportScope(user)) !== "all") {
+        throw new AppError(
+            status.FORBIDDEN,
+            "These figures cover the whole agency. Ask an admin to allow: reports — view, everything."
+        );
+    }
+};
+
 /**
  * Profit and loss. Owner withdrawals and shareholder distributions are not
  * costs: they are earned profit leaving. Borrowed money is not income and
@@ -35,6 +54,7 @@ const dateWhere = (options: ListOptions, column = "date") => {
  * so they read beside team payouts without being counted twice.
  */
 const getProfitAndLoss = async (user: IRequestUser, options: ListOptions = {}) => {
+    await assertWholeAgency(user);
     const scope = { organization_id: user.organizationId, deleted_at: null, ...dateWhere(options) };
 
     const [income, expenseByType, payouts, interest] = await Promise.all([
@@ -99,6 +119,7 @@ const getProfitAndLoss = async (user: IRequestUser, options: ListOptions = {}) =
  * movement whatever caused it, so it cannot fall out of step with the modules.
  */
 const getCashFlow = async (user: IRequestUser, options: ListOptions = {}) => {
+    await assertWholeAgency(user);
     const grouped = await prisma.accountTransaction.groupBy({
         by: ["source_type", "currency"],
         where: { organization_id: user.organizationId, ...dateWhere(options) },
@@ -136,17 +157,23 @@ const getCashFlow = async (user: IRequestUser, options: ListOptions = {}) => {
 };
 
 /**
- * Revenue per client, highest first. `mine` narrows it to the clients the caller
- * brought in - the only form a salesperson may ask for - and filters the
- * payments as well as the list, so nobody else's revenue is grouped under a null
- * client.
+ * Revenue per client, highest first. Narrowed to the clients the caller brought
+ * in when they ask (`mine`) and whenever their reports scope is short of "all"
+ * - sales by default - and the payments are filtered as well as the list, so
+ * nobody else's revenue is grouped under a null client.
  */
 const getClientRevenue = async (
     user: IRequestUser,
     options: ListOptions = {},
     filters: { mine?: boolean } = {}
 ) => {
-    const ownScope = filters.mine ? { client: { owner_id: user.userId } } : {};
+    const scope = await reportScope(user);
+    if (scope === "none") return [];
+
+    // Forced by the scope, never read from the query alone: a rule that holds
+    // only while a parameter is present is not a rule.
+    const mine = scope !== "all" || filters.mine;
+    const ownScope = mine ? { client: { owner_id: user.userId } } : {};
 
     const grouped = await prisma.payment.groupBy({
         by: ["client_id"],
@@ -163,7 +190,7 @@ const getClientRevenue = async (
     const clients = await prisma.client.findMany({
         where: {
             organization_id: user.organizationId,
-            ...(filters.mine ? { owner_id: user.userId } : {}),
+            ...(mine ? { owner_id: user.userId } : {}),
         },
         select: { id: true, name: true, company: true },
     });
@@ -180,13 +207,20 @@ const getClientRevenue = async (
         .sort((a, b) => b.revenue_usd - a.revenue_usd);
 };
 
-/** Profitability per project, in four grouped queries however many projects there are. */
+/**
+ * Profitability per project, in four grouped queries however many projects
+ * there are. A scope short of "all" keeps the projects the caller is on.
+ */
 const getProjectProfitability = async (user: IRequestUser, options: ListOptions = {}) => {
+    const reach = await reportScope(user);
+    if (reach === "none") return [];
+
     const scope = { organization_id: user.organizationId, deleted_at: null, ...dateWhere(options) };
+    const membership = reach === "all" ? {} : { members: { some: { user_id: user.userId } } };
 
     const [projects, payments, expenses, payouts] = await Promise.all([
         prisma.project.findMany({
-            where: { organization_id: user.organizationId, deleted_at: null },
+            where: { organization_id: user.organizationId, deleted_at: null, ...membership },
             select: {
                 id: true,
                 name: true,
@@ -250,6 +284,7 @@ const getProjectProfitability = async (user: IRequestUser, options: ListOptions 
 
 /** Monthly revenue and cost for the P&L chart, grouped in SQL rather than row by row in JavaScript. */
 const getMonthlySeries = async (user: IRequestUser, months = 12) => {
+    await assertWholeAgency(user);
     const start = new Date();
     start.setUTCMonth(start.getUTCMonth() - (months - 1), 1);
     start.setUTCHours(0, 0, 0, 0);

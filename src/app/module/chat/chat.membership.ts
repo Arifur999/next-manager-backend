@@ -3,6 +3,15 @@ import { Prisma } from "../../../generated/prisma/client.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
+import { resolveScope, type ScopeSubject } from "../../shared/resolveScope.js";
+
+/**
+ * Whether the chat view square lets this person read chat at all. Membership
+ * decides WHICH conversations; the square can only switch reading off, since
+ * "all" must never mean other people's direct messages.
+ */
+export const canReadChat = async (user: ScopeSubject) =>
+    (await resolveScope(user, "chat", "view")) !== "none";
 
 /**
  * Confirms this person is IN the conversation, and that it is their agency's.
@@ -17,6 +26,11 @@ export const assertMembership = async (
     conversationId: string,
     user: IRequestUser
 ) => {
+    // The same 404 as a stranger gets: chat switched off reads as no conversation.
+    if (!(await canReadChat(user))) {
+        throw new AppError(status.NOT_FOUND, "Conversation not found");
+    }
+
     const membership = await tx.conversationMember.findFirst({
         where: {
             conversation_id: conversationId,

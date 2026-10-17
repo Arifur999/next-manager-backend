@@ -23,11 +23,14 @@ import {
 
 type ResolvedPermissions = Map<string, PermissionScope>;
 
-const cache = new WeakMap<IRequestUser, Promise<ResolvedPermissions>>();
+/** Only what the answer depends on, so the chat socket can ask without a whole request user. */
+export type ScopeSubject = Pick<IRequestUser, "userId" | "organizationId" | "role">;
+
+const cache = new WeakMap<ScopeSubject, Promise<ResolvedPermissions>>();
 
 const key = (module: PermissionModule, action: PermissionAction) => `${module}.${action}`;
 
-const load = async (user: IRequestUser): Promise<ResolvedPermissions> => {
+const load = async (user: ScopeSubject): Promise<ResolvedPermissions> => {
     const [roleRows, userRows] = await Promise.all([
         prisma.rolePermission.findMany({
             where: { organization_id: user.organizationId, role: user.role },
@@ -55,7 +58,7 @@ const load = async (user: IRequestUser): Promise<ResolvedPermissions> => {
 };
 
 export const resolveScope = async (
-    user: IRequestUser,
+    user: ScopeSubject,
     module: PermissionModule,
     action: PermissionAction
 ): Promise<PermissionScope> => {

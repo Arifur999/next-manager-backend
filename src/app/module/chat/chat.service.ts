@@ -3,7 +3,7 @@ import { ConversationType } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
-import { assertMembership } from "./chat.membership.js";
+import { assertMembership, canReadChat } from "./chat.membership.js";
 import { IAddMembersPayload, ICreateConversationPayload } from "./chat.validation.js";
 
 /**
@@ -47,6 +47,8 @@ const getConversations = async (
     user: IRequestUser,
     filters: { type?: ConversationType; unreadOnly?: boolean; archived?: boolean } = {}
 ) => {
+    if (!(await canReadChat(user))) return { rows: [], total: 0 };
+
     const memberships = await prisma.conversationMember.findMany({
         where: {
             user_id: user.userId,
@@ -276,6 +278,8 @@ const setArchived = async (conversationId: string, archived: boolean, user: IReq
 
 /** How many unread messages this person has anywhere - the navbar's badge. */
 const getUnreadTotal = async (user: IRequestUser) => {
+    if (!(await canReadChat(user))) return { unread_count: 0 };
+
     const memberships = await prisma.conversationMember.findMany({
         where: {
             user_id: user.userId,

@@ -6,6 +6,7 @@ import { UserStatus } from "../../generated/prisma/enums.js";
 import { prisma } from "../lib/prisma.js";
 import { jwtUtils } from "../utils/jwt.js";
 import { isAllowedOrigin } from "../shared/allowedOrigins.js";
+import { canReadChat } from "../module/chat/chat.membership.js";
 import { readAccessToken } from "./readAccessToken.js";
 
 /**
@@ -48,7 +49,7 @@ const authenticate = async (cookieHeader?: string): Promise<Authenticated | null
     try {
         user = await prisma.user.findUnique({
             where: { id: userId },
-            select: { id: true, organization_id: true, status: true, token_version: true },
+            select: { id: true, organization_id: true, role: true, status: true, token_version: true },
         });
     } catch {
         return null;
@@ -64,7 +65,16 @@ const authenticate = async (cookieHeader?: string): Promise<Authenticated | null
     // would ever be pushed to them; refusing the socket says so plainly.
     if (!user.organization_id) return null;
 
-    return { userId: user.id, organizationId: user.organization_id };
+    const subject = { userId: user.id, organizationId: user.organization_id, role: user.role };
+    // Chat switched off on the permission grid gets no live copy of what the
+    // HTTP reads refuse. A database error refuses, like the lookup above.
+    try {
+        if (!(await canReadChat(subject))) return null;
+    } catch {
+        return null;
+    }
+
+    return { userId: subject.userId, organizationId: subject.organizationId };
 };
 
 const remember = (userId: string, socket: WebSocket) => {

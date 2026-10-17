@@ -21,6 +21,7 @@ import {
 import { ICreateTaskPayload, IUpdateTaskPayload } from "./task.validation.js";
 import { toDateOnly } from "../../shared/dates.js";
 import { assertOwnMember, assertOwnProject, assertOwnStatus } from "../../shared/ownership.js";
+import { assertMayAssign } from "./taskAssign.js";
 
 
 const INCLUDE = {
@@ -157,6 +158,10 @@ const createTask = async (payload: ICreateTaskPayload, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
         await assertReferences(tx, payload, user);
 
+        if (payload.assignee_id) {
+            await assertMayAssign(tx, user, { projectId: payload.project_id, assigneeId: payload.assignee_id });
+        }
+
         // Chosen, or whatever the board starts on. An agency always has
         // statuses - they are seeded with the organization - so a missing one
         // means somebody switched every single status off, and saying that is
@@ -226,6 +231,15 @@ const updateTask = async (id: string, payload: IUpdateTaskPayload, user: IReques
         }
 
         await assertReferences(tx, payload, user);
+
+        // Only a change of hands is an assignment, so a form that resends the
+        // current assignee with an edit is not refused for it.
+        if (payload.assignee_id !== undefined && payload.assignee_id !== existing.assignee_id) {
+            await assertMayAssign(tx, user, {
+                projectId: payload.project_id ?? existing.project_id,
+                assigneeId: payload.assignee_id,
+            });
+        }
 
         // completed_at is derived from the status, never accepted from the
         // client, and by CATEGORY rather than name, so an agency that renames

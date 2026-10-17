@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
-import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
+import { listQuerySchema, paginationMeta } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ChatService } from "./chat.service.js";
 import { idOf, queryOf } from "../../shared/requestSchemas.js";
@@ -37,7 +37,7 @@ const createConversation = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getMessages = catchAsync(async (req: Request, res: Response) => {
-    const options = parseListOptions(req.query as Record<string, unknown>);
+    const options = queryOf(req, listQuerySchema);
     const { rows, total } = await ChatService.getMessages(
         idOf(req),
         requireUser(req),

@@ -5,6 +5,7 @@ import { validateRequest } from "../../middleware/validateRequest.js";
 import { ChatController } from "./chat.controller.js";
 import { addMembersZodSchema, createConversationZodSchema, sendMessageZodSchema, conversationListQueryZodSchema } from "./chat.validation.js";
 import { idParams } from "../../shared/requestSchemas.js";
+import { listQuerySchema } from "../../shared/listQuery.js";
 
 const router = Router();
 
@@ -28,7 +29,7 @@ router.post(
     ChatController.createConversation
 );
 
-router.get("/:id/messages", ...member, validateRequest({ params: idParams }), ChatController.getMessages);
+router.get("/:id/messages", ...member, validateRequest({ params: idParams, query: listQuerySchema }), ChatController.getMessages);
 // Persisted here and broadcast afterwards, never socket-only: a dropped
 // connection must not lose a message.
 router.post(

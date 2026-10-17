@@ -84,3 +84,5 @@ Node 24 (Docker image), Express 5, TypeScript ESM (`.js` in import paths), Prism
 - Emails are compared case-insensitively in code; a unique index on `lower(email)` waits on a duplicate check of existing data.
 - Refresh tokens are not rotated or revoked server-side on logout.
 - The chat NOTIFY payload carries the recipient list; conversations above about 200 members exceed Postgres' 8000-byte limit and lose live updates.
+- Some list services still `include` whole relations; moving them to `select` needs a check that every key the web reads survives.
+- `GET /services` is unpaged and sends no `meta`, so the web's sales dashboard counts its rows (`next-manager/src/components/modules/Dashboard/SalesOverview.tsx`).

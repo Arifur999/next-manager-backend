@@ -1,9 +1,7 @@
 import { Request } from "express";
 import status from "http-status";
-import { SubscriptionStatus } from "../../generated/prisma/enums.js";
-import { Role } from "../../generated/prisma/enums.js";
+import { Role, SubscriptionStatus } from "../../generated/prisma/enums.js";
 import AppError from "../errorHelpers/AppError.js";
-import { IRequestUser } from "../interfaces/requestUser.interface.js";
 import { prisma } from "../lib/prisma.js";
 
 /**
@@ -34,7 +32,7 @@ const REASONS: Record<string, string> = {
  * lets checkAuth's own catch hand the error on.
  */
 export const enforceSubscription = async (req: Request): Promise<void> => {
-    const user = req.user as IRequestUser | undefined;
+    const user = req.user;
 
     // checkAuth sets this immediately before calling. No user means the call
     // order changed, which is a bug to fix rather than a request to refuse.

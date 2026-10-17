@@ -287,25 +287,6 @@ router.delete(
 export const PlatformRoutes = router;
 
 // ---------------------------------------------------------------------------
-// The customer half: the bell.
-// ---------------------------------------------------------------------------
-//
-// `checkAuth()` with no role, because a notice about Sunday maintenance is for
-// whoever works on Sunday, not only for whoever pays. Nothing here is scoped to
-// an organization - the audience is worked out from the reader's own company -
-// so requireCompany would add a way to fail and nothing else.
-const notificationRouter = Router();
-
-notificationRouter.get("/", checkAuth(), AnnouncementController.getMyAnnouncements);
-// Its own endpoint because the badge is polled: counting by fetching the list
-// would pull every body text across the wire to render one number.
-notificationRouter.get("/unread-count", checkAuth(), AnnouncementController.getUnreadCount);
-notificationRouter.post("/read-all", checkAuth(), AnnouncementController.markAllRead);
-notificationRouter.post("/:id/read", checkAuth(), validateRequest({ params: idParams }), AnnouncementController.markRead);
-
-export const NotificationRoutes = notificationRouter;
-
-// ---------------------------------------------------------------------------
 // Public. Whoever opens the link has no account yet.
 // ---------------------------------------------------------------------------
 //

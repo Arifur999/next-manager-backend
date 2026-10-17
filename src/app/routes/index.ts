@@ -25,11 +25,11 @@ import { LeadRoutes } from "../module/lead/lead.route.js";
 import { MilestoneRoutes } from "../module/milestone/milestone.route.js";
 import { OwnerWithdrawalRoutes } from "../module/ownerWithdrawal/ownerWithdrawal.route.js";
 import {
-    NotificationRoutes,
     PublicAgencyInviteRoutes,
     PlatformRoutes,
     PublicPlatformInviteRoutes,
 } from "../module/platform/platform.route.js";
+import { NotificationRoutes } from "../module/platform/notificationBell.route.js";
 import { PaymentRoutes } from "../module/payment/payment.route.js";
 import { ProjectRoutes } from "../module/project/project.route.js";
 import { ProjectMemberRoutes } from "../module/projectMember/projectMember.route.js";

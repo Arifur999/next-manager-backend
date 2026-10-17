@@ -1,5 +1,6 @@
 import z from "zod";
 import { DueDirection } from "../../../generated/prisma/enums.js";
+import { listQuerySchema, optionalFilter } from "../../shared/listQuery.js";
 
 export const createDuePersonZodSchema = z.object({
     name: z.string("Name must be string").min(1, "Name is required"),
@@ -26,3 +27,7 @@ export const createDueTransactionZodSchema = z.object({
 export type ICreateDuePersonPayload = z.infer<typeof createDuePersonZodSchema>;
 export type IUpdateDuePersonPayload = z.infer<typeof updateDuePersonZodSchema>;
 export type ICreateDueTransactionPayload = z.infer<typeof createDueTransactionZodSchema>;
+
+export const dueTransactionListQueryZodSchema = listQuerySchema.extend({
+    person_id: optionalFilter(z.uuid("person_id must be a valid id")),
+});

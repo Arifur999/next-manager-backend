@@ -1,14 +1,15 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
-import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
+import { listQuerySchema, paginationMeta } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { DuePaymentService } from "./duePayment.service.js";
 import { requireUser } from "../../shared/requireUser.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
+import { dueTransactionListQueryZodSchema } from "./duePayment.validation.js";
 
 const getAllPeople = catchAsync(async (req: Request, res: Response) => {
-    const options = parseListOptions(req.query as Record<string, unknown>);
+    const options = queryOf(req, listQuerySchema);
     const { rows } = await DuePaymentService.getAllPeople(requireUser(req), options);
     sendResponse(res, {
         success: true,
@@ -49,10 +50,8 @@ const deletePerson = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getTransactions = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const options = parseListOptions(query);
-    const personId = typeof query.person_id === "string" ? query.person_id : undefined;
-    const { rows, total } = await DuePaymentService.getTransactions(requireUser(req), personId, options);
+    const { person_id, ...options } = queryOf(req, dueTransactionListQueryZodSchema);
+    const { rows, total } = await DuePaymentService.getTransactions(requireUser(req), person_id, options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

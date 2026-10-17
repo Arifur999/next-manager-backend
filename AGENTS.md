@@ -81,6 +81,5 @@ Node 24 (Docker image), Express 5, TypeScript ESM (`.js` in import paths), Prism
 
 - Emails are compared case-insensitively in code; a unique index on `lower(email)` waits on a duplicate check of existing data.
 - Drop `totalPage` once next-manager reads only `totalPages`.
-- `announcement.service.ts` (505 lines) and `chat.service.ts` (470) are over the 400-line service limit.
 - Refresh tokens are not rotated or revoked server-side on logout.
 - The chat NOTIFY payload carries the recipient list; conversations above about 200 members exceed Postgres' 8000-byte limit and lose live updates.

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { dateRangeWhere, escapeLikeTerm, findPage, pageSlice, paginationMeta, parseListOptions } from "./listQuery.js";
+import { dateRangeWhere, escapeLikeTerm, findPage, listQuerySchema, pageSlice, paginationMeta } from "./listQuery.js";
 
-describe("parseListOptions", () => {
+describe("listQuerySchema", () => {
     it("reads page, limit, search and dates", () => {
-        assert.deepEqual(parseListOptions({ page: "2", limit: "25", search: "  acme ", from: "2026-09-01", to: "2026-09-30" }), {
+        assert.deepEqual(listQuerySchema.parse({ page: "2", limit: "25", search: "  acme ", from: "2026-09-01", to: "2026-09-30" }), {
             page: 2,
             limit: 25,
             search: "acme",
@@ -14,23 +14,23 @@ describe("parseListOptions", () => {
     });
 
     it("ignores a bad limit or page instead of failing", () => {
-        const options = parseListOptions({ page: "0", limit: "abc" });
+        const options = listQuerySchema.parse({ page: "0", limit: "abc" });
         assert.equal(options.page, undefined);
         assert.equal(options.limit, undefined);
-        assert.equal(parseListOptions({ limit: "1.5" }).limit, undefined);
+        assert.equal(listQuerySchema.parse({ limit: "1.5" }).limit, undefined);
     });
 
     it("caps the page size at 200", () => {
-        assert.equal(parseListOptions({ limit: "100000000" }).limit, 200);
-        assert.equal(parseListOptions({ limit: "50" }).limit, 50);
+        assert.equal(listQuerySchema.parse({ limit: "100000000" }).limit, 200);
+        assert.equal(listQuerySchema.parse({ limit: "50" }).limit, 50);
     });
 
     it("drops an impossible date rather than rolling it forward", () => {
-        assert.equal(parseListOptions({ from: "2026-02-31" }).from, undefined);
+        assert.equal(listQuerySchema.parse({ from: "2026-02-31" }).from, undefined);
     });
 
     it("treats a blank search as none", () => {
-        assert.equal(parseListOptions({ search: "   " }).search, undefined);
+        assert.equal(listQuerySchema.parse({ search: "   " }).search, undefined);
     });
 });
 

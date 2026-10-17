@@ -22,7 +22,8 @@ import {
  * notice aimed at paying customers without anybody re-sending it, and a company
  * that leaves stops seeing it. The alternative - fanning out a row per user at
  * publish - freezes the audience at a moment that is already stale by the time
- * anyone reads it, and grows a table nobody prunes.
+ * anyone reads it, and grows a table nobody prunes. That read-time matching is
+ * in notificationBell.service.ts, using the rule in announcement.audience.ts.
  *
  * **The bell reaches everybody in a company; the email reaches its admin.**
  * "Maintenance on Sunday" is for whoever is working on Sunday, which is not

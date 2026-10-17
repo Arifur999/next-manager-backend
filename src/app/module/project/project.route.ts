@@ -7,6 +7,7 @@ import { validateRequest } from "../../middleware/validateRequest.js";
 import { ProjectController } from "./project.controller.js";
 import {
     createProjectZodSchema,
+    projectListQueryZodSchema,
     setBaselineZodSchema,
     updateProjectZodSchema,
 } from "./project.validation.js";
@@ -16,7 +17,7 @@ const router = Router();
 
 // Operations can see the projects they work on, so the read routes are open to
 // every signed-in user - but the money on them is not.
-router.get("/", checkAuth(), requireCompany, ProjectController.getAllProjects);
+router.get("/", checkAuth(), requireCompany, validateRequest({ query: projectListQueryZodSchema }), ProjectController.getAllProjects);
 router.get("/:id", checkAuth(), requireCompany, validateRequest({ params: idParams }), ProjectController.getSingleProject);
 router.get("/:id/financials", checkAuth(Role.admin, Role.project_manager), validateRequest({ params: idParams }), ProjectController.getProjectFinancials);
 router.post("/", checkAuth(Role.admin, Role.sales, Role.project_manager), requireScope("projects", "create"), validateRequest(createProjectZodSchema), ProjectController.createProject);

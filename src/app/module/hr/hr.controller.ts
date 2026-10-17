@@ -7,13 +7,10 @@ import { LeaveService } from "./leave.service.js";
 import { PayrollService } from "./payroll.service.js";
 import { idOf, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
-import { attendanceListQueryZodSchema, leaveListQueryZodSchema } from "./hr.validation.js";
+import { attendanceListQueryZodSchema, leaveBalanceQueryZodSchema, leaveListQueryZodSchema } from "./hr.validation.js";
 
 const ok = (res: Response, message: string, data: unknown, httpStatus: number = status.OK) =>
     sendResponse(res, { success: true, httpStatus, message, data });
-
-const q = (req: Request) => req.query as Record<string, unknown>;
-const str = (value: unknown) => (typeof value === "string" ? value : undefined);
 
 // ---------------------------------------------------------------- attendance
 
@@ -69,15 +66,15 @@ const getLeaveRequests = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getLeaveBalance = catchAsync(async (req: Request, res: Response) => {
-    const query = q(req);
+    const query = queryOf(req, leaveBalanceQueryZodSchema);
     const user = requireUser(req);
 
     const result = await LeaveService.getBalance(
         user,
         // Somebody else's balance is a management view; asking for it without
         // the roles to read it is handled by the route, not here.
-        str(query.user_id) ?? user.userId,
-        Number(str(query.year)) || new Date().getUTCFullYear()
+        query.user_id ?? user.userId,
+        query.year ?? new Date().getUTCFullYear()
     );
     ok(res, "Leave balance retrieved successfully", result);
 });

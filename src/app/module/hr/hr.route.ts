@@ -4,7 +4,7 @@ import { checkAuth } from "../../middleware/checkAuth.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { HrController } from "./hr.controller.js";
-import { completePayrollZodSchema, createLeaveTypeZodSchema, createPayrollRunZodSchema, decideLeaveZodSchema, recordAttendanceZodSchema, requestLeaveZodSchema, setPayrollItemsZodSchema, updateLeaveTypeZodSchema, attendanceListQueryZodSchema, leaveListQueryZodSchema } from "./hr.validation.js";
+import { completePayrollZodSchema, createLeaveTypeZodSchema, createPayrollRunZodSchema, decideLeaveZodSchema, recordAttendanceZodSchema, requestLeaveZodSchema, setPayrollItemsZodSchema, updateLeaveTypeZodSchema, attendanceListQueryZodSchema, leaveBalanceQueryZodSchema, leaveListQueryZodSchema } from "./hr.validation.js";
 import { idParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
@@ -51,7 +51,7 @@ router.patch(
 router.get("/leave", checkAuth(), requireCompany, validateRequest({ query: leaveListQueryZodSchema }), HrController.getLeaveRequests);
 // Somebody else's balance is a management view; your own is always readable,
 // and the service defaults to the caller when no id is given.
-router.get("/leave/balance", checkAuth(), requireCompany, HrController.getLeaveBalance);
+router.get("/leave/balance", checkAuth(), requireCompany, validateRequest({ query: leaveBalanceQueryZodSchema }), HrController.getLeaveBalance);
 router.post(
     "/leave",
     checkAuth(),

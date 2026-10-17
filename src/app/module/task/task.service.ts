@@ -96,7 +96,9 @@ const getAllTasks = async (
     const where: Prisma.TaskWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
-        ...(await visibilityScope(user)),
+        // In AND, not spread: the scope narrows assignee_id too, and a spread
+        // filter below would replace it - ?assignee_id= read anybody's tasks.
+        AND: [await visibilityScope(user)],
         ...(filters.mine ? { assignee_id: user.userId } : {}),
         // Not "tasks assigned to me" but "tasks inside work I brought in" -
         // a salesperson watching their own client without touching it.

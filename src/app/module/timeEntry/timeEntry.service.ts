@@ -133,7 +133,9 @@ const getAllEntries = async (
     const where: Prisma.TimeEntryWhereInput = {
         organization_id: user.organizationId,
         deleted_at: null,
-        ...(await visibilityScope(user)),
+        // In AND, not spread: the scope narrows user_id too, and the ?user_id=
+        // filter below would otherwise replace it and read anybody's hours.
+        AND: [await visibilityScope(user)],
         ...dateRangeWhere(options),
         ...(filters.userId ? { user_id: filters.userId } : {}),
         ...(filters.projectId ? { project_id: filters.projectId } : {}),

@@ -1,14 +1,14 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
-import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
+import { listQuerySchema, paginationMeta } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { OwnerWithdrawalService } from "./ownerWithdrawal.service.js";
 import { requireUser } from "../../shared/requireUser.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
 
 const getAllWithdrawals = catchAsync(async (req: Request, res: Response) => {
-    const options = parseListOptions(req.query as Record<string, unknown>);
+    const options = queryOf(req, listQuerySchema);
     const { rows, total } = await OwnerWithdrawalService.getAllWithdrawals(requireUser(req), options);
     sendResponse(res, {
         success: true,

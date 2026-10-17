@@ -5,6 +5,7 @@ import { validateRequest } from "../../middleware/validateRequest.js";
 import { OwnerWithdrawalController } from "./ownerWithdrawal.controller.js";
 import { createOwnerWithdrawalZodSchema, updateOwnerWithdrawalZodSchema } from "./ownerWithdrawal.validation.js";
 import { idParams } from "../../shared/requestSchemas.js";
+import { listQuerySchema } from "../../shared/listQuery.js";
 
 const router = Router();
 
@@ -12,7 +13,7 @@ const router = Router();
 // top of a company and this is what they take out of it - nobody below them
 // has any business seeing it, and the role gate is the only thing enforcing
 // that.
-router.get("/", checkAuth(Role.admin), OwnerWithdrawalController.getAllWithdrawals);
+router.get("/", checkAuth(Role.admin), validateRequest({ query: listQuerySchema }), OwnerWithdrawalController.getAllWithdrawals);
 router.post("/", checkAuth(Role.admin), validateRequest(createOwnerWithdrawalZodSchema), OwnerWithdrawalController.createWithdrawal);
 router.patch("/:id", checkAuth(Role.admin), validateRequest({ params: idParams, body: updateOwnerWithdrawalZodSchema }), OwnerWithdrawalController.updateWithdrawal);
 router.delete("/:id", checkAuth(Role.admin), validateRequest({ params: idParams }), OwnerWithdrawalController.deleteWithdrawal);

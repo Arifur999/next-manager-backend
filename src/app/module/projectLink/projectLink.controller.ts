@@ -3,14 +3,13 @@ import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ProjectLinkService } from "./projectLink.service.js";
-import { idOf } from "../../shared/requestSchemas.js";
+import { idOf, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
+import { projectLinkListQueryZodSchema } from "./projectLink.validation.js";
 
 const getAll = catchAsync(async (req: Request, res: Response) => {
-    const query = req.query as Record<string, unknown>;
-    const result = await ProjectLinkService.getAll(requireUser(req), {
-        projectId: typeof query.project_id === "string" ? query.project_id : undefined,
-    });
+    const { project_id } = queryOf(req, projectLinkListQueryZodSchema);
+    const result = await ProjectLinkService.getAll(requireUser(req), { projectId: project_id });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

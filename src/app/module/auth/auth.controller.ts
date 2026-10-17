@@ -4,6 +4,7 @@ import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { cookieUtils } from "../../utils/cookie.js";
 import { AuthService } from "./auth.service.js";
+import { PasswordResetService } from "./passwordReset.service.js";
 import { requireUser } from "../../shared/requireUser.js";
 
 const register = catchAsync(async (req: Request, res: Response) => {
@@ -113,7 +114,7 @@ const changePassword = catchAsync(async (req: Request, res: Response) => {
 });
 
 const forgotPassword = catchAsync(async (req: Request, res: Response) => {
-    const result = await AuthService.forgotPassword(req.body, { ip: req.ip });
+    const result = await PasswordResetService.forgotPassword(req.body, { ip: req.ip });
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -123,7 +124,7 @@ const forgotPassword = catchAsync(async (req: Request, res: Response) => {
 });
 
 const resetPassword = catchAsync(async (req: Request, res: Response) => {
-    const result = await AuthService.resetPassword(req.body);
+    const result = await PasswordResetService.resetPassword(req.body);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

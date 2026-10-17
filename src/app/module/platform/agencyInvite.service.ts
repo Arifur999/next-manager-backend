@@ -1,6 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
 import status from "http-status";
-import { env } from "../../../config/env.js";
 import { Role, SubscriptionStatus, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
@@ -11,6 +9,7 @@ import { seedLeaveTypes } from "../../shared/defaultLeaveTypes.js";
 import { seedRolePermissions } from "../../shared/defaultPermissions.js";
 import { seedWorkflowStatuses } from "../../shared/defaultWorkflowStatuses.js";
 import { logPlatformActivity } from "../../shared/platformActivity.js";
+import { createLinkToken, hashLinkToken, isOpenInvite, webAppUrl } from "../../shared/oneTimeLink.js";
 import { getBrand, getPlatformSettings } from "../../shared/platformSettings.js";
 import { passwordUtils } from "../../utils/password.js";
 import {
@@ -45,8 +44,6 @@ import { sameEmail } from "../../shared/emailField.js";
  */
 
 const DEFAULT_EXPIRY_DAYS = 14;
-
-const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
 const INVITE_FIELDS = {
     id: true,
@@ -101,9 +98,9 @@ const createInvite = async (payload: ICreateAgencyInvitePayload, user: IRequestU
         data: { revoked_at: new Date() },
     });
 
-    const token = randomBytes(32).toString("hex");
+    const token = createLinkToken();
     const days = payload.expires_in_days ?? DEFAULT_EXPIRY_DAYS;
-    const joinUrl = `${env.FRONTEND_URL.split(",")[0]}/agency-join/${token}`;
+    const joinUrl = webAppUrl(`/agency-join/${token}`);
     const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     const trialDays = payload.trial_days ?? settings.default_trial_days;
 
@@ -114,7 +111,7 @@ const createInvite = async (payload: ICreateAgencyInvitePayload, user: IRequestU
                 company_name: payload.company_name?.trim() ?? "",
                 plan_id: planId,
                 trial_days: trialDays,
-                token_hash: hashToken(token),
+                token_hash: hashLinkToken(token),
                 expires_at: expiresAt,
                 created_by: user.userId,
             },
@@ -201,7 +198,7 @@ const revokeInvite = async (id: string, user: IRequestUser) => {
  */
 const getInviteByToken = async (token: string) => {
     const invite = await prisma.agencyInvite.findUnique({
-        where: { token_hash: hashToken(token) },
+        where: { token_hash: hashLinkToken(token) },
         select: {
             email: true,
             company_name: true,
@@ -213,12 +210,7 @@ const getInviteByToken = async (token: string) => {
         },
     });
 
-    if (
-        !invite ||
-        invite.used_at ||
-        invite.revoked_at ||
-        invite.expires_at.getTime() < Date.now()
-    ) {
+    if (!isOpenInvite(invite)) {
         throw new AppError(
             status.NOT_FOUND,
             "That invite link is no longer valid. Ask for a new one."
@@ -240,7 +232,7 @@ const getInviteByToken = async (token: string) => {
  * a workspace without an owner is one nobody can ever get into.
  */
 const acceptInvite = async (token: string, payload: IAcceptAgencyInvitePayload) => {
-    const tokenHash = hashToken(token);
+    const tokenHash = hashLinkToken(token);
     const hashedPassword = await passwordUtils.hashPassword(payload.password);
 
     return prisma.$transaction(async (tx) => {
@@ -258,12 +250,7 @@ const acceptInvite = async (token: string, payload: IAcceptAgencyInvitePayload) 
             },
         });
 
-        if (
-            !invite ||
-            invite.used_at ||
-            invite.revoked_at ||
-            invite.expires_at.getTime() < Date.now()
-        ) {
+        if (!isOpenInvite(invite)) {
             throw new AppError(
                 status.NOT_FOUND,
                 "That invite link is no longer valid. Ask for a new one."

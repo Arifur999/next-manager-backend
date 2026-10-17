@@ -4,6 +4,7 @@ import catchAsync from "../../shared/catchAsync.js";
 import { listQuerySchema, paginationMeta } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { ChatService } from "./chat.service.js";
+import { ChatMessageService } from "./chatMessage.service.js";
 import { idOf, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
 import { conversationListQueryZodSchema } from "./chat.validation.js";
@@ -38,7 +39,7 @@ const createConversation = catchAsync(async (req: Request, res: Response) => {
 
 const getMessages = catchAsync(async (req: Request, res: Response) => {
     const options = queryOf(req, listQuerySchema);
-    const { rows, total } = await ChatService.getMessages(
+    const { rows, total } = await ChatMessageService.getMessages(
         idOf(req),
         requireUser(req),
         options
@@ -53,7 +54,7 @@ const getMessages = catchAsync(async (req: Request, res: Response) => {
 });
 
 const sendMessage = catchAsync(async (req: Request, res: Response) => {
-    const result = await ChatService.sendMessage(
+    const result = await ChatMessageService.sendMessage(
         idOf(req),
         req.body,
         requireUser(req)
@@ -67,7 +68,7 @@ const sendMessage = catchAsync(async (req: Request, res: Response) => {
 });
 
 const markRead = catchAsync(async (req: Request, res: Response) => {
-    const result = await ChatService.markRead(idOf(req), requireUser(req));
+    const result = await ChatMessageService.markRead(idOf(req), requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

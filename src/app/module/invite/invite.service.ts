@@ -1,21 +1,15 @@
-import { createHash, randomBytes } from "node:crypto";
 import status from "http-status";
-import { env } from "../../../config/env.js";
 import { NotificationEvent, Role, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { sendMail, teamInviteMail } from "../../lib/mailer.js";
 import { prisma } from "../../lib/prisma.js";
-import { assertSeatAvailable } from "../../shared/planLimits.js";
 import { logActivity } from "../../shared/activity.js";
+import { createLinkToken, hashLinkToken, isOpenInvite, webAppUrl } from "../../shared/oneTimeLink.js";
 import { getBrand } from "../../shared/platformSettings.js";
 import { notify } from "../../shared/notify.js";
 import { passwordUtils } from "../../utils/password.js";
-import {
-    IAcceptInvitePayload,
-    ICreateInvitePayload,
-    IRejectMemberPayload,
-} from "./invite.validation.js";
+import { IAcceptInvitePayload, ICreateInvitePayload } from "./invite.validation.js";
 import { sameEmail } from "../../shared/emailField.js";
 
 /**
@@ -34,8 +28,6 @@ import { sameEmail } from "../../shared/emailField.js";
  */
 
 const DEFAULT_EXPIRY_DAYS = 7;
-
-const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
 const INVITE_FIELDS = {
     id: true,
@@ -85,9 +77,9 @@ const createInvite = async (payload: ICreateInvitePayload, user: IRequestUser) =
         data: { revoked_at: new Date() },
     });
 
-    const token = randomBytes(32).toString("hex");
+    const token = createLinkToken();
     const days = payload.expires_in_days ?? DEFAULT_EXPIRY_DAYS;
-    const joinUrl = `${env.FRONTEND_URL.split(",")[0]}/join/${token}`;
+    const joinUrl = webAppUrl(`/join/${token}`);
     const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
     const invite = await prisma.teamInvite.create({
@@ -95,7 +87,7 @@ const createInvite = async (payload: ICreateInvitePayload, user: IRequestUser) =
             organization_id: user.organizationId,
             email,
             role: Role.operations,
-            token_hash: hashToken(token),
+            token_hash: hashLinkToken(token),
             expires_at: expiresAt,
             created_by: user.userId,
         },
@@ -177,7 +169,7 @@ const revokeInvite = async (id: string, user: IRequestUser) => {
  */
 const getInviteByToken = async (token: string) => {
     const invite = await prisma.teamInvite.findUnique({
-        where: { token_hash: hashToken(token) },
+        where: { token_hash: hashLinkToken(token) },
         select: {
             email: true,
             expires_at: true,
@@ -189,12 +181,7 @@ const getInviteByToken = async (token: string) => {
 
     // One message for expired, spent, revoked and never-existed. Which kind of
     // wrong it is helps nobody legitimate and helps somebody guessing tokens.
-    if (
-        !invite ||
-        invite.used_at ||
-        invite.revoked_at ||
-        invite.expires_at.getTime() < Date.now()
-    ) {
+    if (!isOpenInvite(invite)) {
         throw new AppError(
             status.NOT_FOUND,
             "That invite link is no longer valid. Ask an admin for a new one.",
@@ -212,7 +199,7 @@ const getInviteByToken = async (token: string) => {
  * handing them a session here would be a session that does nothing.
  */
 const acceptInvite = async (token: string, payload: IAcceptInvitePayload) => {
-    const tokenHash = hashToken(token);
+    const tokenHash = hashLinkToken(token);
 
     return prisma.$transaction(async (tx) => {
         const invite = await tx.teamInvite.findUnique({
@@ -228,12 +215,7 @@ const acceptInvite = async (token: string, payload: IAcceptInvitePayload) => {
             },
         });
 
-        if (
-            !invite ||
-            invite.used_at ||
-            invite.revoked_at ||
-            invite.expires_at.getTime() < Date.now()
-        ) {
+        if (!isOpenInvite(invite)) {
             throw new AppError(
                 status.NOT_FOUND,
                 "That invite link is no longer valid. Ask an admin for a new one.",
@@ -317,102 +299,10 @@ const acceptInvite = async (token: string, payload: IAcceptInvitePayload) => {
     });
 };
 
-const findPendingMember = async (id: string, user: IRequestUser) => {
-    const member = await prisma.user.findFirst({
-        where: {
-            id,
-            organization_id: user.organizationId,
-            deleted_at: null,
-            status: UserStatus.pending,
-        },
-        select: { id: true, full_name: true, email: true, role: true },
-    });
-
-    if (!member) {
-        throw new AppError(status.NOT_FOUND, "No pending request found for that person");
-    }
-
-    return member;
-};
-
-/**
- * Let somebody in.
- *
- * **This is where the seat is charged**, not at invite time. A pending person
- * has no access, so billing for them would be billing for nothing - and it
- * would let anybody holding a link exhaust the company's plan.
- */
-const approveMember = async (id: string, user: IRequestUser) => {
-    const member = await findPendingMember(id, user);
-
-    return prisma.$transaction(async (tx) => {
-        await assertSeatAvailable(tx, user.organizationId, { excludingUserId: member.id });
-
-        const approved = await tx.user.update({
-            where: { id },
-            data: { status: UserStatus.active },
-            select: { id: true, full_name: true, email: true, role: true, status: true },
-        });
-
-        await logActivity(
-            tx,
-            {
-                entityType: "user",
-                entityId: id,
-                action: "status_changed",
-                summary: `Approved ${member.full_name} as ${member.role}`,
-            },
-            user,
-        );
-
-        return approved;
-    });
-};
-
-/**
- * Turn somebody down.
- *
- * Soft-deleted and suspended together, the same as removing a member: a row
- * flagged deleted but still active would keep passing checkAuth. The account
- * is kept rather than erased so a second request from the same person is
- * visibly a second request.
- */
-const rejectMember = async (id: string, payload: IRejectMemberPayload, user: IRequestUser) => {
-    const member = await findPendingMember(id, user);
-
-    await prisma.$transaction(async (tx) => {
-        await tx.user.update({
-            where: { id },
-            data: {
-                status: UserStatus.suspended,
-                deleted_at: new Date(),
-                deleted_by: user.userId,
-            },
-        });
-
-        await logActivity(
-            tx,
-            {
-                entityType: "user",
-                entityId: id,
-                action: "deleted",
-                summary: payload.reason
-                    ? `Turned down ${member.full_name}'s request: ${payload.reason}`
-                    : `Turned down ${member.full_name}'s request to join`,
-            },
-            user,
-        );
-    });
-
-    return { message: "Request turned down" };
-};
-
 export const InviteService = {
     createInvite,
     getInvites,
     revokeInvite,
     getInviteByToken,
     acceptInvite,
-    approveMember,
-    rejectMember,
 };

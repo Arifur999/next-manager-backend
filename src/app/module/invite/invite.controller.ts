@@ -3,6 +3,7 @@ import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { InviteService } from "./invite.service.js";
+import { MemberApprovalService } from "./memberApproval.service.js";
 import { idOf, paramsOf, tokenParams } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
 
@@ -65,7 +66,7 @@ const acceptInvite = catchAsync(async (req: Request, res: Response) => {
 });
 
 const approveMember = catchAsync(async (req: Request, res: Response) => {
-    const result = await InviteService.approveMember(
+    const result = await MemberApprovalService.approveMember(
         idOf(req),
         requireUser(req)
     );
@@ -78,7 +79,7 @@ const approveMember = catchAsync(async (req: Request, res: Response) => {
 });
 
 const rejectMember = catchAsync(async (req: Request, res: Response) => {
-    const result = await InviteService.rejectMember(
+    const result = await MemberApprovalService.rejectMember(
         idOf(req),
         req.body,
         requireUser(req)

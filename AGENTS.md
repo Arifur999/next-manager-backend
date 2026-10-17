@@ -58,6 +58,7 @@ Node 24 (Docker image), Express 5, TypeScript ESM (`.js` in import paths), Prism
 - `requirePermission`: a platform operator with an empty permission list passes, so the first operator is never locked out. Changing it is a product decision.
 - Reads are allowed on a lapsed subscription; writes are refused (`checkSubscription.ts`).
 - Unpaged lists when no `limit` is sent.
+- An unknown `GET /clients?status=` or `GET /transactions?kind=` is ignored and the whole list comes back, so a stale bookmark is not an error page (the smoke suite pins both). Every other enum or id filter is a 400.
 
 ## Contracts with next-manager
 
@@ -81,6 +82,5 @@ Node 24 (Docker image), Express 5, TypeScript ESM (`.js` in import paths), Prism
 
 - Emails are compared case-insensitively in code; a unique index on `lower(email)` waits on a duplicate check of existing data.
 - Drop `totalPage` once next-manager reads only `totalPages`.
-- `announcement.service.ts` (505 lines) and `chat.service.ts` (470) are over the 400-line service limit.
 - Refresh tokens are not rotated or revoked server-side on logout.
 - The chat NOTIFY payload carries the recipient list; conversations above about 200 members exceed Postgres' 8000-byte limit and lose live updates.

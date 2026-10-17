@@ -4,6 +4,7 @@ import catchAsync from "../../shared/catchAsync.js";
 import { paginationMeta } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { LoanService } from "./loan.service.js";
+import { LoanRepaymentService } from "./loanRepayment.service.js";
 import { ShareholderService } from "./shareholder.service.js";
 import { idOf, paramsOf, instalmentIdParams, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
@@ -78,7 +79,7 @@ const setInstalments = catchAsync(async (req: Request, res: Response) => {
 });
 
 const payInstalment = catchAsync(async (req: Request, res: Response) => {
-    const result = await LoanService.payInstalment(
+    const result = await LoanRepaymentService.payInstalment(
         paramsOf(req, instalmentIdParams).instalmentId,
         req.body,
         requireUser(req)
@@ -94,7 +95,7 @@ const payInstalment = catchAsync(async (req: Request, res: Response) => {
 });
 
 const reverseInstalment = catchAsync(async (req: Request, res: Response) => {
-    const result = await LoanService.reverseInstalment(
+    const result = await LoanRepaymentService.reverseInstalment(
         paramsOf(req, instalmentIdParams).instalmentId,
         requireUser(req)
     );

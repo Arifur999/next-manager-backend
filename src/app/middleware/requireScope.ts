@@ -25,24 +25,20 @@ export const requireScope =
             );
         }
 
-        try {
-            const scope = await resolveScope(user, module, action);
+        const scope = await resolveScope(user, module, action);
 
-            // Anything but `none` lets them act. How much they may act on is the
-            // service's question: only it knows which record is being touched.
-            if (scope !== "none") {
-                return next();
-            }
-
-            // Names the missing square: the caller is a signed-in colleague, and
-            // knowing what to ask an admin for beats reporting the app as broken.
-            return next(
-                new AppError(
-                    status.FORBIDDEN,
-                    `You do not have permission for this action. Ask an admin to allow: ${module} — ${action}.`
-                )
-            );
-        } catch (error) {
-            return next(error);
+        // Anything but `none` lets them act. How much they may act on is the
+        // service's question: only it knows which record is being touched.
+        if (scope !== "none") {
+            return next();
         }
+
+        // Names the missing square: the caller is a signed-in colleague, and
+        // knowing what to ask an admin for beats reporting the app as broken.
+        return next(
+            new AppError(
+                status.FORBIDDEN,
+                `You do not have permission for this action. Ask an admin to allow: ${module} — ${action}.`
+            )
+        );
     };

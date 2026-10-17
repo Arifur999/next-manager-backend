@@ -28,8 +28,8 @@ const REASONS: Record<string, string> = {
 
 /**
  * Not an Express middleware: checkAuth runs inside each route definition, so
- * anything mounted around a router would run before req.user exists. Throwing
- * lets checkAuth's own catch hand the error on.
+ * anything mounted around a router would run before req.user exists. A throw
+ * rejects checkAuth, and Express 5 hands the rejection to the error handler.
  */
 export const enforceSubscription = async (req: Request): Promise<void> => {
     const user = req.user;

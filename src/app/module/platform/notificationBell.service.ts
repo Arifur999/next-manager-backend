@@ -3,7 +3,7 @@ import { AnnouncementAudience } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
-import { AUDIENCE_STATUSES, matchesAudience } from "./announcement.audience.js";
+import { matchesAudience } from "./announcement.audience.js";
 
 /**
  * Everything published since this person's account existed.
@@ -28,8 +28,8 @@ const myAnnouncementFilter = async (user: IRequestUser) => {
         throw new AppError(status.NOT_FOUND, "Account not found");
     }
 
-    const audiences = (Object.keys(AUDIENCE_STATUSES) as AnnouncementAudience[]).filter(
-        (audience) => matchesAudience(audience, subscription?.status ?? null)
+    const audiences = Object.values(AnnouncementAudience).filter((audience) =>
+        matchesAudience(audience, subscription?.status ?? null)
     );
 
     return {

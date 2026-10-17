@@ -16,6 +16,12 @@ describe("createLinkToken", () => {
 });
 
 describe("hashLinkToken", () => {
+    // Pinned to the algorithm, not just to repeatability: a switch to another
+    // hash, an HMAC or a pepper would strand every link already sent.
+    it("is plain sha256 as hex", () => {
+        assert.equal(hashLinkToken("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    });
+
     it("gives the same sha256 hex for the same token, so a link can be looked up", () => {
         const token = createLinkToken();
         assert.equal(hashLinkToken(token), hashLinkToken(token));

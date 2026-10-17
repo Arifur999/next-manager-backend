@@ -46,6 +46,19 @@ const call = async <Row = { id: string }>(method: string, path: string, body?: u
     };
 };
 
+/** One object back rather than a list: a create, or the pipeline. */
+const callOne = async <Row>(method: string, path: string, body?: unknown, cookie = "") => {
+    const res = await fetch(BASE + path, {
+        method,
+        headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+    });
+    return {
+        status: res.status,
+        json: (await res.json().catch(() => ({}))) as { data?: Row; message?: string },
+    };
+};
+
 // ---------------------------------------------------------------- an agency
 const email = `scope${stamp}@agencio.test`;
 await call("POST", "/auth/register", {
@@ -302,8 +315,8 @@ check("and 'all' lets them read it", daysTaken(balance) === 3, `${daysTaken(bala
 await setScope(Role.operations, "leave", "view", "own");
 
 console.log("\n--- a leave decision follows the grid and reaches the requester ---");
-const asked = await call("POST", "/hr/leave", { leave_type_id: leaveType.id, from_date: "2026-05-04", to_date: "2026-05-05", days: 2 }, salesCookie);
-const askedId = (asked.json as unknown as { data: { id: string } }).data?.id;
+const asked = await callOne<{ id: string }>("POST", "/hr/leave", { leave_type_id: leaveType.id, from_date: "2026-05-04", to_date: "2026-05-05", days: 2 }, salesCookie);
+const askedId = asked.json.data?.id;
 check("a request to decide", asked.status === 201, `${asked.status} ${asked.json.message}`);
 await setScope(Role.project_manager, "leave", "edit", "none");
 const decideRefused = await call("POST", `/hr/leave/${askedId}/decide`, { approve: true }, pmCookie);
@@ -339,23 +352,21 @@ const clearOverride = (userId: string, module: string, action: string) =>
 
 type Pipeline = { total: number };
 const leadCount = async () =>
-    ((await call("GET", "/leads", undefined, salesCookie)).json as unknown as { data?: Pipeline }).data?.total ?? -1;
+    (await callOne<Pipeline>("GET", "/leads", undefined, salesCookie)).json.data?.total ?? -1;
 const rowCount = async (path: string) => {
     const res = await call("GET", path, undefined, salesCookie);
     return Array.isArray(res.json.data) ? res.json.data.length : -1;
 };
 
-const lead = await call("POST", "/leads", { name: `Scoped lead ${stamp}` }, admin);
-const leadId = (lead.json as unknown as { data: { id: string } }).data?.id;
-const invoice = await call(
+const leadId = (await callOne<{ id: string }>("POST", "/leads", { name: `Scoped lead ${stamp}` }, admin)).json.data?.id;
+const invoice = await callOne<{ id: string }>(
     "POST",
     "/invoices",
     { client_id: clientId, issue_date: "2026-03-01", due_date: "2026-03-31", items: [{ description: "Work", unit_price: 100 }] },
     admin
 );
-const invoiceId = (invoice.json as unknown as { data: { id: string } }).data?.id;
-const service = await call("POST", "/services", { name: `Scoped service ${stamp}` }, admin);
-const serviceId = (service.json as unknown as { data: { id: string } }).data?.id;
+const invoiceId = invoice.json.data?.id;
+const serviceId = (await callOne<{ id: string }>("POST", "/services", { name: `Scoped service ${stamp}` }, admin)).json.data?.id;
 check("a lead, an invoice and a service to hide", Boolean(leadId && invoiceId && serviceId));
 
 check("by default sales sees the pipeline", (await leadCount()) > 0, `${await leadCount()} leads`);
@@ -429,15 +440,14 @@ check("a colleague's hours to hide", adminEntry.status === 201, `${adminEntry.st
 check("nor a colleague's hours", (await workerRows(`/time-entries?user_id=${adminId}`)) === 0, `${await workerRows(`/time-entries?user_id=${adminId}`)} rows`);
 
 console.log("\n--- the task filters the web now sends ---");
-const loose = await call("POST", "/tasks", { project_id: mineId, title: "Nobody's yet" }, admin);
-const looseId = (loose.json as unknown as { data: { id: string; status: { name: string } } }).data;
+const looseTask = (await callOne<{ id: string; status: { name: string } }>("POST", "/tasks", { project_id: mineId, title: "Nobody's yet" }, admin)).json.data;
 const adminTaskIds = async (query: string) =>
     ((await call("GET", `/tasks?project_id=${mineId}&${query}`, undefined, admin)).json.data ?? []).map((row) => row.id);
 let taskIds = await adminTaskIds("unassigned=true");
-check("unassigned=true lists the task nobody holds", taskIds.includes(looseId?.id ?? ""), `${taskIds.length} tasks`);
+check("unassigned=true lists the task nobody holds", taskIds.includes(looseTask?.id ?? ""), `${taskIds.length} tasks`);
 check("and not the one somebody does", !taskIds.includes(taskId), "an assigned task came back");
-taskIds = await adminTaskIds(`status=${encodeURIComponent((looseId?.status.name ?? "").toUpperCase())}`);
-check("status=<name> matches the column by name, in any case", taskIds.includes(looseId?.id ?? ""), `${taskIds.length} tasks`);
+taskIds = await adminTaskIds(`status=${encodeURIComponent((looseTask?.status.name ?? "").toUpperCase())}`);
+check("status=<name> matches the column by name, in any case", taskIds.includes(looseTask?.id ?? ""), `${taskIds.length} tasks`);
 taskIds = await adminTaskIds("status=No%20such%20column");
 check("and a name no column has lists nothing", taskIds.length === 0, `${taskIds.length} tasks`);
 

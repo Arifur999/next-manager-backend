@@ -1,6 +1,7 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { Application, Request, Response } from "express";
+import helmet from "helmet";
 import { apiRateLimit } from "./app/middleware/rateLimit.js";
 import { globalErrorHandler } from "./app/middleware/globalErrorHandler.js";
 import notFound from "./app/middleware/notFound.js";
@@ -22,6 +23,14 @@ app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
 app.use(requestLogger);
+
+// The API answers JSON that nobody should render or frame, so its policy allows
+// nothing. Frame and referrer values match what nginx sends, so the two agree.
+app.use(helmet({
+    contentSecurityPolicy: { useDefaults: false, directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] } },
+    xFrameOptions: { action: "deny" },
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+}));
 
 app.use(cors({
     origin(origin, callback) {

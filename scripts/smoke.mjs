@@ -79,6 +79,18 @@ check("cookies issued", cookie.includes("accessToken"));
 r = await call("GET", "/auth/me");
 check("/auth/me", r.status === 200 && r.json.data?.email === email);
 
+console.log("\n--- security headers ---");
+// Set by the API itself, so a deployment without nginx in front still sends them.
+const apiHeaders = (await fetch(`${BASE}/auth/me`, { headers: { Cookie: cookie } })).headers;
+check("responses refuse MIME sniffing", apiHeaders.get("x-content-type-options") === "nosniff", apiHeaders.get("x-content-type-options"));
+check("and being framed", apiHeaders.get("x-frame-options") === "DENY", apiHeaders.get("x-frame-options"));
+check(
+  "and load nothing if a browser renders one",
+  (apiHeaders.get("content-security-policy") ?? "").includes("default-src 'none'"),
+  apiHeaders.get("content-security-policy")
+);
+check("and do not name the framework", !apiHeaders.has("x-powered-by"));
+
 console.log("\n--- accounts ---");
 r = await call("POST", "/accounts", { name: "PayPal", type: "paypal", currency: "USD" });
 const usdAccount = r.json.data?.id;

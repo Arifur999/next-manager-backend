@@ -64,7 +64,7 @@ Node 24 (Docker image), Express 5, TypeScript ESM (`.js` in import paths), Prism
 
 - The web app reads `success`, `message`, `data`, `meta` (`next-manager/src/lib/actionError.ts`, `src/types/api.types.ts`) through `src/services/*.ts`. Any change to a response shape is paired with a change there in the same session.
 - `ACCESS_TOKEN_SECRET` must equal the web app's `JWT_ACCESS_SECRET`: `next-manager/src/proxy.ts` verifies access tokens itself.
-- `scripts/api-matrix.expected.txt` pins every route's role gate; `npm run test:api-matrix` fails when it drifts.
+- `scripts/api-matrix.expected.txt` pins which company roles each listed GET endpoint answers (reads only: writes and platform routes are not swept); `npm run test:api-matrix` fails when it drifts.
 
 ## Do
 

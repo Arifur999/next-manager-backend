@@ -44,7 +44,7 @@ Each company is an organization, and every company record carries `organization_
 
 ## Endpoints
 
-All under `/api/v1`, mounted in `src/app/routes/index.ts`; each module's `*.route.ts` lists its routes with their role gate. `scripts/api-matrix.expected.txt` is the full route-by-role table, kept honest by `npm run test:api-matrix`. Unauthenticated routes: sign-up, sign-in, password reset, invite acceptance (`/join`, `/platform-join`, `/agency-join`), `GET /public/plans`, and `GET /health`.
+All under `/api/v1`, mounted in `src/app/routes/index.ts`; each module's `*.route.ts` lists its routes with their role gate. `scripts/api-matrix.expected.txt` is the role table for the company GET endpoints (reads only), kept honest by `npm run test:api-matrix`. Unauthenticated routes: sign-up, sign-in, password reset, invite acceptance (`/join`, `/platform-join`, `/agency-join`), `GET /public/plans`, and `GET /health`.
 
 ## Scripts
 
@@ -61,7 +61,7 @@ All under `/api/v1`, mounted in `src/app/routes/index.ts`; each module's `*.rout
 | `npm run smoke` | yes | end-to-end checks across every module |
 | `npm run test:isolation` | yes | one company cannot read or write another's data |
 | `npm run test:scope` | yes | the permission grid narrows reads and writes |
-| `npm run test:api-matrix` | yes | every route's role gate matches `scripts/api-matrix.expected.txt` |
+| `npm run test:api-matrix` | yes | each listed company GET endpoint answers the roles in `scripts/api-matrix.expected.txt` |
 | `npm run test:leaks` | yes | responses never carry secrets |
 | `npm run test:ledger` | yes | edits and deletes reverse ledger rows exactly once |
 | `npm run test:reset` | yes | the password-reset flow |

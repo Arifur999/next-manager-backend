@@ -11,24 +11,13 @@ import { toDateOnly } from "../../shared/dates.js";
 import { LOAN_INCLUDE, summarise, generateSchedule } from "./loan.schedule.js";
 
 /**
- * Bank loans and EMIs.
+ * Bank loans and EMIs - not DuePerson, whose informal lending has no schedule,
+ * interest or term.
  *
- * Deliberately not DuePerson. Informal lending between people has no schedule,
- * no interest and no term; folding the two together would mean one screen that
- * answers neither question.
- *
- * Two rules run through everything here:
- *
- *   What is still owed is COMPUTED - principal minus the principal of every
- *   paid instalment - and never stored. A stored outstanding figure and a
- *   schedule are two places to say one thing, and they drift the first time a
- *   write half-fails.
- *
- *   An instalment is principal plus interest, and only the interest is a cost.
- *   Repaying principal settles a liability; counting the whole instalment as an
- *   expense would understate profit by the principal every month. The ledger
- *   row is the full cash, because that is what actually leaves the account -
- *   the split is what profit and loss reads.
+ * What is still owed is COMPUTED (principal minus every paid instalment's
+ * principal), never stored. An instalment is principal plus interest and only
+ * the interest is a cost: the ledger row is the full cash that leaves, and
+ * profit and loss reads the split.
  */
 
 const assertOwnLoan = async (
@@ -171,12 +160,8 @@ const update = async (id: string, payload: IUpdateLoanPayload, user: IRequestUse
 };
 
 /**
- * Replace the schedule.
- *
- * Only the unpaid rows. A paid instalment has moved money through an account,
- * and rewriting it here would leave a ledger row describing a repayment that no
- * longer matches anything - so those are kept and the new rows carry on after
- * them.
+ * Replace the schedule's unpaid rows. Paid ones moved money through an account
+ * and their ledger rows must keep matching them, so the new rows follow them.
  */
 const setInstalments = async (id: string, payload: ISetInstalmentsPayload, user: IRequestUser) => {
     return prisma.$transaction(async (tx) => {
@@ -238,12 +223,7 @@ const remove = async (id: string, user: IRequestUser) => {
     });
 };
 
-/**
- * What is owed across every loan, and what is due next.
- *
- * The figure an admin opens the page for. Computed, like every other balance in
- * this product.
- */
+/** What is owed across every loan and what is due next, computed like every balance here. */
 const getSummary = async (user: IRequestUser) => {
     const loans = await prisma.loan.findMany({
         where: { organization_id: user.organizationId, deleted_at: null },

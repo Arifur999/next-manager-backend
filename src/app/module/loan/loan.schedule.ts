@@ -86,13 +86,9 @@ export const addMonthsClamped = (start: Date, months: number): Date => {
 };
 
 /**
- * An equal-principal schedule, as a starting point.
- *
- * Not an EMI formula. A bank's own table rarely matches one exactly, and a
- * schedule nobody can correct is one people keep in a spreadsheet instead - so
- * this fills the rows in and the agency edits them to match the paper they
- * actually signed. Interest is left at zero rather than guessed: a made-up
- * interest figure would flow straight into profit and loss.
+ * An equal-principal schedule as a starting point the agency edits to match its
+ * bank's table (no EMI formula matches one exactly). Interest is left at zero
+ * rather than guessed, since it flows straight into profit and loss.
  */
 export const generateSchedule = (payload: ICreateLoanPayload) => {
     const start = toDateOnly(payload.started_on);

@@ -42,12 +42,9 @@ const assertReferences = async (
 };
 
 /**
- * Tasks the caller is allowed to see.
- *
- * Operations sees only what is assigned to them. Anyone above that sees the whole
- * agency's board - which is the difference between "My Tasks" and the project
- * task list being the same endpoint with a different scope, rather than two
- * near-identical ones that drift apart.
+ * Tasks the caller may see: operations only what is assigned to them, anyone
+ * above that the whole agency's board, so "My Tasks" and a project's task list
+ * are one endpoint with a different scope.
  */
 const visibilityScope = async (user: IRequestUser): Promise<Prisma.TaskWhereInput> => {
     const scope = await resolveScope(user, "tasks", "view");
@@ -55,10 +52,7 @@ const visibilityScope = async (user: IRequestUser): Promise<Prisma.TaskWhereInpu
     switch (scope) {
         case "all":
             return {};
-        // A task is assigned to exactly one person, so both narrowing scopes
-        // mean the same thing: yours. Kept apart in the catalogue because
-        // clients and projects distinguish them, and one vocabulary across
-        // twelve modules is worth more than a special case here.
+        // A task has one assignee, so both narrowing scopes mean "yours".
         case "assigned":
         case "own":
             return { assignee_id: user.userId };
@@ -116,13 +110,9 @@ const getAllTasks = async (
         ...(filters.statusName
             ? { status: { name: { equals: filters.statusName, mode: "insensitive" } } }
             : {}),
-        // Due today, and due soon. Compared on the DAY boundary through the
-        // same startOfToday() overdue uses: due_date is a date column, and
-        // comparing it against `now` would call a task due today overdue from
-        // one second past midnight.
-        //
-        // "Upcoming" is a seven-day window rather than everything with a future
-        // date, so the list stays a week of work instead of a backlog.
+        // Compared on the day boundary, like overdue: due_date is a date, and
+        // `now` would make a task due today overdue from one second past
+        // midnight. Upcoming is the next seven days, a week of work, not a backlog.
         ...(filters.due === "today" ? { due_date: startOfToday() } : {}),
         ...(filters.due === "upcoming"
             ? { due_date: { gt: startOfToday(), lte: endOfUpcoming() } }
@@ -237,14 +227,9 @@ const updateTask = async (id: string, payload: IUpdateTaskPayload, user: IReques
 
         await assertReferences(tx, payload, user);
 
-        // completed_at is derived from the status rather than accepted from
-        // the client: it is the one field that has to agree with the status,
-        // and letting both be set independently guarantees they eventually
-        // will not.
-        //
-        // Compared by CATEGORY, never by name. An agency that renames "Done"
-        // to "Shipped" or adds "Client approved" alongside it keeps a working
-        // completion date; comparing names would silently stop the clock.
+        // completed_at is derived from the status, never accepted from the
+        // client, and by CATEGORY rather than name, so an agency that renames
+        // "Done" or adds another done column keeps a working completion date.
         const nextStatus = payload.status_id
             ? await assertOwnStatus(tx, payload.status_id, user.organizationId, WorkflowKind.task)
             : null;
@@ -305,18 +290,9 @@ const deleteTask = async (id: string, user: IRequestUser) => {
 };
 
 /**
- * The task board, counted.
- *
- * Every figure here already exists on the board; none of them has ever been
- * added up. Which is the point - a project manager asking "where is everything"
- * should not have to count four columns by eye.
- *
- * Read through the same visibilityScope the board uses, so a report never shows
- * somebody work they could not open.
- *
- * "Done" and "overdue" are decided by CATEGORY, never by a status name. An
- * agency that renames Done to Shipped keeps a correct report, and one that adds
- * "In QA" gets it counted as in-flight without telling this function about it.
+ * The task board, counted, through the board's own visibilityScope so a report
+ * never shows work the caller could not open. Done and overdue are decided by
+ * status CATEGORY, so renamed or added columns are counted correctly.
  */
 const getReport = async (user: IRequestUser, options: ListOptions = {}) => {
     const where: Prisma.TaskWhereInput = {

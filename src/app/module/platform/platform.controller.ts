@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
+import { paginationMeta } from "../../shared/listQuery.js";
 import { PlatformService } from "./platform.service.js";
 import { idOf, paramsOf, organizationIdParams, queryOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
@@ -42,12 +43,17 @@ const updatePlan = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getCompanies = catchAsync(async (req: Request, res: Response) => {
-    const result = await PlatformService.getCompanies(queryOf(req, companyListQueryZodSchema));
+    const { status: subscriptionStatus, search, page, limit } = queryOf(req, companyListQueryZodSchema);
+    const options = { page, limit };
+    const { rows, total } = await PlatformService.getCompanies({ status: subscriptionStatus, search }, options);
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
         message: "Companies retrieved successfully",
-        data: result,
+        // A plain array whether or not a page was asked for, so a caller that
+        // ignores `meta` sees what it saw before.
+        data: rows,
+        meta: paginationMeta(options, total),
     });
 });
 

@@ -1,4 +1,5 @@
 import status from "http-status";
+import { Prisma } from "../../../generated/prisma/client.js";
 import { Role, SubscriptionStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
@@ -11,6 +12,8 @@ import { logPlatformActivity } from "../../shared/platformActivity.js";
 import { passwordUtils } from "../../utils/password.js";
 import { ICreateCompanyPayload } from "./platform.validation.js";
 import { sameEmail } from "../../shared/emailField.js";
+import { findPage, type ListOptions } from "../../shared/listQuery.js";
+import { type CompanyStatusFilter } from "./platform.validation.js";
 import { PLAN_FIELDS } from "./platformPlan.service.js";
 
 /**
@@ -23,68 +26,84 @@ import { PLAN_FIELDS } from "./platformPlan.service.js";
 // Companies
 // ---------------------------------------------------------------------------
 
+/** A subscription status, or "none" for a company with no subscription row at all. */
+export const subscriptionFilter = (subscriptionStatus?: CompanyStatusFilter): Prisma.OrganizationWhereInput => {
+    if (!subscriptionStatus) return {};
+    // Signed up before plans existed, or never provisioned: the ones to follow up.
+    if (subscriptionStatus === "none") return { subscription: { is: null } };
+    return { subscription: { is: { status: subscriptionStatus } } };
+};
+
 /**
- * Every company, with how much of its plan it uses. Seats and projects are
- * counted, not stored, so a limit is never enforced against a drifted figure.
+ * Every company, with how much of its plan it uses, a page at a time when a
+ * limit is sent. Seats and projects are counted, not stored, so a limit is
+ * never enforced against a drifted figure.
  */
-export const getCompanies = async (filters: { status?: SubscriptionStatus; search?: string } = {}) => {
-    const organizations = await prisma.organization.findMany({
-        where: {
-            ...(filters.status ? { subscription: { status: filters.status } } : {}),
-            ...(filters.search
-                ? {
-                    OR: [
-                        { name: { contains: filters.search, mode: "insensitive" } },
-                        { email: { contains: filters.search, mode: "insensitive" } },
-                        // Searching by the person you sell to, which is
-                        // usually how an operator remembers a customer.
-                        {
-                            users: {
-                                some: {
-                                    role: Role.admin,
-                                    deleted_at: null,
-                                    OR: [
-                                        { full_name: { contains: filters.search, mode: "insensitive" } },
-                                        { email: { contains: filters.search, mode: "insensitive" } },
-                                    ],
-                                },
+export const getCompanies = async (
+    filters: { status?: CompanyStatusFilter; search?: string } = {},
+    options: ListOptions = {}
+) => {
+    const where: Prisma.OrganizationWhereInput = {
+        ...subscriptionFilter(filters.status),
+        ...(filters.search
+            ? {
+                OR: [
+                    { name: { contains: filters.search, mode: "insensitive" } },
+                    { email: { contains: filters.search, mode: "insensitive" } },
+                    // Searching by the person you sell to, which is
+                    // usually how an operator remembers a customer.
+                    {
+                        users: {
+                            some: {
+                                role: Role.admin,
+                                deleted_at: null,
+                                OR: [
+                                    { full_name: { contains: filters.search, mode: "insensitive" } },
+                                    { email: { contains: filters.search, mode: "insensitive" } },
+                                ],
                             },
                         },
-                    ],
-                }
-                : {}),
-        },
-        select: {
-            id: true,
-            name: true,
-            email: true,
-            created_at: true,
-            subscription: {
-                select: {
-                    id: true,
-                    status: true,
-                    trial_ends_at: true,
-                    current_period_end: true,
-                    cancelled_at: true,
-                    notes: true,
-                    plan: { select: PLAN_FIELDS },
-                },
+                    },
+                ],
+            }
+            : {}),
+    };
+
+    const select = {
+        id: true,
+        name: true,
+        email: true,
+        created_at: true,
+        subscription: {
+            select: {
+                id: true,
+                status: true,
+                trial_ends_at: true,
+                current_period_end: true,
+                cancelled_at: true,
+                notes: true,
+                plan: { select: PLAN_FIELDS },
             },
-            // The person this was sold to. Name and email only - not the whole
-            // staff list, which would be every customer's people on one
-            // screen and is not what running a platform needs.
-            users: {
-                where: { role: Role.admin, deleted_at: null },
-                select: { id: true, full_name: true, email: true, status: true },
-                orderBy: { created_at: "asc" },
-                take: 1,
-            },
-            // Counts only. Deliberately no clients, no accounts, no payments -
-            // see the note at the top of this file.
-            _count: { select: { users: true, projects: true } },
         },
-        orderBy: { created_at: "desc" },
-    });
+        // The person this was sold to. Name and email only - not the whole
+        // staff list, which would be every customer's people on one
+        // screen and is not what running a platform needs.
+        users: {
+            where: { role: Role.admin, deleted_at: null },
+            select: { id: true, full_name: true, email: true, status: true },
+            orderBy: { created_at: "asc" },
+            take: 1,
+        },
+        // Counts only. Deliberately no clients, no accounts, no payments -
+        // see the note at the top of this file.
+        _count: { select: { users: true, projects: true } },
+    } satisfies Prisma.OrganizationSelect;
+
+    const { rows: organizations, total } = await findPage(
+        options,
+        (page) => prisma.organization.findMany({ where, select, orderBy: { created_at: "desc" }, ...page }),
+        () => prisma.organization.count({ where })
+    );
 
     // When each company was last used, from its own activity log. One grouped
     // query rather than one per company, and it is the closest honest signal
@@ -100,7 +119,7 @@ export const getCompanies = async (filters: { status?: SubscriptionStatus; searc
         lastSeen.map((row) => [row.organization_id, row._max.created_at])
     );
 
-    return organizations.map((organization) => ({
+    const rows = organizations.map((organization) => ({
         id: organization.id,
         name: organization.name,
         email: organization.email,
@@ -118,6 +137,8 @@ export const getCompanies = async (filters: { status?: SubscriptionStatus; searc
             projects_limit: organization.subscription?.plan.max_projects ?? null,
         },
     }));
+
+    return { rows, total };
 };
 
 /**

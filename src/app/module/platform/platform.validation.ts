@@ -2,7 +2,7 @@ import z from "zod";
 import { AnnouncementAudience, SubscriptionStatus } from "../../../generated/prisma/enums.js";
 import { PLATFORM_PERMISSIONS } from "./platform.permissions.js";
 import { emailField } from "../../shared/emailField.js";
-import { optionalFilter, MAX_PAGE_SIZE } from "../../shared/listQuery.js";
+import { listQuerySchema, optionalFilter, MAX_PAGE_SIZE } from "../../shared/listQuery.js";
 
 export const createPlanZodSchema = z.object({
     code: z
@@ -250,9 +250,17 @@ export const acceptAgencyInviteZodSchema = z.object({
 export type ICreateAgencyInvitePayload = z.infer<typeof createAgencyInviteZodSchema>;
 export type IAcceptAgencyInvitePayload = z.infer<typeof acceptAgencyInviteZodSchema>;
 
-export const companyListQueryZodSchema = z.object({
-    status: optionalFilter(z.enum(SubscriptionStatus, "Choose a valid subscription status")),
-    search: z.string().trim().optional().catch(undefined).transform((term) => term || undefined),
+/** A subscription status, or "none": companies with no subscription row at all. */
+const companyStatusFilter = z.union(
+    [z.enum(SubscriptionStatus), z.literal("none")],
+    "Choose a valid subscription status, or none"
+);
+
+export type CompanyStatusFilter = z.infer<typeof companyStatusFilter>;
+
+// page/limit are opt-in like every list: without a limit the whole list comes back.
+export const companyListQueryZodSchema = listQuerySchema.pick({ page: true, limit: true, search: true }).extend({
+    status: optionalFilter(companyStatusFilter),
 });
 
 export const platformActivityQueryZodSchema = z.object({

@@ -1,4 +1,5 @@
 import z from "zod";
+import { listQuerySchema, optionalFilter } from "../../shared/listQuery.js";
 
 export const createCredentialZodSchema = z.object({
     // A credential belongs to a client, a project, or neither (agency-internal).
@@ -17,3 +18,8 @@ export const updateCredentialZodSchema = createCredentialZodSchema.partial();
 
 export type ICreateCredentialPayload = z.infer<typeof createCredentialZodSchema>;
 export type IUpdateCredentialPayload = z.infer<typeof updateCredentialZodSchema>;
+
+export const credentialListQueryZodSchema = listQuerySchema.extend({
+    client_id: optionalFilter(z.uuid("client_id must be a valid id")),
+    project_id: optionalFilter(z.uuid("project_id must be a valid id")),
+});

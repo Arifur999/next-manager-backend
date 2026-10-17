@@ -7,6 +7,7 @@ import { validateRequest, validateRequestBy } from "../../middleware/validateReq
 import { TaskController } from "./task.controller.js";
 import { createTaskZodSchema, taskUpdateSchemaFor, taskListQueryZodSchema } from "./task.validation.js";
 import { idParams } from "../../shared/requestSchemas.js";
+import { listQuerySchema } from "../../shared/listQuery.js";
 
 const router = Router();
 
@@ -18,7 +19,7 @@ const router = Router();
 // is not swallowed. Open to everybody the board is open to, and read through
 // the same visibility scope - a report must never show somebody work they
 // could not open.
-router.get("/report", checkAuth(), requireCompany, TaskController.getReport);
+router.get("/report", checkAuth(), requireCompany, validateRequest({ query: listQuerySchema }), TaskController.getReport);
 
 router.get("/", checkAuth(), requireCompany, validateRequest({ query: taskListQueryZodSchema }), TaskController.getAllTasks);
 

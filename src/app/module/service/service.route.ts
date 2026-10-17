@@ -9,6 +9,7 @@ import {
     createServiceCategoryZodSchema,
     createServiceTemplateZodSchema,
     createServiceZodSchema,
+    serviceListQueryZodSchema,
     updateServiceCategoryZodSchema,
     updateServiceTemplateZodSchema,
     updateServiceZodSchema,
@@ -60,7 +61,7 @@ router.delete("/templates/:id", checkAuth(Role.admin), validateRequest({ params:
 // What each service has been billed. Money, so admin alone.
 router.get("/revenue", checkAuth(Role.admin), requireCompany, ServiceController.getRevenue);
 
-router.get("/", checkAuth(), requireCompany, ServiceController.getServices);
+router.get("/", checkAuth(), requireCompany, validateRequest({ query: serviceListQueryZodSchema }), ServiceController.getServices);
 // Declared after the literal paths above so /categories, /templates and
 // /revenue are not swallowed by the parameter route.
 router.get("/:id", checkAuth(), requireCompany, validateRequest({ params: idParams }), ServiceController.getService);

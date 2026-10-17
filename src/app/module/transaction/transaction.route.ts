@@ -3,6 +3,8 @@ import { Role } from "../../../generated/prisma/enums.js";
 import { checkAuth } from "../../middleware/checkAuth.js";
 import { requireCompany } from "../../middleware/requireCompany.js";
 import { TransactionController } from "./transaction.controller.js";
+import { validateRequest } from "../../middleware/validateRequest.js";
+import { transactionListQueryZodSchema } from "./transaction.validation.js";
 
 const router = Router();
 
@@ -14,6 +16,6 @@ const router = Router();
 // caused them - a payment, an expense, an exchange - and a ledger somebody can
 // type into directly is one that can be made to disagree with the records it is
 // supposed to summarise.
-router.get("/", checkAuth(Role.admin), requireCompany, TransactionController.getTransactions);
+router.get("/", checkAuth(Role.admin), requireCompany, validateRequest({ query: transactionListQueryZodSchema }), TransactionController.getTransactions);
 
 export const TransactionRoutes = router;

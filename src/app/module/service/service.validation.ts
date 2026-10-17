@@ -1,4 +1,5 @@
 import z from "zod";
+import { optionalFilter } from "../../shared/listQuery.js";
 
 export const createServiceZodSchema = z.object({
     name: z
@@ -52,3 +53,7 @@ export type ICreateServiceCategoryPayload = z.infer<typeof createServiceCategory
 export type IUpdateServiceCategoryPayload = z.infer<typeof updateServiceCategoryZodSchema>;
 export type ICreateServiceTemplatePayload = z.infer<typeof createServiceTemplateZodSchema>;
 export type IUpdateServiceTemplatePayload = z.infer<typeof updateServiceTemplateZodSchema>;
+
+export const serviceListQueryZodSchema = z.object({
+    category_id: optionalFilter(z.uuid("category_id must be a valid id")),
+});

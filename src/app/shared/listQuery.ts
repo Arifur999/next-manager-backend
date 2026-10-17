@@ -71,11 +71,6 @@ export const queryBoolean = z.unknown().optional().transform((value) =>
     value === "true" ? true : value === "false" ? false : undefined
 );
 
-export const parseListOptions = (query: Record<string, unknown>): ListOptions => {
-    const { page, limit, search, from, to } = listQuerySchema.parse(query);
-    return { page, limit, search, from, to };
-};
-
 // A Prisma filter for the given column, or undefined when neither bound was
 // supplied - spread into a `where` so an absent range changes nothing:
 //

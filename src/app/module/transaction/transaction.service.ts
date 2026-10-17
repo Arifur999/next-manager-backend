@@ -20,6 +20,10 @@ import {
  * Nothing new is recorded here. This is a view.
  */
 
+export const TRANSACTION_KINDS = ["income", "expense", "transfer"] as const;
+
+export type TransactionKind = (typeof TRANSACTION_KINDS)[number];
+
 /**
  * What each kind of ledger row means to the business.
  *
@@ -38,7 +42,7 @@ import {
 // money in and shows under Income here, even though it is not revenue - this
 // screen answers "what moved", and profit and loss answers "what did we
 // earn". The same reason an owner withdrawal already sits under Expenses.
-const KINDS = {
+const KINDS: Record<TransactionKind, readonly LedgerSource[]> = {
     income: [LedgerSource.payment, LedgerSource.due_received, LedgerSource.loan_received],
     expense: [
         LedgerSource.expense,
@@ -49,12 +53,7 @@ const KINDS = {
         LedgerSource.shareholder_distribution,
     ],
     transfer: [LedgerSource.exchange_in, LedgerSource.exchange_out],
-} as const;
-
-export type TransactionKind = keyof typeof KINDS;
-
-export const isTransactionKind = (value: string): value is TransactionKind =>
-    value in KINDS;
+};
 
 const SELECT = {
     id: true,

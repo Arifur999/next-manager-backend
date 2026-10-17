@@ -67,13 +67,9 @@ const getLeaveRequests = catchAsync(async (req: Request, res: Response) => {
 
 const getLeaveBalance = catchAsync(async (req: Request, res: Response) => {
     const query = queryOf(req, leaveBalanceQueryZodSchema);
-    const user = requireUser(req);
-
     const result = await LeaveService.getBalance(
-        user,
-        // Somebody else's balance is a management view; asking for it without
-        // the roles to read it is handled by the route, not here.
-        query.user_id ?? user.userId,
+        requireUser(req),
+        query.user_id,
         query.year ?? new Date().getUTCFullYear()
     );
     ok(res, "Leave balance retrieved successfully", result);

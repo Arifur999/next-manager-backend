@@ -49,8 +49,8 @@ router.patch(
 );
 
 router.get("/leave", checkAuth(), requireCompany, validateRequest({ query: leaveListQueryZodSchema }), HrController.getLeaveRequests);
-// Somebody else's balance is a management view; your own is always readable,
-// and the service defaults to the caller when no id is given.
+// Somebody else's balance is a management view: the service answers with the
+// caller's own unless their leave view scope is "all".
 router.get("/leave/balance", checkAuth(), requireCompany, validateRequest({ query: leaveBalanceQueryZodSchema }), HrController.getLeaveBalance);
 router.post(
     "/leave",

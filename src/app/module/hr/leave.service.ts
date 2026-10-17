@@ -143,7 +143,11 @@ const getRequests = async (
  * A type with a zero allowance reports `null` remaining rather than zero:
  * "tracked but not capped" and "you have none left" are opposite answers.
  */
-const getBalance = async (user: IRequestUser, userId: string, year: number) => {
+const getBalance = async (user: IRequestUser, requestedUserId: string | undefined, year: number) => {
+    // The request list's rule: without the "all" view, only your own balance.
+    const seesEveryone = (await resolveScope(user, "leave", "view")) === "all";
+    const userId = seesEveryone && requestedUserId ? requestedUserId : user.userId;
+
     const from = new Date(Date.UTC(year, 0, 1));
     const to = new Date(Date.UTC(year, 11, 31));
 

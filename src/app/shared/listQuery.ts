@@ -125,6 +125,5 @@ export const paginationMeta = (options: ListOptions, total: number) => {
     const limit = options.limit ?? total;
     const page = options.page ?? 1;
     const totalPages = limit > 0 ? Math.ceil(total / limit) : 1;
-    // totalPage is the old name, kept until the web app reads totalPages.
-    return { page, limit, total, totalPages, totalPage: totalPages };
+    return { page, limit, total, totalPages };
 };

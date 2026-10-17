@@ -133,7 +133,7 @@ describe("pageSlice", () => {
 
 describe("paginationMeta", () => {
     it("an unpaged list is one page of everything", () => {
-        assert.deepEqual(paginationMeta({}, 42), { page: 1, limit: 42, total: 42, totalPages: 1, totalPage: 1 });
+        assert.deepEqual(paginationMeta({}, 42), { page: 1, limit: 42, total: 42, totalPages: 1 });
     });
 
     it("rounds pages up", () => {

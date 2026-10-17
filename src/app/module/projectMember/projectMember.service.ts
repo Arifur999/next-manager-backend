@@ -6,13 +6,7 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { IAssignMemberPayload } from "./projectMember.validation.js";
 
-/**
- * Who is on which project.
- *
- * A thin join, but it earns its own module: the project screen needs it per
- * project, and the team screen needs it per person, and neither is a natural
- * home for the other's query.
- */
+/** Who is on which project: read per project by the project screen and per person by the team screen. */
 
 const MEMBER_SELECT = {
     id: true,
@@ -39,11 +33,8 @@ const getProjectMembers = async (projectId: string, user: IRequestUser) => {
 };
 
 /**
- * The whole agency's assignments, grouped by person.
- *
- * Two queries rather than one per member, and everyone appears - including
- * people on nothing, which is the answer the screen is usually being opened to
- * find.
+ * The whole agency's assignments by person, in two queries, listing everyone -
+ * the people on nothing are usually what the screen is opened to find.
  */
 const getAssignmentOverview = async (user: IRequestUser) => {
     const [members, assignments] = await Promise.all([
@@ -79,13 +70,8 @@ const getAssignmentOverview = async (user: IRequestUser) => {
                 role_on_project: entry.role_on_project,
                 project: entry.project,
             })),
-            // Only live work counts towards "how loaded is this person" -
-            // finished and cancelled projects would make everyone look busy
-            // forever.
-            //
-            // By category, not by name: an agency that renamed "Active" to
-            // "In flight" still has its people counted, and one that added a
-            // second in-progress status gets both.
+            // Only live work counts towards load, judged by status category
+            // rather than name, so renamed or added statuses still count.
             active_count: own.filter(
                 (entry) => entry.project.status.category === StatusCategory.active
             ).length,

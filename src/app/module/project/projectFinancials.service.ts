@@ -5,16 +5,9 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 
 /**
- * The Finance tab on a project.
- *
- * Profit is deliberately computed in BDT, not USD, because that is the only
- * currency in which both sides of it exist: income arrives in USD, but team
- * payouts and expenses are BDT and have no USD figure at all. Mixing them would
- * require converting costs at some rate chosen after the fact.
- *
- * The income side therefore uses each payment's FROZEN reporting rate - the one
- * saved with the payment - rather than reconverting at today's rate. That keeps
- * a finished project's profit from drifting every time the taka moves.
+ * The Finance tab on a project. Profit is in BDT, the one currency both sides
+ * exist in (payouts and expenses have no USD figure), with income at each
+ * payment's FROZEN reporting rate so a finished project's profit never drifts.
  */
 const getProjectFinancials = async (id: string, user: IRequestUser) => {
     const project = await prisma.project.findFirst({

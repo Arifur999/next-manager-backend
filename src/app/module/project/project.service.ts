@@ -18,20 +18,10 @@ import { toDateOnly } from "../../shared/dates.js";
 import { assertOwnClient, assertOwnService, assertOwnStatus } from "../../shared/ownership.js";
 
 /**
- * Projects the caller may see.
- *
- * Operations sees only the ones they are on. The same shape tasks already use,
- * and it was missing here: an agency's whole project list, with client names
- * and contract values attached, was readable by anyone with a login.
- *
- * Membership, not assignment - a person on the team of a project should see
- * the project even on a week they have no task open on it.
- *
- * Read from the permission rows now rather than from `role === operations`.
- * The behaviour is identical for every stock agency, because that is exactly
- * what the seed says; what changed is that an agency can now say something
- * else. What it can NEVER say is another agency: organization_id sits above
- * this in the same where clause and no scope removes it.
+ * Projects the caller may see, from the projects view scope. By default
+ * operations sees the projects they are a member of - membership, not task
+ * assignment, so a quiet week does not hide their project. organization_id
+ * always sits above this.
  */
 const visibilityScope = async (user: IRequestUser): Promise<Prisma.ProjectWhereInput> => {
     const scope = await resolveScope(user, "projects", "view");
@@ -233,15 +223,9 @@ const updateProject = async (id: string, payload: IUpdateProjectPayload, user: I
 };
 
 /**
- * Freeze the plan a project will be measured against.
- *
- * Plan-vs-actual and scope-change rate both need an original that does not
- * move. The contract value does move - that is what makes drift measurable -
- * so the baseline is copied once and then left alone.
- *
- * Re-baselining is allowed but never implicit: it throws away the number every
- * overrun was being measured from, and a project quietly re-baselined at its
- * current state always reads as perfectly on plan.
+ * Freeze the plan a project is measured against: plan-vs-actual and scope
+ * change need an original that does not move. Re-baselining must be asked for
+ * explicitly, or any project could be made to read as on plan.
  */
 const setBaseline = async (id: string, payload: ISetBaselinePayload, user: IRequestUser) => {
     const existing = await prisma.project.findFirst({

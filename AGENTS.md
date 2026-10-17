@@ -58,6 +58,7 @@ Node 24 (Docker image), Express 5, TypeScript ESM (`.js` in import paths), Prism
 - `requirePermission`: a platform operator with an empty permission list passes, so the first operator is never locked out. Changing it is a product decision.
 - Reads are allowed on a lapsed subscription; writes are refused (`checkSubscription.ts`).
 - Unpaged lists when no `limit` is sent.
+- An unknown `GET /clients?status=` or `GET /transactions?kind=` is ignored and the whole list comes back, so a stale bookmark is not an error page (the smoke suite pins both). Every other enum or id filter is a 400.
 
 ## Contracts with next-manager
 

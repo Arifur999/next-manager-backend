@@ -36,7 +36,7 @@ Node 24 (Docker image), Express 5, TypeScript ESM (`.js` in import paths), Prism
 - Success: `{ success, message, data, meta? }`. Decimals become numbers and UTC-midnight dates become `YYYY-MM-DD` in `sendResponse`.
 - Error: `{ success: false, message, errorSource: [{ path, message }], requestId }`, always from `globalErrorHandler` (validation, 404 route, 429 included). `stack`/`error` only in development; unexpected 500s say "Internal Server Error" in production.
 - Every response has an `x-request-id` header; the error body's `requestId` matches it.
-- Lists: no `limit` returns everything (unpaged); `limit` is capped at 200. `meta` carries `page, limit, total, totalPages` and the deprecated `totalPage` (same value) until the web app stops reading it. Build pages with `findPage` from `shared/listQuery.ts`.
+- Lists: no `limit` returns everything (unpaged); `limit` is capped at 200. `meta` carries `page, limit, total, totalPages`. Build pages with `findPage` from `shared/listQuery.ts`.
 - Invalid enum or id filters are 400; empty filter values are ignored. A malformed `:id` is 400, a foreign or missing row is 404.
 - `GET /api/v1/public/plans` is unauthenticated: active plans only, a fixed field whitelist (`publicPlan.mapper.ts`), `Cache-Control: public, max-age=300`, 60 requests a minute per IP in production.
 
@@ -81,6 +81,5 @@ Node 24 (Docker image), Express 5, TypeScript ESM (`.js` in import paths), Prism
 ## Open follow-ups
 
 - Emails are compared case-insensitively in code; a unique index on `lower(email)` waits on a duplicate check of existing data.
-- Drop `totalPage` once next-manager reads only `totalPages`.
 - Refresh tokens are not rotated or revoked server-side on logout.
 - The chat NOTIFY payload carries the recipient list; conversations above about 200 members exceed Postgres' 8000-byte limit and lose live updates.

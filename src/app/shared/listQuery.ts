@@ -32,7 +32,7 @@ export const MAX_PAGE_SIZE = 200;
 
 // A value that cannot be used is ignored, not rejected: a bad ?limit must not
 // turn a working list into an error page.
-const lenient = <T extends z.ZodType>(schema: T) => schema.optional().catch(undefined);
+export const lenient = <T extends z.ZodType>(schema: T) => schema.optional().catch(undefined);
 
 const positiveInt = z.coerce.number().int().positive();
 

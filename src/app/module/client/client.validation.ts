@@ -1,5 +1,6 @@
 import z from "zod";
 import { ClientStatus } from "../../../generated/prisma/enums.js";
+import { lenient, listQuerySchema, queryFlag } from "../../shared/listQuery.js";
 
 export const createClientZodSchema = z.object({
     name: z.string("Name must be string").min(1, "Name is required"),
@@ -19,3 +20,9 @@ export const updateClientZodSchema = createClientZodSchema.partial();
 
 export type ICreateClientPayload = z.infer<typeof createClientZodSchema>;
 export type IUpdateClientPayload = z.infer<typeof updateClientZodSchema>;
+
+export const clientListQueryZodSchema = listQuerySchema.extend({
+    // An unknown status lists every client instead of failing (smoke pins this).
+    status: lenient(z.enum(ClientStatus)),
+    mine: queryFlag,
+});

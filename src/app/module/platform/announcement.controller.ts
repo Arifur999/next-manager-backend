@@ -46,16 +46,15 @@ const updateAnnouncement = catchAsync(async (req: Request, res: Response) => {
  * it went out. An operator who is told "published" and later finds nobody was
  * mailed has been misled by their own tool.
  */
+const publishedMessage = (email: { attempted: number; delivered: number } | null): string => {
+    if (!email) return "Published successfully";
+    if (email.delivered === email.attempted) return `Published, and emailed to ${email.delivered} of your customers`;
+    return `Published, but the email reached ${email.delivered} of ${email.attempted} addresses`;
+};
+
 const publishAnnouncement = catchAsync(async (req: Request, res: Response) => {
     const result = await AnnouncementService.publishAnnouncement(requireUser(req), idOf(req));
-
-    const message = !result.email
-        ? "Published successfully"
-        : result.email.delivered === result.email.attempted
-          ? `Published, and emailed to ${result.email.delivered} of your customers`
-          : `Published, but the email reached ${result.email.delivered} of ${result.email.attempted} addresses`;
-
-    sendResponse(res, { success: true, httpStatus: status.OK, message, data: result });
+    sendResponse(res, { success: true, httpStatus: status.OK, message: publishedMessage(result.email), data: result });
 });
 
 const deleteAnnouncement = catchAsync(async (req: Request, res: Response) => {

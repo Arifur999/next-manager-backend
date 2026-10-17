@@ -28,6 +28,21 @@ const PERSON = { id: true, full_name: true, email: true, role: true, avatar_url:
  * grouped count of unread messages across all of them. Joining a chat never
  * adds a query.
  */
+// A direct conversation has no stored name, so it is named here after the
+// other person - a different name for each of the two people in it, and the
+// reason it is not a column.
+const conversationName = (
+    conversation: { type: ConversationType; name: string; project: { name: string } | null },
+    people: Array<{ id: string; full_name: string }>,
+    viewerId: string
+): string => {
+    if (conversation.type === ConversationType.direct) {
+        return people.find((person) => person.id !== viewerId)?.full_name ?? "Direct message";
+    }
+    if (conversation.type === ConversationType.project) return conversation.project?.name ?? conversation.name;
+    return conversation.name;
+};
+
 const getConversations = async (
     user: IRequestUser,
     filters: { type?: ConversationType; unreadOnly?: boolean; archived?: boolean } = {}
@@ -101,16 +116,7 @@ const getConversations = async (
         return {
             id: conversation.id,
             type: conversation.type,
-            // A direct conversation has no stored name, so it is named here
-            // after the other person - which is a different name for each of
-            // the two people in it, and the reason it is not a column.
-            name:
-                conversation.type === ConversationType.direct
-                    ? (people.find((person) => person.id !== user.userId)?.full_name ??
-                      "Direct message")
-                    : conversation.type === ConversationType.project
-                      ? (conversation.project?.name ?? conversation.name)
-                      : conversation.name,
+            name: conversationName(conversation, people, user.userId),
             project: conversation.project,
             members: people,
             last_message: conversation.messages[0] ?? null,

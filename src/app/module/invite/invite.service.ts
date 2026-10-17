@@ -1,12 +1,11 @@
-import { createHash, randomBytes } from "node:crypto";
 import status from "http-status";
-import { env } from "../../../config/env.js";
 import { NotificationEvent, Role, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { sendMail, teamInviteMail } from "../../lib/mailer.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
+import { createLinkToken, hashLinkToken, webAppUrl } from "../../shared/oneTimeLink.js";
 import { getBrand } from "../../shared/platformSettings.js";
 import { notify } from "../../shared/notify.js";
 import { passwordUtils } from "../../utils/password.js";
@@ -29,8 +28,6 @@ import { sameEmail } from "../../shared/emailField.js";
  */
 
 const DEFAULT_EXPIRY_DAYS = 7;
-
-const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
 const INVITE_FIELDS = {
     id: true,
@@ -80,9 +77,9 @@ const createInvite = async (payload: ICreateInvitePayload, user: IRequestUser) =
         data: { revoked_at: new Date() },
     });
 
-    const token = randomBytes(32).toString("hex");
+    const token = createLinkToken();
     const days = payload.expires_in_days ?? DEFAULT_EXPIRY_DAYS;
-    const joinUrl = `${env.FRONTEND_URL.split(",")[0]}/join/${token}`;
+    const joinUrl = webAppUrl(`/join/${token}`);
     const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
     const invite = await prisma.teamInvite.create({
@@ -90,7 +87,7 @@ const createInvite = async (payload: ICreateInvitePayload, user: IRequestUser) =
             organization_id: user.organizationId,
             email,
             role: Role.operations,
-            token_hash: hashToken(token),
+            token_hash: hashLinkToken(token),
             expires_at: expiresAt,
             created_by: user.userId,
         },
@@ -172,7 +169,7 @@ const revokeInvite = async (id: string, user: IRequestUser) => {
  */
 const getInviteByToken = async (token: string) => {
     const invite = await prisma.teamInvite.findUnique({
-        where: { token_hash: hashToken(token) },
+        where: { token_hash: hashLinkToken(token) },
         select: {
             email: true,
             expires_at: true,
@@ -207,7 +204,7 @@ const getInviteByToken = async (token: string) => {
  * handing them a session here would be a session that does nothing.
  */
 const acceptInvite = async (token: string, payload: IAcceptInvitePayload) => {
-    const tokenHash = hashToken(token);
+    const tokenHash = hashLinkToken(token);
 
     return prisma.$transaction(async (tx) => {
         const invite = await tx.teamInvite.findUnique({

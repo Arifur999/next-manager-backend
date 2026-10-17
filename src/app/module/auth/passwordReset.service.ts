@@ -1,6 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
 import status from "http-status";
-import { env } from "../../../config/env.js";
 import { UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { logger } from "../../lib/logger.js";
@@ -8,6 +6,7 @@ import { passwordResetMail, sendMail } from "../../lib/mailer.js";
 import { prisma } from "../../lib/prisma.js";
 import { sameEmail } from "../../shared/emailField.js";
 import { getBrand } from "../../shared/platformSettings.js";
+import { createLinkToken, hashLinkToken, webAppUrl } from "../../shared/oneTimeLink.js";
 import { passwordUtils } from "../../utils/password.js";
 import { IForgotPasswordPayload, IResetPasswordPayload } from "./auth.validation.js";
 
@@ -18,8 +17,6 @@ import { IForgotPasswordPayload, IResetPasswordPayload } from "./auth.validation
  * that somebody who checks their email an hour later is not sent round again.
  */
 const RESET_TTL_MINUTES = 30;
-
-const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
 /**
  * Start a reset.
@@ -59,20 +56,18 @@ const forgotPassword = async (
         data: { used_at: new Date() },
     });
 
-    // 32 bytes from the CSPRNG. Not a uuid: uuids are identifiers, and their
-    // guessability is nobody's design goal.
-    const token = randomBytes(32).toString("hex");
+    const token = createLinkToken();
 
     await prisma.passwordResetToken.create({
         data: {
             user_id: user.id,
-            token_hash: hashToken(token),
+            token_hash: hashLinkToken(token),
             expires_at: new Date(Date.now() + RESET_TTL_MINUTES * 60 * 1000),
             requested_ip: context.ip ?? "",
         },
     });
 
-    const resetUrl = `${env.FRONTEND_URL.split(",")[0]}/reset-password?token=${token}`;
+    const resetUrl = webAppUrl(`/reset-password?token=${token}`);
     const result = await sendMail({
         to: user.email,
         ...passwordResetMail(resetUrl, RESET_TTL_MINUTES, await getBrand()),
@@ -97,7 +92,7 @@ const forgotPassword = async (
  * in each case. They ask for another link.
  */
 const resetPassword = async (payload: IResetPasswordPayload) => {
-    const tokenHash = hashToken(payload.token);
+    const tokenHash = hashLinkToken(payload.token);
     const password = await passwordUtils.hashPassword(payload.new_password);
 
     await prisma.$transaction(async (tx) => {

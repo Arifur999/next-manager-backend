@@ -1,12 +1,11 @@
-import { createHash, randomBytes } from "node:crypto";
 import status from "http-status";
-import { env } from "../../../config/env.js";
 import { Role, UserStatus } from "../../../generated/prisma/enums.js";
 import AppError from "../../errorHelpers/AppError.js";
 import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { prisma } from "../../lib/prisma.js";
 import { platformInviteMail, sendMail } from "../../lib/mailer.js";
 import { logPlatformActivity } from "../../shared/platformActivity.js";
+import { createLinkToken, hashLinkToken, webAppUrl } from "../../shared/oneTimeLink.js";
 import { getBrand } from "../../shared/platformSettings.js";
 import { passwordUtils } from "../../utils/password.js";
 import {
@@ -29,8 +28,6 @@ import { sameEmail } from "../../shared/emailField.js";
  */
 
 const DEFAULT_EXPIRY_DAYS = 7;
-
-const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
 const INVITE_FIELDS = {
     id: true,
@@ -66,9 +63,9 @@ const createInvite = async (payload: ICreatePlatformInvitePayload, user: IReques
         data: { revoked_at: new Date() },
     });
 
-    const token = randomBytes(32).toString("hex");
+    const token = createLinkToken();
     const days = payload.expires_in_days ?? DEFAULT_EXPIRY_DAYS;
-    const joinUrl = `${env.FRONTEND_URL.split(",")[0]}/platform-join/${token}`;
+    const joinUrl = webAppUrl(`/platform-join/${token}`);
     const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
     const created = await prisma.$transaction(async (tx) => {
@@ -76,7 +73,7 @@ const createInvite = async (payload: ICreatePlatformInvitePayload, user: IReques
             data: {
                 email,
                 permissions: payload.permissions ?? [],
-                token_hash: hashToken(token),
+                token_hash: hashLinkToken(token),
                 expires_at: expiresAt,
                 created_by: user.userId,
             },
@@ -170,7 +167,7 @@ const revokeInvite = async (id: string, user: IRequestUser) => {
  */
 const getInviteByToken = async (token: string) => {
     const invite = await prisma.platformInvite.findUnique({
-        where: { token_hash: hashToken(token) },
+        where: { token_hash: hashLinkToken(token) },
         select: { email: true, expires_at: true, used_at: true, revoked_at: true },
     });
 
@@ -196,7 +193,7 @@ const getInviteByToken = async (token: string) => {
  * them tokens would hand them tokens that do nothing.
  */
 const acceptInvite = async (token: string, payload: IAcceptPlatformInvitePayload) => {
-    const tokenHash = hashToken(token);
+    const tokenHash = hashLinkToken(token);
 
     return prisma.$transaction(async (tx) => {
         const invite = await tx.platformInvite.findUnique({

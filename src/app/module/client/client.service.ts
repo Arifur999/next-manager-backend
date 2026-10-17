@@ -11,20 +11,10 @@ import { ICreateClientPayload, IUpdateClientPayload } from "./client.validation.
 import { assertOwnMember } from "../../shared/ownership.js";
 
 /**
- * Clients the caller may see.
- *
- * Operations sees only clients whose projects they are on. The full book - every
- * client's name, email and phone - was readable by anyone with a login, which
- * for an agency is its most sensitive list after the vault.
- *
- * Sales and the project manager keep the whole list: sales needs to know who
- * the agency already works with before approaching anybody, and delivery needs
- * to know whose work it is scheduling.
- *
- * Read from the permission rows now rather than from `role === operations`.
- * Identical for a stock agency — that is what the seed says — and an agency can
- * now say something else. It can never say another agency: organization_id sits
- * above this in the same where clause and no scope removes it.
+ * Clients the caller may see, from the clients view scope. By default
+ * operations sees only clients whose projects they are on - the client book is
+ * an agency's most sensitive list after the vault - while sales and project
+ * managers keep the whole list. organization_id always sits above this.
  */
 const visibilityScope = async (user: IRequestUser): Promise<Prisma.ClientWhereInput> => {
     const scope = await resolveScope(user, "clients", "view");
@@ -115,16 +105,9 @@ const getSingleClient = async (id: string, user: IRequestUser) => {
 };
 
 /**
- * The numbers on a client's Overview tab.
- *
- * Revenue is what was actually RECEIVED, not what was invoiced - an invoice is
- * a claim, a payment is a fact, and conflating them is how an agency talks
- * itself into believing it had a good month. Outstanding is the gap between
- * the two, taken from invoices that are still owing.
- *
- * All USD, because that is what clients are billed in. The BDT column on the
- * payment rows is frozen reporting metadata (see the Payment model) and is
- * summed separately rather than reconverted at today's rate.
+ * The numbers on a client's Overview tab, in USD. Revenue is what was RECEIVED,
+ * not invoiced; outstanding is what still-owing invoices leave. The BDT figure
+ * sums the payments' frozen reporting values, never reconverted.
  */
 const getClientFinancials = async (id: string, user: IRequestUser) => {
     const client = await prisma.client.findFirst({

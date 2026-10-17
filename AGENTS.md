@@ -10,6 +10,7 @@ npm run dev                  # tsx watch, http://localhost:5000 (PORT in .env)
 npm test                     # unit tests: tsx --test "src/**/*.test.ts", no database needed
 npx tsx --test src/app/shared/listQuery.test.ts   # one file
 npx tsc --noEmit && npm run lint && npm test      # must pass before you say "done"
+npm run typecheck:scripts    # tsc over scripts/ (tenantIsolation.ts excluded until its responses are typed)
 npm run generate             # Prisma client into src/generated (git-ignored), after any schema change
 npm run migrate -- --name <name>   # new migration (prisma migrate dev), additive only
 npm run migrate:apply        # apply pending migrations without the Prisma schema engine

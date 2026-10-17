@@ -20,6 +20,7 @@ const getAllTasks = catchAsync(async (req: Request, res: Response) => {
             statusId: query.status_id,
             statusName: query.status,
             mine: query.mine,
+            unassigned: query.unassigned,
             // Every task on the clients this person brought in - the sales board.
             clientOwnerMine: query.client_owner,
             overdue: query.overdue,

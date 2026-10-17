@@ -394,6 +394,34 @@ const titleOnly = await call("PATCH", `/tasks/${taskId}`, { title: "Renamed, not
 check("but still edits a task without moving it", titleOnly.status === 200, `${titleOnly.status}`);
 await setScope(Role.project_manager, "tasks", "assign", "all");
 
+console.log("\n--- a filter by person cannot widen the scope ---");
+// ?assignee_id= and ?user_id= used to replace the scope's own condition on the
+// same column, so operations read anybody's tasks and hours by naming them.
+const adminUser = await prisma.user.findFirst({ where: { email }, select: { id: true } });
+const adminId = adminUser?.id ?? "";
+await call("PATCH", `/tasks/${taskId}`, { assignee_id: salesId }, admin);
+const workerRows = async (path: string) => {
+    const res = await call("GET", path, undefined, workerCookie);
+    return Array.isArray(res.json.data) ? res.json.data.length : -1;
+};
+check("operations cannot read a colleague's tasks by naming them", (await workerRows(`/tasks?assignee_id=${salesId}`)) === 0, `${await workerRows(`/tasks?assignee_id=${salesId}`)} rows`);
+const adminEntry = await call("POST", "/time-entries", { project_id: mineId, date: "2026-03-02", hours: 2, is_billable: true }, admin);
+check("a colleague's hours to hide", adminEntry.status === 201, `${adminEntry.status} ${adminEntry.json.message}`);
+check("nor a colleague's hours", (await workerRows(`/time-entries?user_id=${adminId}`)) === 0, `${await workerRows(`/time-entries?user_id=${adminId}`)} rows`);
+
+console.log("\n--- the task filters the web now sends ---");
+const loose = await call("POST", "/tasks", { project_id: mineId, title: "Nobody's yet" }, admin);
+const looseId = (loose.json as unknown as { data: { id: string; status: { name: string } } }).data;
+const adminTaskIds = async (query: string) =>
+    ((await call("GET", `/tasks?project_id=${mineId}&${query}`, undefined, admin)).json.data ?? []).map((row) => row.id);
+let taskIds = await adminTaskIds("unassigned=true");
+check("unassigned=true lists the task nobody holds", taskIds.includes(looseId?.id ?? ""), `${taskIds.length} tasks`);
+check("and not the one somebody does", !taskIds.includes(taskId), "an assigned task came back");
+taskIds = await adminTaskIds(`status=${encodeURIComponent((looseId?.status.name ?? "").toUpperCase())}`);
+check("status=<name> matches the column by name, in any case", taskIds.includes(looseId?.id ?? ""), `${taskIds.length} tasks`);
+taskIds = await adminTaskIds("status=No%20such%20column");
+check("and a name no column has lists nothing", taskIds.length === 0, `${taskIds.length} tasks`);
+
 await setRoleScope("assigned");
 await prisma.$disconnect();
 

@@ -43,8 +43,12 @@ export const taskListQueryZodSchema = listQuerySchema.extend({
     project_id: optionalFilter(z.uuid("project_id must be a valid id")),
     assignee_id: optionalFilter(z.uuid("assignee_id must be a valid id")),
     status_id: optionalFilter(z.uuid("status_id must be a valid id")),
+    // A status NAME, matched case-insensitively, for links that cannot carry
+    // an id that differs per agency.
     status: optionalFilter(z.string().max(60)),
     mine: queryFlag,
+    // Work nobody holds yet: the triage view.
+    unassigned: queryFlag,
     // A fixed "me" rather than an id: taking one would let anybody read anybody
     // else's book of clients by guessing.
     client_owner: z.unknown().optional().transform((value) => value === "me"),

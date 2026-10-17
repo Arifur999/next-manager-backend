@@ -86,6 +86,7 @@ const getAllTasks = async (
         statusId?: string;
         statusName?: string;
         mine?: boolean;
+        unassigned?: boolean;
         clientOwnerMine?: boolean;
         overdue?: boolean;
         due?: "today" | "upcoming";
@@ -107,6 +108,7 @@ const getAllTasks = async (
             : {}),
         ...(filters.projectId ? { project_id: filters.projectId } : {}),
         ...(filters.assigneeId ? { assignee_id: filters.assigneeId } : {}),
+        ...(filters.unassigned ? { assignee_id: null } : {}),
         ...(filters.statusId ? { status_id: filters.statusId } : {}),
         // By name, for the same reason projects are: a sidebar entry cannot
         // carry an id that differs per agency.

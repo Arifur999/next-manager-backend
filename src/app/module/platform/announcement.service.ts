@@ -15,21 +15,13 @@ import {
 /**
  * Telling customers things.
  *
- * Two decisions shape everything below.
- *
- * **Audience is resolved when the notice is read, not when it is published.**
- * There is no recipient table. A company that starts paying tomorrow sees the
- * notice aimed at paying customers without anybody re-sending it, and a company
- * that leaves stops seeing it. The alternative - fanning out a row per user at
- * publish - freezes the audience at a moment that is already stale by the time
- * anyone reads it, and grows a table nobody prunes. That read-time matching is
+ * Audience is resolved when a notice is read, not when it is published: there is
+ * no recipient table, so a company that starts paying tomorrow sees the notices
+ * for paying customers and one that leaves stops seeing them. That matching is
  * in notificationBell.service.ts, using the rule in announcement.audience.ts.
  *
- * **The bell reaches everybody in a company; the email reaches its admin.**
- * "Maintenance on Sunday" is for whoever is working on Sunday, which is not
- * only the person who pays. Email is the opposite case: it leaves the product,
- * it cannot be unsent, and a price change mailed to every operations person at
- * every customer is a blast radius nobody asked for.
+ * The bell reaches everybody in a company; the email only its admins, because
+ * mail leaves the product and cannot be unsent.
  */
 
 const ANNOUNCEMENT_FIELDS = {
@@ -75,12 +67,8 @@ const createAnnouncement = async (user: IRequestUser, payload: ICreateAnnounceme
     });
 
 /**
- * Editing.
- *
- * Only while it is a draft. Once a notice is out, people have read it and some
- * have been emailed a copy; quietly rewriting the text underneath them would
- * leave two versions of what the platform said and no way to tell which one
- * somebody acted on. Publish a correction instead.
+ * Editing, only while it is a draft: once out, it has been read and maybe
+ * emailed, and a rewrite would leave two versions. Publish a correction instead.
  */
 const updateAnnouncement = async (
     user: IRequestUser,
@@ -126,17 +114,9 @@ const updateAnnouncement = async (
 };
 
 /**
- * Sending it.
- *
- * The write and the email are deliberately not in one transaction. Mail is a
- * network call to somebody else's server and can hang for as long as it likes;
- * holding a database transaction open across it is how a connection pool dies.
- * So: publish first, then mail, then record how many addresses it reached.
- *
- * That ordering also picks the right failure. If the mail step falls over, the
- * notice is still published and `emailed_count` stays null - "we do not know
- * how many got the email", which is true. The other order would risk a mail
- * going out about a notice that no longer exists.
+ * Sending it: publish, then mail, then record how many it reached. Mail stays
+ * outside the transaction, so a slow mail server cannot hold a connection; if
+ * it fails, the notice is still published and `emailed_count` stays null.
  */
 const publishAnnouncement = async (user: IRequestUser, id: string) => {
     const existing = await prisma.announcement.findFirst({

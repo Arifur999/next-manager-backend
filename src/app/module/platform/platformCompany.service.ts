@@ -14,13 +14,9 @@ import { sameEmail } from "../../shared/emailField.js";
 import { PLAN_FIELDS } from "./platformPlan.service.js";
 
 /**
- * The platform's view of its customers.
- *
- * The rule that shapes every query here: **super_admin can see that a company
- * exists, how big it is, and what it pays - and nothing about its money.** No
- * balances, no payments, no client names, no vault. Provisioning a workspace
- * is not a licence to read the books of the business inside it, and the
- * boundary is easier to keep if the queries never select those columns at all.
+ * The platform's view of its customers: that a company exists, how big it is
+ * and what it pays - never its money. No balances, payments, client names or
+ * vault; the queries do not even select those columns.
  */
 
 // ---------------------------------------------------------------------------
@@ -28,12 +24,8 @@ import { PLAN_FIELDS } from "./platformPlan.service.js";
 // ---------------------------------------------------------------------------
 
 /**
- * Every company, with how much of its plan it is using.
- *
- * Seats and projects are counted rather than stored. A stored count is a
- * number that drifts the first time somebody is deactivated outside the one
- * code path that maintains it, and the limit would then be enforced against a
- * figure nobody can reconcile.
+ * Every company, with how much of its plan it uses. Seats and projects are
+ * counted, not stored, so a limit is never enforced against a drifted figure.
  */
 export const getCompanies = async (filters: { status?: SubscriptionStatus; search?: string } = {}) => {
     const organizations = await prisma.organization.findMany({
@@ -129,16 +121,8 @@ export const getCompanies = async (filters: { status?: SubscriptionStatus; searc
 };
 
 /**
- * Provision a company from the platform side.
- *
- * The self-serve route already creates a company and its first admin together;
- * so does this, for the same reason - a workspace nobody can sign in to is not
- * a workspace. What is different is that the operator chooses the plan and the
- * trial, rather than the company landing on whatever the default is.
- *
- * One transaction. A half-created company - an organization with no admin, or
- * an admin with no subscription - is a support ticket rather than a state
- * anybody would notice.
+ * Provision a company, its first admin and its subscription in one transaction,
+ * on the plan and trial the operator chose: half a company is a support ticket.
  */
 export const createCompany = async (payload: ICreateCompanyPayload, user: IRequestUser) => {
     const existingUser = await prisma.user.findFirst({
@@ -153,14 +137,9 @@ export const createCompany = async (payload: ICreateCompanyPayload, user: IReque
         );
     }
 
-    // Chosen, or the cheapest active one - never nothing. A company with no
-    // subscription row passes every check, which is right for a workspace
-    // predating billing and wrong for one created after it.
-    //
-    // Deliberately NOT the platform default plan: that setting is about a
-    // company signing itself up. This form is somebody provisioning a customer
-    // who already agreed a price, and the price they agreed is the one typed
-    // in, not whatever the sign-up page happens to offer this week.
+    // The chosen plan or the cheapest active one, never none: a company without a
+    // subscription passes every check. Not the sign-up default plan, because
+    // this customer already agreed the price that was typed in.
     const plan = payload.plan_id
         ? await prisma.plan.findUnique({ where: { id: payload.plan_id }, select: { id: true } })
         : await prisma.plan.findFirst({
@@ -230,13 +209,8 @@ export const createCompany = async (payload: ICreateCompanyPayload, user: IReque
 };
 
 /**
- * The numbers the operator opens the console to see.
- *
- * Monthly revenue counts trialing and cancelled companies as zero rather than
- * leaving them out: a trial is worth nothing yet and a cancellation is worth
- * nothing any more, and both facts are more useful than a total that quietly
- * ignores them. `past_due` IS counted - the money is owed, and treating it as
- * gone the day a card fails hides the thing worth chasing.
+ * The console's headline numbers. Trialing and cancelled companies count as zero
+ * revenue rather than being left out; past_due counts, because the money is owed.
  */
 export const getOverview = async () => {
     const now = new Date();

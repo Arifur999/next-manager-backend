@@ -6,12 +6,8 @@ import { prisma } from "../../lib/prisma.js";
 import { matchesAudience } from "./announcement.audience.js";
 
 /**
- * Everything published since this person's account existed.
- *
- * The cutoff is deliberate. Without it somebody joining a two-year-old customer
- * lands on a badge showing every notice the platform has ever sent, none of
- * which is news to them, and the first thing they learn about the bell is that
- * it can be ignored.
+ * Everything published since this person's account existed, so somebody joining
+ * a long-standing customer does not start with a badge full of old news.
  */
 const myAnnouncementFilter = async (user: IRequestUser) => {
     const [account, subscription] = await Promise.all([
@@ -40,15 +36,10 @@ const myAnnouncementFilter = async (user: IRequestUser) => {
 };
 
 /**
- * Everything in one person's bell.
- *
- * Two sources, one list: notices from the platform, and notifications from
- * inside their own company. Two bells would be two things to ignore, and the
- * unread badge would have to pick one to be wrong about.
- *
- * `source` tells them apart because they clear differently - an announcement
- * is read per person against a shared row, a notification IS the per-person
- * row - and the caller has to send the right mark-read back.
+ * One person's bell: platform notices and their company's notifications in one
+ * list under one badge. `source` tells them apart because they clear
+ * differently - an announcement is read against a shared row, a notification
+ * IS the person's own row.
  */
 const getMyAnnouncements = async (user: IRequestUser) => {
     const where = await myAnnouncementFilter(user);
@@ -129,16 +120,9 @@ const getUnreadCount = async (user: IRequestUser) => {
 };
 
 /**
- * Marking one read.
- *
- * The id can be either kind, and the caller does not have to say which. A
- * notification is looked for first because it is the narrower thing - one row
- * belonging to one person - and both lookups are scoped to the caller, so
- * neither can clear somebody else's bell.
- *
- * Upsert on the announcement side, because a second click is not a second
- * reading and a unique constraint violation is not something the bell should
- * ever show anybody.
+ * Mark one read; the id may be either kind. The caller's own notification is
+ * looked for first and both lookups are scoped to the caller, so nobody can
+ * clear somebody else's bell. Upserted, so a second click is not an error.
  */
 const markRead = async (user: IRequestUser, id: string) => {
     if (user.organizationId) {

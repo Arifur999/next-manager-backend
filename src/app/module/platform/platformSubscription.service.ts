@@ -9,12 +9,8 @@ import { ISetSubscriptionPayload } from "./platform.validation.js";
 import { PLAN_FIELDS } from "./platformPlan.service.js";
 
 /**
- * Put a company on a plan, or move it.
- *
- * One endpoint for every transition the platform makes. Upsert rather than
- * create-or-update by hand, because the unique index means a company has
- * exactly one subscription and the two branches would only differ in which
- * error they threw.
+ * Put a company on a plan, or move it: one upsert for every transition, since a
+ * company has exactly one subscription.
  */
 export const setSubscription = async (
     organizationId: string,
@@ -117,11 +113,8 @@ export const setSubscription = async (
 };
 
 /**
- * What a company can see about its own standing.
- *
- * Readable by anyone signed in, not just admin: "you are out of seats" is a
- * message a project manager can hit, and it is useless without being able to
- * look up what the limit actually is.
+ * What a company can see about its own standing. Any member may read it: "you
+ * are out of seats" is useless without being able to look up the limit.
  */
 export const getMySubscription = async (user: IRequestUser) => {
     const subscription = await prisma.subscription.findUnique({
@@ -150,18 +143,9 @@ export const getMySubscription = async (user: IRequestUser) => {
 // ---------------------------------------------------------------------------
 
 /**
- * Move subscriptions whose date has passed.
- *
- * Run nightly, and exported so it can be called directly by a test rather than
- * waiting for a cron to fire.
- *
- * Two steps, in order, because they are different transitions:
- *
- *   1. A trial that ran out goes `past_due`, not `suspended`. There is a
- *      difference between "your card has not gone through" and "we have cut
- *      you off", and skipping the middle state means a company loses write
- *      access overnight with no warning.
- *   2. Anything that has been `past_due` beyond the grace window is suspended.
+ * The nightly expiry sweep, in two steps: a lapsed trial or period goes
+ * past_due, never straight to suspended (that would cut off writes overnight
+ * with no warning), then anything past_due beyond the grace window is suspended.
  */
 export const GRACE_DAYS = 7;
 

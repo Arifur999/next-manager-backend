@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
-import { paginationMeta, parseListOptions } from "../../shared/listQuery.js";
+import { listQuerySchema, paginationMeta } from "../../shared/listQuery.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { TimeCapacityService } from "./timeCapacity.service.js";
 import { TimeEntryService } from "./timeEntry.service.js";
@@ -109,7 +109,7 @@ const getCapacities = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getWorkload = catchAsync(async (req: Request, res: Response) => {
-    const options = parseListOptions(req.query as Record<string, unknown>);
+    const options = queryOf(req, listQuerySchema);
     const result = await TimeCapacityService.getWorkload(requireUser(req), options);
     sendResponse(res, {
         success: true,

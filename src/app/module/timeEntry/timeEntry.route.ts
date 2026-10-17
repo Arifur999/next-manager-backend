@@ -7,6 +7,7 @@ import { validateRequest } from "../../middleware/validateRequest.js";
 import { TimeEntryController } from "./timeEntry.controller.js";
 import { createTimeEntryZodSchema, setCapacityZodSchema, updateTimeEntryZodSchema, timeEntryListQueryZodSchema, timeSummaryQueryZodSchema } from "./timeEntry.validation.js";
 import { idParams, userIdParams } from "../../shared/requestSchemas.js";
+import { listQuerySchema } from "../../shared/listQuery.js";
 
 const router = Router();
 
@@ -27,7 +28,7 @@ router.delete("/:id", checkAuth(), requireCompany, validateRequest({ params: idP
 // readings: Workload is the hours side, Availability is the gap side, and
 // computing them apart is how two screens end up disagreeing about one
 // person's week.
-router.get("/workload", checkAuth(Role.admin, Role.project_manager), TimeEntryController.getWorkload);
+router.get("/workload", checkAuth(Role.admin, Role.project_manager), validateRequest({ query: listQuerySchema }), TimeEntryController.getWorkload);
 router.get("/capacity", checkAuth(Role.admin, Role.project_manager), TimeEntryController.getCapacities);
 router.patch("/capacity/:userId", checkAuth(Role.admin, Role.project_manager), validateRequest({ params: userIdParams, body: setCapacityZodSchema }), TimeEntryController.setCapacity);
 

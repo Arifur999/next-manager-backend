@@ -3,6 +3,7 @@ import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
 import { sendResponse } from "../../shared/sendResponse.js";
 import { AnnouncementService } from "./announcement.service.js";
+import { NotificationBellService } from "./notificationBell.service.js";
 import { idOf } from "../../shared/requestSchemas.js";
 import { requireUser } from "../../shared/requireUser.js";
 
@@ -70,7 +71,7 @@ const deleteAnnouncement = catchAsync(async (req: Request, res: Response) => {
 // ---------------------------------------------------------------- customer
 
 const getMyAnnouncements = catchAsync(async (req: Request, res: Response) => {
-    const result = await AnnouncementService.getMyAnnouncements(requireUser(req));
+    const result = await NotificationBellService.getMyAnnouncements(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -80,7 +81,7 @@ const getMyAnnouncements = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getUnreadCount = catchAsync(async (req: Request, res: Response) => {
-    const result = await AnnouncementService.getUnreadCount(requireUser(req));
+    const result = await NotificationBellService.getUnreadCount(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -90,7 +91,7 @@ const getUnreadCount = catchAsync(async (req: Request, res: Response) => {
 });
 
 const markRead = catchAsync(async (req: Request, res: Response) => {
-    const result = await AnnouncementService.markRead(requireUser(req), idOf(req));
+    const result = await NotificationBellService.markRead(requireUser(req), idOf(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,
@@ -100,7 +101,7 @@ const markRead = catchAsync(async (req: Request, res: Response) => {
 });
 
 const markAllRead = catchAsync(async (req: Request, res: Response) => {
-    const result = await AnnouncementService.markAllRead(requireUser(req));
+    const result = await NotificationBellService.markAllRead(requireUser(req));
     sendResponse(res, {
         success: true,
         httpStatus: status.OK,

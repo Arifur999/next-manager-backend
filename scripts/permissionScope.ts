@@ -33,7 +33,7 @@ const check = (label: string, ok: boolean, detail = "") => {
     }
 };
 
-const call = async (method: string, path: string, body?: unknown, cookie = "") => {
+const call = async <Row = { id: string }>(method: string, path: string, body?: unknown, cookie = "") => {
     const res = await fetch(BASE + path, {
         method,
         headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
@@ -41,7 +41,7 @@ const call = async (method: string, path: string, body?: unknown, cookie = "") =
     });
     return {
         status: res.status,
-        json: (await res.json().catch(() => ({}))) as { data?: Array<{ id: string }>; message?: string },
+        json: (await res.json().catch(() => ({}))) as { data?: Row[]; message?: string },
         cookie: (res.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; "),
     };
 };
@@ -271,11 +271,14 @@ const leaveType = await prisma.leaveType.findFirst({
     where: { organization_id: organizationId },
     select: { id: true },
 });
+if (!leaveType) {
+    throw new Error("A new agency should be seeded with leave types");
+}
 await prisma.leaveRequest.create({
     data: {
         organization_id: organizationId,
         user_id: salesId,
-        leave_type_id: leaveType?.id ?? "",
+        leave_type_id: leaveType.id,
         from_date: new Date("2026-03-02"),
         to_date: new Date("2026-03-04"),
         days: 3,
@@ -283,21 +286,24 @@ await prisma.leaveRequest.create({
     },
 });
 
-// The balance of the sales colleague, as somebody else asks for it.
-const salesDaysTakenSeenBy = async (cookie: string) => {
-    const res = await fetch(`${BASE}/hr/leave/balance?year=2026&user_id=${salesId}`, { headers: { Cookie: cookie } });
-    const body = (await res.json()) as { data?: Array<{ days_taken: number }> };
-    return (body.data ?? []).reduce((sum, row) => sum + row.days_taken, 0);
-};
+// Somebody's balance, as somebody else asks for it.
+const balanceOf = (userId: string, cookie: string) =>
+    call<{ days_taken: number }>("GET", `/hr/leave/balance?year=2026&user_id=${userId}`, undefined, cookie);
+const daysTaken = (res: Awaited<ReturnType<typeof balanceOf>>) =>
+    (res.json.data ?? []).reduce((sum, row) => sum + row.days_taken, 0);
 
-let daysTaken = await salesDaysTakenSeenBy(admin);
-check("an admin reads a colleague's leave balance", daysTaken === 3, `${daysTaken} days`);
-daysTaken = await salesDaysTakenSeenBy(workerCookie);
-check("leave view 'own' gets their own balance, not a colleague's", daysTaken === 0, `${daysTaken} days`);
+let balance = await balanceOf(salesId, admin);
+check("an admin reads a colleague's leave balance", daysTaken(balance) === 3, `${daysTaken(balance)} days`);
+balance = await balanceOf(salesId, workerCookie);
+check("leave view 'own' cannot read a colleague's balance", balance.status === 404, `${balance.status}`);
 await setScope(Role.operations, "leave", "view", "all");
-daysTaken = await salesDaysTakenSeenBy(workerCookie);
-check("and 'all' lets them read the colleague's", daysTaken === 3, `${daysTaken} days`);
+balance = await balanceOf(salesId, workerCookie);
+check("and 'all' lets them read it", daysTaken(balance) === 3, `${daysTaken(balance)} days`);
 await setScope(Role.operations, "leave", "view", "own");
+
+const otherAdmin = await prisma.user.findFirst({ where: { email: otherEmail }, select: { id: true } });
+balance = await balanceOf(otherAdmin?.id ?? "", admin);
+check("even 'all' cannot read another agency's member", balance.status === 404, `${balance.status}`);
 
 await setRoleScope("assigned");
 await prisma.$disconnect();

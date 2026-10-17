@@ -13,6 +13,7 @@ import {
     IUpdateLeaveTypePayload,
 } from "./hr.validation.js";
 import { toDateOnly } from "../../shared/dates.js";
+import { assertOwnMember } from "../../shared/ownership.js";
 
 /**
  * Asking to be away, and somebody deciding.
@@ -144,9 +145,16 @@ const getRequests = async (
  * "tracked but not capped" and "you have none left" are opposite answers.
  */
 const getBalance = async (user: IRequestUser, requestedUserId: string | undefined, year: number) => {
-    // The request list's rule: without the "all" view, only your own balance.
-    const seesEveryone = (await resolveScope(user, "leave", "view")) === "all";
-    const userId = seesEveryone && requestedUserId ? requestedUserId : user.userId;
+    const userId = requestedUserId ?? user.userId;
+
+    // Somebody else's balance needs the "all" leave view, as the request list
+    // does. Both refusals are a 404, so neither confirms the person exists.
+    if (userId !== user.userId) {
+        if ((await resolveScope(user, "leave", "view")) !== "all") {
+            throw new AppError(status.NOT_FOUND, "Team member not found");
+        }
+        await assertOwnMember(prisma, userId, user.organizationId);
+    }
 
     const from = new Date(Date.UTC(year, 0, 1));
     const to = new Date(Date.UTC(year, 11, 31));

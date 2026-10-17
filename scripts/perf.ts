@@ -210,7 +210,7 @@ const measure = async () => {
             prisma.task.findMany({
                 where: { organization_id: orgId, deleted_at: null },
                 orderBy: [
-                    { status: "asc" },
+                    { status: { sort_order: "asc" } },
                     { due_date: { sort: "asc", nulls: "last" } },
                     { priority: "desc" },
                 ],

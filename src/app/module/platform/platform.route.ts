@@ -4,12 +4,12 @@ import { checkAuth } from "../../middleware/checkAuth.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
 import { validateRequest } from "../../middleware/validateRequest.js";
 import { AgencyInviteRoutes } from "./agencyInvite.route.js";
-import { AnnouncementController } from "./announcement.controller.js";
+import { AnnouncementRoutes } from "./announcement.route.js";
 import { PlatformController } from "./platform.controller.js";
 import { PlatformFinanceRoutes } from "./platformFinance.route.js";
 import { PlatformInviteRoutes } from "./platformInvite.route.js";
 import { PlatformSettingsController } from "./platformSettings.controller.js";
-import { createAnnouncementZodSchema, createCompanyZodSchema, createPlanZodSchema, setPlatformPermissionsZodSchema, setSubscriptionZodSchema, updateAnnouncementZodSchema, updatePlanZodSchema, updatePlatformSettingsZodSchema, companyListQueryZodSchema, platformActivityQueryZodSchema } from "./platform.validation.js";
+import { createCompanyZodSchema, createPlanZodSchema, setPlatformPermissionsZodSchema, setSubscriptionZodSchema, updatePlanZodSchema, updatePlatformSettingsZodSchema, companyListQueryZodSchema, platformActivityQueryZodSchema } from "./platform.validation.js";
 import { idParams, organizationIdParams } from "../../shared/requestSchemas.js";
 
 const router = Router();
@@ -110,48 +110,7 @@ router.use(PlatformInviteRoutes);
 
 router.use(PlatformFinanceRoutes);
 
-// ---------------------------------------------------------------------------
-// Announcements
-// ---------------------------------------------------------------------------
-//
-// The console half. Writing a draft and sending it are the same permission,
-// because a draft nobody may publish is a document, not a feature.
-router.get(
-    "/announcements",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.campaigns.send"),
-    AnnouncementController.getAnnouncements
-);
-router.post(
-    "/announcements",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.campaigns.send"),
-    validateRequest(createAnnouncementZodSchema),
-    AnnouncementController.createAnnouncement
-);
-router.patch(
-    "/announcements/:id",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.campaigns.send"),
-    validateRequest({ params: idParams, body: updateAnnouncementZodSchema }),
-    AnnouncementController.updateAnnouncement
-);
-// Its own endpoint rather than a flag on the edit: this is the one that cannot
-// be taken back, and it should not be reachable by a form that autosaves.
-router.post(
-    "/announcements/:id/publish",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.campaigns.send"),
-    validateRequest({ params: idParams }),
-    AnnouncementController.publishAnnouncement
-);
-router.delete(
-    "/announcements/:id",
-    checkAuth(Role.super_admin),
-    requirePermission("platform.campaigns.send"),
-    validateRequest({ params: idParams }),
-    AnnouncementController.deleteAnnouncement
-);
+router.use(AnnouncementRoutes);
 
 // ---------------------------------------------------------------------------
 // How this installation is set up

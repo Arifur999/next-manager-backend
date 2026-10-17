@@ -5,7 +5,7 @@ import { IRequestUser } from "../../interfaces/requestUser.interface.js";
 import { sendMail, teamInviteMail } from "../../lib/mailer.js";
 import { prisma } from "../../lib/prisma.js";
 import { logActivity } from "../../shared/activity.js";
-import { createLinkToken, hashLinkToken, webAppUrl } from "../../shared/oneTimeLink.js";
+import { createLinkToken, hashLinkToken, isOpenInvite, webAppUrl } from "../../shared/oneTimeLink.js";
 import { getBrand } from "../../shared/platformSettings.js";
 import { notify } from "../../shared/notify.js";
 import { passwordUtils } from "../../utils/password.js";
@@ -181,12 +181,7 @@ const getInviteByToken = async (token: string) => {
 
     // One message for expired, spent, revoked and never-existed. Which kind of
     // wrong it is helps nobody legitimate and helps somebody guessing tokens.
-    if (
-        !invite ||
-        invite.used_at ||
-        invite.revoked_at ||
-        invite.expires_at.getTime() < Date.now()
-    ) {
+    if (!isOpenInvite(invite)) {
         throw new AppError(
             status.NOT_FOUND,
             "That invite link is no longer valid. Ask an admin for a new one.",
@@ -220,12 +215,7 @@ const acceptInvite = async (token: string, payload: IAcceptInvitePayload) => {
             },
         });
 
-        if (
-            !invite ||
-            invite.used_at ||
-            invite.revoked_at ||
-            invite.expires_at.getTime() < Date.now()
-        ) {
+        if (!isOpenInvite(invite)) {
             throw new AppError(
                 status.NOT_FOUND,
                 "That invite link is no longer valid. Ask an admin for a new one.",

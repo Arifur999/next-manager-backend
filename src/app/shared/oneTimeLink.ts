@@ -12,3 +12,9 @@ export const hashLinkToken = (token: string) => createHash("sha256").update(toke
 
 /** A page on the web app. FRONTEND_URL may list several origins; links use the first. */
 export const webAppUrl = (path: string) => `${env.FRONTEND_URL.split(",")[0]}${path}`;
+
+type InviteLinkState = { used_at: Date | null; revoked_at: Date | null; expires_at: Date };
+
+/** An invite link works only while it is unused, unrevoked and in date. */
+export const isOpenInvite = <Invite extends InviteLinkState>(invite: Invite | null): invite is Invite =>
+    invite !== null && !invite.used_at && !invite.revoked_at && invite.expires_at.getTime() >= Date.now();

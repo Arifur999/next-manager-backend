@@ -9,7 +9,7 @@ import { seedLeaveTypes } from "../../shared/defaultLeaveTypes.js";
 import { seedRolePermissions } from "../../shared/defaultPermissions.js";
 import { seedWorkflowStatuses } from "../../shared/defaultWorkflowStatuses.js";
 import { logPlatformActivity } from "../../shared/platformActivity.js";
-import { createLinkToken, hashLinkToken, webAppUrl } from "../../shared/oneTimeLink.js";
+import { createLinkToken, hashLinkToken, isOpenInvite, webAppUrl } from "../../shared/oneTimeLink.js";
 import { getBrand, getPlatformSettings } from "../../shared/platformSettings.js";
 import { passwordUtils } from "../../utils/password.js";
 import {
@@ -210,12 +210,7 @@ const getInviteByToken = async (token: string) => {
         },
     });
 
-    if (
-        !invite ||
-        invite.used_at ||
-        invite.revoked_at ||
-        invite.expires_at.getTime() < Date.now()
-    ) {
+    if (!isOpenInvite(invite)) {
         throw new AppError(
             status.NOT_FOUND,
             "That invite link is no longer valid. Ask for a new one."
@@ -255,12 +250,7 @@ const acceptInvite = async (token: string, payload: IAcceptAgencyInvitePayload) 
             },
         });
 
-        if (
-            !invite ||
-            invite.used_at ||
-            invite.revoked_at ||
-            invite.expires_at.getTime() < Date.now()
-        ) {
+        if (!isOpenInvite(invite)) {
             throw new AppError(
                 status.NOT_FOUND,
                 "That invite link is no longer valid. Ask for a new one."

@@ -1,4 +1,5 @@
 import z from "zod";
+import { optionalFilter } from "../../shared/listQuery.js";
 
 export const createClientLinkZodSchema = z.object({
     client_id: z.uuid("client_id must be a valid id"),
@@ -22,3 +23,7 @@ export const updateClientLinkZodSchema = createClientLinkZodSchema
 
 export type ICreateClientLinkPayload = z.infer<typeof createClientLinkZodSchema>;
 export type IUpdateClientLinkPayload = z.infer<typeof updateClientLinkZodSchema>;
+
+export const clientLinkListQueryZodSchema = z.object({
+    client_id: optionalFilter(z.uuid("client_id must be a valid id")),
+});
